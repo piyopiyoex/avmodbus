@@ -77,15 +77,28 @@ defmodule RobotSim.Drive do
   end
 
   defp find_completed(completed, request_id) do
-    Enum.find(completed, fn {completed_id, _command, _result} ->
-      completed_id == request_id
-    end)
+    find_completed_loop(completed, request_id)
   end
+
+  defp find_completed_loop([], _request_id), do: nil
+
+  defp find_completed_loop(
+         [{request_id, _command, _result} = completed | _rest],
+         request_id
+       ),
+       do: completed
+
+  defp find_completed_loop([_completed | rest], request_id),
+    do: find_completed_loop(rest, request_id)
 
   defp accepted_rover({:ok, %Rover{} = rover}, _current), do: rover
   defp accepted_rover({:error, _reason}, current), do: current
 
   defp remember(completed, entry, max_completed) do
-    [entry | Enum.take(completed, max_completed - 1)]
+    [entry | take(completed, max_completed - 1)]
   end
+
+  defp take(_completed, 0), do: []
+  defp take([], _remaining), do: []
+  defp take([entry | rest], remaining), do: [entry | take(rest, remaining - 1)]
 end

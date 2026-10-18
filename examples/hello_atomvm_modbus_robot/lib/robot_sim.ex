@@ -23,11 +23,15 @@ defmodule RobotSim do
   @doc "Run commands against the supplied rover state."
   @spec run([Rover.command()], Rover.t()) :: {:ok, Rover.t()} | {:error, :invalid_command}
   def run(commands, %Rover{} = initial_rover) when is_list(commands) do
-    Enum.reduce_while(commands, {:ok, initial_rover}, fn command, {:ok, rover} ->
-      case Rover.execute(rover, command) do
-        {:ok, next} -> {:cont, {:ok, next}}
-        {:error, _reason} = error -> {:halt, error}
-      end
-    end)
+    run_commands(commands, initial_rover)
+  end
+
+  defp run_commands([], rover), do: {:ok, rover}
+
+  defp run_commands([command | rest], rover) do
+    case Rover.execute(rover, command) do
+      {:ok, next} -> run_commands(rest, next)
+      {:error, _reason} = error -> error
+    end
   end
 end

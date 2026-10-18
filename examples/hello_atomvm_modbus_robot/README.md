@@ -133,11 +133,67 @@ Elixir では次の command 列です。
 multidrop と、1 本の UART 上に複数の独立した distribution stream を構成できるかを別々に検証してから追加します。
 図は目標であり、現在サポートしている topology ではありません。
 
+## Stage 1 の build（実機検証前）
+
+Stage 1 は既存 example を local path dependency とし、`DisterlProbe.ModbusUART` をそのまま利用します。FC-100
+protocol、session、queue、virtual UART source は複製しません。この依存関係は experimental example 間の暫定境界であり、
+AVModbus の public API ではありません。詳細は
+[ADR 0003](docs/adr/0003-reuse-the-existing-experimental-carrier.md) を参照してください。
+
+依存 package と AtomVM image を準備します。
+
+```sh
+cd examples/hello_atomvm_modbus_robot
+mise install
+mix deps.get
+mix atomvm.esp32.install --version v0.7.0-beta.0
+```
+
+Drive (`drive@modbus.local`、Modbus Server Unit ID 1):
+
+```sh
+ROBOT_ROLE=drive MIX_ENV=prod mix clean
+ROBOT_ROLE=drive MIX_ENV=prod mix atomvm.check
+ROBOT_ROLE=drive MIX_ENV=prod mix atomvm.packbeam
+ROBOT_ROLE=drive MIX_ENV=prod \
+  mix atomvm.esp32.flash --port /dev/ttyACM0
+```
+
+Controller (`controller@modbus.local`、Modbus Client):
+
+```sh
+MIX_ENV=prod mix clean
+MIX_ENV=prod mix atomvm.check
+MIX_ENV=prod mix atomvm.packbeam
+MIX_ENV=prod mix atomvm.esp32.flash --port /dev/ttyACM1
+```
+
+role は compile-time configuration です。role を切り替える前に必ず `mix clean` し、同じ environment で
+check、pack、flash してください。現在は両 role の `atomvm.check` と PackBEAM 生成まで確認済みですが、実機の
+remote mission はまだ未検証です。
+
+主な build-time configuration:
+
+| environment variable | default | 意味 |
+| --- | --- | --- |
+| `ROBOT_ROLE` | `controller` | `controller` または `drive` |
+| `ROBOT_COMMAND_TIMEOUT_MS` | `60000` | application reply timeout |
+| `ROBOT_COMMAND_RETRIES` | `1` | timeout 後の追加送信回数 |
+| `ROBOT_MISSION_START_DELAY_MS` | `2000` | distribution 開始後、mission を送るまでの delay |
+| `ROBOT_FIRST_REQUEST_ID` | `1` | reference mission の最初の request ID |
+| `MODBUS_UNIT_ID` | `1` | Drive の Modbus Unit ID |
+| `MODBUS_POLL_INTERVAL_MS` | `20` | Controller の FC-100 poll interval |
+| `MODBUS_WAIT_FOR_PEER` | Controller で `true` | `net_kernel` 開始前に FC-100 response を待つ |
+| `ATOMVM_UART_SPEED` | `9600` | RS485 UART baud rate |
+
+UART pin、chunk、queue、trace の environment variable は既存の
+[distributed Erlang example](../hello_atomvm_modbus_disterl/README.md#build-time-configuration) と同じです。
+
 ## 境界
 
 - simulation logic と transport / process lifecycle を分離する
 - AVModbus core と既存の distributed Erlang example を変更しない
-- Stage 1 へ進む前に carrier の再利用境界を判断し、大量の source copy を避ける
+- carrier の再利用境界を ADR 0003 に保ち、大量の source copy を避ける
 - automatic retry の前に command ID と重複実行防止を設計する
 - physical actuator、real-time control、safety-critical control を対象にしない
 

@@ -34,8 +34,9 @@
 
 ## Stage 1: two-node distributed robot
 
-- [ ] 既存 FC-100 / virtual UART carrier の再利用境界を決める
-- [ ] `controller@modbus.local` と `drive@modbus.local` を構成する
+- [x] 既存 FC-100 / virtual UART carrier の再利用境界を決める
+- [x] `controller@modbus.local` と `drive@modbus.local` を構成する
+- [x] controller / drive の AtomVM compatibility check と PackBEAM build を通す
 - [ ] controller を board A、virtual rover process を board B で起動する
 - [x] command ID、明示的な reply、timeout を持つ小さな application protocol を定義する
 - [x] host 上の drive process で同一 request retry の重複実行を抑止する

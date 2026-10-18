@@ -42,14 +42,16 @@ defmodule RobotSim.Controller do
   end
 
   defp run_commands(destination, commands, first_request_id, options) do
-    commands
-    |> Enum.with_index(first_request_id)
-    |> Enum.reduce_while(:ok, fn {rover_command, request_id}, :ok ->
-      case command(destination, request_id, rover_command, options) do
-        {:ok, _rover} -> {:cont, :ok}
-        {:error, _reason} = error -> {:halt, error}
-      end
-    end)
+    run_commands_loop(destination, commands, first_request_id, options)
+  end
+
+  defp run_commands_loop(_destination, [], _request_id, _options), do: :ok
+
+  defp run_commands_loop(destination, [rover_command | rest], request_id, options) do
+    case command(destination, request_id, rover_command, options) do
+      {:ok, _rover} -> run_commands_loop(destination, rest, request_id + 1, options)
+      {:error, _reason} = error -> error
+    end
   end
 
   defp send_with_retry(destination, request_id, command, timeout_ms, retries_left) do
