@@ -6,17 +6,23 @@ defmodule RobotSim.Controller do
   result instead of executing movement twice.
   """
 
-  alias RobotSim.Protocol
+  alias RobotSim.{Protocol, Rover}
 
   @default_timeout_ms 1_000
   @default_max_retries 1
 
   @type destination :: pid() | atom() | {atom(), node()}
+  @type result ::
+          Protocol.result()
+          | {:error, :timeout | {:unexpected_final_state, Rover.t()}}
 
-  @doc "Run the reference mission and request the final drive state."
-  @spec demo(destination(), keyword()) :: Protocol.result() | {:error, :timeout}
+  @doc "Run the reference mission and verify its final drive state."
+  @spec demo(destination(), keyword()) :: result()
   def demo(destination, options \\ []) do
-    run(destination, RobotSim.mission(), options)
+    case run(destination, RobotSim.mission(), options) do
+      {:ok, rover} -> verify_demo_state(rover)
+      {:error, _reason} = error -> error
+    end
   end
 
   @doc "Run commands sequentially and return a final status response."
@@ -112,4 +118,12 @@ defmodule RobotSim.Controller do
 
   defp trace(false, _message), do: :ok
   defp trace(true, message), do: IO.puts("modbus_robot_controller: #{message}")
+
+  defp verify_demo_state(rover) do
+    if rover == RobotSim.expected_demo_state() do
+      {:ok, rover}
+    else
+      {:error, {:unexpected_final_state, rover}}
+    end
+  end
 end

@@ -25,3 +25,7 @@ Drive process は default で直近 32 件の `{request_id, command, result}` �
 - Drive reboot または cache eviction 後には履歴が残らず、durable exactly-once は保証しません。
 - 同じ Drive process で新しい mission を開始する場合、Controller は以前と重ならない request ID を使う必要があります。
 - Controller reboot、request ID の namespace、mission reconciliation は実機 Stage 1 と Stage 4 で追加検討します。
+
+Stage 1 の実機試験では、request 2 の実行後、reply 前に Drive を reset しました。transport / distribution は再接続し、
+Controller の retry も届きましたが、Drive の rover state と cache は reboot で失われました。この結果は上記の境界と一致します。
+詳細は [in-flight Drive reboot の作業記録](../worklog/2026-10-18-stage-1-drive-reboot.md) にあります。

@@ -20,6 +20,7 @@ AVModbus core と既存 example の source は変更していません。
 - request ID 付き command を drive process へ送り、timeout 時に同じ ID で retry する
 - 直近の同一 request を再実行せず、cache 済み result を返す
 - 2 台の AtomVM node 間で reference mission を remote 実行する
+- Controller が final status を期待値と比較し、不一致を mission failure として検出する
 
 今後の Stage 1–4 と完了条件は [ロードマップ](docs/roadmap.md) を参照してください。
 
@@ -93,9 +94,12 @@ command に使うと `{:error, :request_id_conflict}` を返します。
 
 この仕組みは lost reply による直近 command の重複実行を防ぎますが、durable exactly-once ではありません。
 Drive の reboot または cache eviction 後は履歴が残らないため、Stage 1 の実機試験では controller reconciliation と
-in-flight command の扱いを別途検証します。`Controller.demo/2` の default request ID は fresh Drive 向けです。同じ
+in-flight command の扱いを別途検証しました。transport は再接続できましたが、reboot 後の Drive state は復元されず、
+Controller が final state の不一致を mission failure として検出しました。`Controller.demo/2` の default request ID は
+fresh Drive 向けです。同じ
 Drive で別の mission を開始する場合は、以前と重ならない `:first_request_id` を指定する必要があります。判断は
-[ADR 0002](docs/adr/0002-deduplicate-retries-with-request-ids.md) に記録しています。
+[ADR 0002](docs/adr/0002-deduplicate-retries-with-request-ids.md)、実機結果は
+[Drive reboot worklog](docs/worklog/2026-10-18-stage-1-drive-reboot.md) に記録しています。
 
 ## Reference mission
 

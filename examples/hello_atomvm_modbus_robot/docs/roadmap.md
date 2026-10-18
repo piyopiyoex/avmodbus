@@ -12,7 +12,7 @@
 | Stage | 状態 | 範囲 |
 | --- | --- | --- |
 | 0 | 完了 | host-only virtual rover |
-| 1 | 基準 mission 完了 | 2-node distribution と実機 mission を確認、reboot 中の command は未検証 |
+| 1 | 完了 | 2-node mission と in-flight Drive reboot の境界を実機確認 |
 | 2 | 未着手 | 3-device standard Modbus multidrop |
 | 3 | research | 3-node distributed Erlang |
 | 4 | 未着手 | virtual sensors と fault tolerance |
@@ -43,13 +43,15 @@
 - [x] lost reply、timeout、request ID conflict を host test で検証する
 - [x] remote registered process へ movement command を送る
 - [x] drive node で state transition を実行し、result と status を返す
-- [x] reference mission の最終座標を controller 側で検証する
-- [ ] in-flight command 中の peer reboot を試し、重複実行の扱いを記録する
+- [x] reference mission の最終座標を controller code で期待値と比較する
+- [x] in-flight command 中の peer reboot を試し、重複実行の扱いを記録する
 - [x] 2 台の XIAO ESP32-C5 による実機結果を worklog に記録する
 
 完了条件は、genuine distributed Erlang の message path で 2 台の実機が mission を完了し、controller が
 最終 state を検証することです。この基準は 2026-10-18 に達成しました。in-flight command 中の peer reboot は、
-通常起動時の mission 成功とは分けて fault-tolerance follow-up として残します。
+transport / distribution は再接続した一方、Drive の volatile state と request cache が失われることを実機で確認しました。
+Controller は final state の不一致を mission failure として検出します。永続化または reconciliation による回復は Stage 4
+の対象とします。
 
 ## Stage 2: three-device Modbus multidrop
 

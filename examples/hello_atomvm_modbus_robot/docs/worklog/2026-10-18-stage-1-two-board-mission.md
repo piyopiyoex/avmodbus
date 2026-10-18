@@ -23,8 +23,8 @@ Drive を先に起動し、registered process の準備完了を確認してか�
 
 | Role | 最終 PackBEAM size |
 | --- | ---: |
-| Controller | 213,056 bytes |
-| Drive | 212,552 bytes |
+| Controller | 213,424 bytes |
+| Drive | 212,920 bytes |
 
 ## 結果
 

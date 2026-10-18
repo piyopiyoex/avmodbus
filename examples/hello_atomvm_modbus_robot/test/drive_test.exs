@@ -10,6 +10,13 @@ defmodule RobotSim.DriveTest do
              Controller.demo(drive)
   end
 
+  test "the controller rejects a reference mission with an unexpected final state" do
+    drive = start_supervised!({Drive, initial: %Rover{x_mm: 10}})
+
+    assert {:error, {:unexpected_final_state, %Rover{x_mm: 110, y_mm: 50, heading_deg: 90}}} =
+             Controller.demo(drive)
+  end
+
   test "repeating a request returns the cached result without moving twice" do
     drive = start_supervised!(Drive)
 
