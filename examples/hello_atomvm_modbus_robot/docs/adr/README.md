@@ -15,3 +15,4 @@
 ## 一覧
 
 - [0001: +X から clockwise に増える heading を使う](0001-use-clockwise-heading-from-positive-x.md)
+- [0002: request ID で command retry を重複排除する](0002-deduplicate-retries-with-request-ids.md)

@@ -12,7 +12,7 @@
 | Stage | 状態 | 範囲 |
 | --- | --- | --- |
 | 0 | 完了 | host-only virtual rover |
-| 1 | 未着手 | 2-node distributed robot |
+| 1 | 進行中 | host application protocol 完了、distribution / 実機は未着手 |
 | 2 | 未着手 | 3-device standard Modbus multidrop |
 | 3 | research | 3-node distributed Erlang |
 | 4 | 未着手 | virtual sensors と fault tolerance |
@@ -37,7 +37,9 @@
 - [ ] 既存 FC-100 / virtual UART carrier の再利用境界を決める
 - [ ] `controller@modbus.local` と `drive@modbus.local` を構成する
 - [ ] controller を board A、virtual rover process を board B で起動する
-- [ ] command ID、明示的な reply、timeout を持つ小さな application protocol を定義する
+- [x] command ID、明示的な reply、timeout を持つ小さな application protocol を定義する
+- [x] host 上の drive process で同一 request retry の重複実行を抑止する
+- [x] lost reply、timeout、request ID conflict を host test で検証する
 - [ ] remote registered process へ movement command を送る
 - [ ] drive node で state transition を実行し、result と status を返す
 - [ ] reference mission の最終座標を controller 側で検証する

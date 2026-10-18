@@ -3,8 +3,8 @@
 AtomVM の distributed Erlang over Modbus RTU を、通信確認だけでなく分散 application に利用するための
 独立した実験用 Mix project です。ロボットは software 上で再現するため、motor、sensor、車体は必要ありません。
 
-現在は **Stage 0: host 上の rover simulation** まで実装しています。Modbus RTU、Erlang distribution、AtomVM、
-実機はまだ使用しません。既存の
+現在は **Stage 0: host 上の rover simulation** を完了し、Stage 1 に向けた command / reply protocol と
+drive process も host 上で実装しています。Modbus RTU、Erlang distribution、AtomVM、実機はまだ使用しません。既存の
 [`hello_atomvm_modbus_disterl`](../hello_atomvm_modbus_disterl/README.md) と AVModbus core に変更を加えず、
 移動規則と mission を先に固定します。
 
@@ -16,6 +16,8 @@ AtomVM の distributed Erlang over Modbus RTU を、通信確認だけでなく�
 - 現在の rover state を取得する
 - 同じ初期状態と command 列から常に同じ結果を得る
 - deterministic demonstration mission を host test で検証する
+- request ID 付き command を drive process へ送り、timeout 時に同じ ID で retry する
+- 直近の同一 request を再実行せず、cache 済み result を返す
 
 今後の Stage 1–4 と完了条件は [ロードマップ](docs/roadmap.md) を参照してください。
 
@@ -64,8 +66,34 @@ reference mission の「右へ 90° 旋回した後に `+Y` へ進む」とい�
 | `{:turn, :left, degrees}` | 90° の倍数だけ左旋回する |
 | `:status` | state を変更せず現在値を返す |
 
-不正な command は `{:error, :invalid_command}` を返します。現段階には command ID、retry、deduplication、
-時間経過、速度、battery、obstacle はありません。
+不正な command は `{:error, :invalid_command}` を返します。pure rover 自体は request ID や retry を扱わず、
+process / protocol layer から独立しています。時間経過、速度、battery、obstacle はまだありません。
+
+## Stage 1 application protocol の host test
+
+`RobotSim.Drive` は rover state を所有し、`RobotSim.Controller` から次の message を受け取ります。
+
+```elixir
+{:robot_command, reply_to, request_id, rover_command}
+{:robot_reply, request_id, result}
+```
+
+host 上では次のように reference mission を実行できます。
+
+```elixir
+{:ok, drive} = RobotSim.Drive.start_link()
+RobotSim.Controller.demo(drive)
+```
+
+Controller は timeout 時に同じ `request_id` で retry します。Drive は default で直近 32 件の
+`{request_id, command, result}` を保持し、同一 request には cache 済み result を返します。同じ ID を別の
+command に使うと `{:error, :request_id_conflict}` を返します。
+
+この仕組みは lost reply による直近 command の重複実行を防ぎますが、durable exactly-once ではありません。
+Drive の reboot または cache eviction 後は履歴が残らないため、Stage 1 の実機試験では controller reconciliation と
+in-flight command の扱いを別途検証します。`Controller.demo/2` の default request ID は fresh Drive 向けです。同じ
+Drive で別の mission を開始する場合は、以前と重ならない `:first_request_id` を指定する必要があります。判断は
+[ADR 0002](docs/adr/0002-deduplicate-retries-with-request-ids.md) に記録しています。
 
 ## Reference mission
 

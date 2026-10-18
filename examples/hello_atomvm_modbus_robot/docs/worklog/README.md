@@ -6,3 +6,4 @@ host test、実機試験、障害調査など、再現可能な時系列の記�
 ## 記録
 
 - [2026-10-18: Stage 0 host-only rover simulation](2026-10-18-stage-0-host-simulation.md)
+- [2026-10-18: Stage 1 host application protocol](2026-10-18-stage-1-host-application-protocol.md)
