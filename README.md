@@ -44,6 +44,16 @@ virtual UART adapter はサンプル内にあり、`lib/avmodbus/` は変更し�
 - [実機試験と測定結果](examples/hello_atomvm_modbus_disterl/docs/worklog/README.md)
 - [既知の制約](https://github.com/piyopiyoex/avmodbus/blob/main/examples/hello_atomvm_modbus_disterl/docs/limitations.md)
 
+## 実験: distributed Erlang 仮想ロボット
+
+通信確認から分散 application へ進む次の調査として、software だけで動く
+[仮想ロボット example](examples/hello_atomvm_modbus_robot/README.md) を用意しています。現在は host 上で
+position、heading、forward / turn command、deterministic mission を検証する Stage 0 です。
+
+今後は 2 台の XIAO ESP32-C5 で mission controller と drive node を分離し、その後に standard Modbus RTU の
+3-device multidrop と 3-node distribution の feasibility を段階的に調査します。3-node topology は現在の
+機能ではなく、[ロードマップ](examples/hello_atomvm_modbus_robot/docs/roadmap.md) 上の research objective です。
+
 ## Client の例
 
 Unit ID `1` の Holding Register を、アドレス `0` から 2 個読み取ります。

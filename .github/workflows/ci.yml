@@ -79,6 +79,12 @@ jobs:
             MODBUS_EXPERIMENT=disterl MODBUS_ROLE="$role" MIX_ENV=prod mix atomvm.check
           done
 
+      - name: Test virtual robot example
+        working-directory: examples/hello_atomvm_modbus_robot
+        run: |
+          mix format --check-formatted
+          mix test
+
   interoperability:
     runs-on: ubuntu-24.04
 
