@@ -15,18 +15,20 @@ defmodule RobotSim.Drive do
   @type state :: %{
           rover: Rover.t(),
           completed: [{Protocol.request_id(), Rover.command(), Protocol.result()}],
-          max_completed: pos_integer()
+          max_completed: pos_integer(),
+          trace: boolean()
         }
 
-  @doc "Start a drive process with optional `:initial`, `:max_completed`, and `:name` settings."
+  @doc "Start a drive process with optional `:initial`, `:max_completed`, `:name`, and `:trace` settings."
   @spec start_link(keyword()) :: GenServer.on_start()
   def start_link(options \\ []) do
     initial = Keyword.get(options, :initial, Rover.new())
     max_completed = Keyword.get(options, :max_completed, @default_max_completed)
+    trace = Keyword.get(options, :trace, false)
 
     case Keyword.get(options, :name) do
-      nil -> GenServer.start_link(__MODULE__, {initial, max_completed})
-      name -> GenServer.start_link(__MODULE__, {initial, max_completed}, name: name)
+      nil -> GenServer.start_link(__MODULE__, {initial, max_completed, trace})
+      name -> GenServer.start_link(__MODULE__, {initial, max_completed, trace}, name: name)
     end
   end
 
@@ -35,9 +37,9 @@ defmodule RobotSim.Drive do
   def state(server), do: GenServer.call(server, :state)
 
   @impl true
-  def init({%Rover{} = initial, max_completed})
-      when is_integer(max_completed) and max_completed > 0 do
-    {:ok, %{rover: initial, completed: [], max_completed: max_completed}}
+  def init({%Rover{} = initial, max_completed, trace})
+      when is_integer(max_completed) and max_completed > 0 and is_boolean(trace) do
+    {:ok, %{rover: initial, completed: [], max_completed: max_completed, trace: trace}}
   end
 
   @impl true
@@ -54,6 +56,7 @@ defmodule RobotSim.Drive do
   def handle_info({:robot_command, reply_to, request_id, command}, state)
       when is_pid(reply_to) and is_integer(request_id) and request_id >= 0 do
     {result, next_state} = execute_once(state, request_id, command)
+    trace(state, request_id, command, result)
     send(reply_to, Protocol.reply(request_id, result))
     {:noreply, next_state}
   end
@@ -101,4 +104,12 @@ defmodule RobotSim.Drive do
   defp take(_completed, 0), do: []
   defp take([], _remaining), do: []
   defp take([entry | rest], remaining), do: [entry | take(rest, remaining - 1)]
+
+  defp trace(%{trace: false}, _request_id, _command, _result), do: :ok
+
+  defp trace(%{trace: true}, request_id, command, result) do
+    IO.puts(
+      "modbus_robot_drive: request_id=#{request_id} command=#{inspect(command)} result=#{inspect(result)}"
+    )
+  end
 end

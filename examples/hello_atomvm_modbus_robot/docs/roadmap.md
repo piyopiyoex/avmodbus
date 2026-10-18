@@ -12,7 +12,7 @@
 | Stage | 状態 | 範囲 |
 | --- | --- | --- |
 | 0 | 完了 | host-only virtual rover |
-| 1 | 進行中 | host application protocol 完了、distribution / 実機は未着手 |
+| 1 | 基準 mission 完了 | 2-node distribution と実機 mission を確認、reboot 中の command は未検証 |
 | 2 | 未着手 | 3-device standard Modbus multidrop |
 | 3 | research | 3-node distributed Erlang |
 | 4 | 未着手 | virtual sensors と fault tolerance |
@@ -37,18 +37,19 @@
 - [x] 既存 FC-100 / virtual UART carrier の再利用境界を決める
 - [x] `controller@modbus.local` と `drive@modbus.local` を構成する
 - [x] controller / drive の AtomVM compatibility check と PackBEAM build を通す
-- [ ] controller を board A、virtual rover process を board B で起動する
+- [x] controller を board A、virtual rover process を board B で起動する
 - [x] command ID、明示的な reply、timeout を持つ小さな application protocol を定義する
 - [x] host 上の drive process で同一 request retry の重複実行を抑止する
 - [x] lost reply、timeout、request ID conflict を host test で検証する
-- [ ] remote registered process へ movement command を送る
-- [ ] drive node で state transition を実行し、result と status を返す
-- [ ] reference mission の最終座標を controller 側で検証する
+- [x] remote registered process へ movement command を送る
+- [x] drive node で state transition を実行し、result と status を返す
+- [x] reference mission の最終座標を controller 側で検証する
 - [ ] in-flight command 中の peer reboot を試し、重複実行の扱いを記録する
-- [ ] 2 台の XIAO ESP32-C5 による実機結果を worklog に記録する
+- [x] 2 台の XIAO ESP32-C5 による実機結果を worklog に記録する
 
 完了条件は、genuine distributed Erlang の message path で 2 台の実機が mission を完了し、controller が
-最終 state を検証することです。
+最終 state を検証することです。この基準は 2026-10-18 に達成しました。in-flight command 中の peer reboot は、
+通常起動時の mission 成功とは分けて fault-tolerance follow-up として残します。
 
 ## Stage 2: three-device Modbus multidrop
 

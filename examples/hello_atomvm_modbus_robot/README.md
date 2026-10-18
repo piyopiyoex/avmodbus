@@ -3,10 +3,11 @@
 AtomVM の distributed Erlang over Modbus RTU を、通信確認だけでなく分散 application に利用するための
 独立した実験用 Mix project です。ロボットは software 上で再現するため、motor、sensor、車体は必要ありません。
 
-現在は **Stage 0: host 上の rover simulation** を完了し、Stage 1 に向けた command / reply protocol と
-drive process も host 上で実装しています。Modbus RTU、Erlang distribution、AtomVM、実機はまだ使用しません。既存の
-[`hello_atomvm_modbus_disterl`](../hello_atomvm_modbus_disterl/README.md) と AVModbus core に変更を加えず、
-移動規則と mission を先に固定します。
+現在は **Stage 0: host 上の rover simulation** と、**Stage 1: 2-node distributed robot** の基準 mission を
+完了しています。2 台の XIAO ESP32-C5 上で genuine distributed Erlang を確立し、Controller から Drive の registered
+process へ command を送り、最終 state `(100, 50, 90°)` を確認しました。既存の
+[`hello_atomvm_modbus_disterl`](../hello_atomvm_modbus_disterl/README.md) を local path dependency として再利用し、
+AVModbus core と既存 example の source は変更していません。
 
 ## 現在できること
 
@@ -18,6 +19,7 @@ drive process も host 上で実装しています。Modbus RTU、Erlang distrib
 - deterministic demonstration mission を host test で検証する
 - request ID 付き command を drive process へ送り、timeout 時に同じ ID で retry する
 - 直近の同一 request を再実行せず、cache 済み result を返す
+- 2 台の AtomVM node 間で reference mission を remote 実行する
 
 今後の Stage 1–4 と完了条件は [ロードマップ](docs/roadmap.md) を参照してください。
 
@@ -133,7 +135,7 @@ Elixir では次の command 列です。
 multidrop と、1 本の UART 上に複数の独立した distribution stream を構成できるかを別々に検証してから追加します。
 図は目標であり、現在サポートしている topology ではありません。
 
-## Stage 1 の build（実機検証前）
+## Stage 1 の build と実機実行
 
 Stage 1 は既存 example を local path dependency とし、`DisterlProbe.ModbusUART` をそのまま利用します。FC-100
 protocol、session、queue、virtual UART source は複製しません。この依存関係は experimental example 間の暫定境界であり、
@@ -169,8 +171,16 @@ MIX_ENV=prod mix atomvm.esp32.flash --port /dev/ttyACM1
 ```
 
 role は compile-time configuration です。role を切り替える前に必ず `mix clean` し、同じ environment で
-check、pack、flash してください。現在は両 role の `atomvm.check` と PackBEAM 生成まで確認済みですが、実機の
-remote mission はまだ未検証です。
+check、pack、flash してください。Drive を先に起動し、`drive process registered` が表示されてから Controller を
+起動すると、Controller は reference mission を自動的に実行します。成功時の最後の log は次の形式です。
+
+```text
+modbus_robot: reference mission returned {:ok, %{... x_mm: 100, y_mm: 50, heading_deg: 90 ...}}
+modbus_robot: mission complete state=%{... x_mm: 100, y_mm: 50, heading_deg: 90 ...}
+```
+
+map field の表示順は AtomVM build により異なる場合があります。2026-10-18 の 2-board 検証結果と実測時間は
+[Stage 1 実機検証](docs/worklog/2026-10-18-stage-1-two-board-mission.md) に記録しています。
 
 主な build-time configuration:
 
@@ -181,6 +191,7 @@ remote mission はまだ未検証です。
 | `ROBOT_COMMAND_RETRIES` | `1` | timeout 後の追加送信回数 |
 | `ROBOT_MISSION_START_DELAY_MS` | `2000` | distribution 開始後、mission を送るまでの delay |
 | `ROBOT_FIRST_REQUEST_ID` | `1` | reference mission の最初の request ID |
+| `ROBOT_TRACE_APPLICATION` | `true` | application command / reply を console に出力する |
 | `MODBUS_UNIT_ID` | `1` | Drive の Modbus Unit ID |
 | `MODBUS_POLL_INTERVAL_MS` | `20` | Controller の FC-100 poll interval |
 | `MODBUS_WAIT_FOR_PEER` | Controller で `true` | `net_kernel` 開始前に FC-100 response を待つ |

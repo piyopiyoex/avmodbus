@@ -55,7 +55,7 @@ defmodule RobotSim.DriveTest do
   end
 
   test "unexpected calls and casts have AtomVM-safe failure reasons" do
-    state = %{rover: Rover.new(), completed: [], max_completed: 32}
+    state = %{rover: Rover.new(), completed: [], max_completed: 32, trace: false}
 
     assert Drive.handle_call(:unexpected, :from, state) ==
              {:stop, {:bad_call, :unexpected}, state}

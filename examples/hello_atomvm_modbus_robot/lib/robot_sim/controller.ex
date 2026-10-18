@@ -37,8 +37,9 @@ defmodule RobotSim.Controller do
       when is_integer(request_id) and request_id >= 0 do
     timeout_ms = Keyword.get(options, :timeout_ms, @default_timeout_ms)
     max_retries = Keyword.get(options, :max_retries, @default_max_retries)
+    trace = Keyword.get(options, :trace, false)
 
-    send_with_retry(destination, request_id, rover_command, timeout_ms, max_retries)
+    send_with_retry(destination, request_id, rover_command, timeout_ms, max_retries, trace, 1)
   end
 
   defp run_commands(destination, commands, first_request_id, options) do
@@ -54,14 +55,38 @@ defmodule RobotSim.Controller do
     end
   end
 
-  defp send_with_retry(destination, request_id, command, timeout_ms, retries_left) do
+  defp send_with_retry(
+         destination,
+         request_id,
+         command,
+         timeout_ms,
+         retries_left,
+         trace,
+         attempt
+       ) do
+    trace(
+      trace,
+      "sending request_id=#{request_id} attempt=#{attempt} command=#{inspect(command)}"
+    )
+
     send(destination, Protocol.request(self(), request_id, command))
 
     case await_reply(request_id, timeout_ms) do
       {:error, :timeout} when retries_left > 0 ->
-        send_with_retry(destination, request_id, command, timeout_ms, retries_left - 1)
+        trace(trace, "request_id=#{request_id} timed out; retrying")
+
+        send_with_retry(
+          destination,
+          request_id,
+          command,
+          timeout_ms,
+          retries_left - 1,
+          trace,
+          attempt + 1
+        )
 
       result ->
+        trace(trace, "received request_id=#{request_id} result=#{inspect(result)}")
         result
     end
   end
@@ -84,4 +109,7 @@ defmodule RobotSim.Controller do
       remaining_ms -> {:error, :timeout}
     end
   end
+
+  defp trace(false, _message), do: :ok
+  defp trace(true, message), do: IO.puts("modbus_robot_controller: #{message}")
 end

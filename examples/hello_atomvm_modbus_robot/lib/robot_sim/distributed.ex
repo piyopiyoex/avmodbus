@@ -23,6 +23,7 @@ defmodule RobotSim.Distributed do
   @poll_ms Application.compile_env(:robot_sim, :poll_ms, 20)
   @trace_transactions Application.compile_env(:robot_sim, :trace_transactions, false)
   @trace_queue Application.compile_env(:robot_sim, :trace_queue, false)
+  @trace_application Application.compile_env(:robot_sim, :trace_application, true)
   @wait_for_peer Application.compile_env(:robot_sim, :wait_for_peer, true)
   @cookie Application.compile_env(:robot_sim, :cookie, "AtomVM")
   @mission_timeout_ms Application.compile_env(:robot_sim, :mission_timeout_ms, 60_000)
@@ -64,7 +65,7 @@ defmodule RobotSim.Distributed do
   defp start_role(identity) do
     case identity.role do
       :drive ->
-        {:ok, _drive} = Drive.start_link(name: @drive_name)
+        {:ok, _drive} = Drive.start_link(name: @drive_name, trace: @trace_application)
         IO.puts("modbus_robot: drive process registered as #{inspect(@drive_name)}")
         Process.sleep(:infinity)
 
@@ -74,16 +75,18 @@ defmodule RobotSim.Distributed do
         options = [
           first_request_id: @first_request_id,
           timeout_ms: @mission_timeout_ms,
-          max_retries: @mission_retries
+          max_retries: @mission_retries,
+          trace: @trace_application
         ]
 
         IO.puts("modbus_robot: starting reference mission on #{inspect(identity.peer)}")
 
-        case Controller.demo({@drive_name, identity.peer}, options) do
+        result = Controller.demo({@drive_name, identity.peer}, options)
+        IO.puts("modbus_robot: reference mission returned #{inspect(result)}")
+
+        case result do
           {:ok, rover} ->
-            IO.puts(
-              "modbus_robot: mission complete x_mm=#{rover.x_mm} y_mm=#{rover.y_mm} heading_deg=#{rover.heading_deg}"
-            )
+            IO.puts("modbus_robot: mission complete state=#{inspect(rover)}")
 
           {:error, reason} ->
             IO.puts("modbus_robot: mission failed #{inspect(reason)}")
