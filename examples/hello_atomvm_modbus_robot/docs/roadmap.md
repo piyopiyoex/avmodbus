@@ -15,7 +15,7 @@
 | 1 | 完了 | 2-node mission と in-flight Drive reboot の境界を実機確認 |
 | 2 | 完了 | 3-device standard Modbus multidrop、120-request soak、独立Server reboot |
 | 3 | 基本実証 | 2 remote node の同時接続、Controller relay、複数 tick を実機確認 |
-| 4 | 進行中 | adaptive mission と role 別 readiness lease recovery を実機確認 |
+| 4 | 完了 | adaptive mission、readiness lease、reply-loss retry を実機確認 |
 
 ## Stage 0: local virtual rover simulation
 
@@ -95,9 +95,13 @@ local AtomVM patch が必要なため Stage 3 は follow-up を残していま�
 - [x] simulated battery sample を追加する
 - [x] sensor data に基づいて controller が mission を変更する
 - [x] distributed process monitor の blocker を記録し、readiness lease で independent node restart を検証する
-- [ ] mission 中の communication interruption を検証する（reply loss injection の host test は完了、3台実機は未検証）
-- [ ] retried movement command の重複実行を防ぐ（bounded cache は実装済み、3台での injected reply loss は未検証）
+- [x] mission 中の application reply loss を3台実機で検証する
+- [x] same-ID retry と bounded cache で movement command の重複実行を防ぐ
 - [x] bounded queue、recovery behavior、残る制約を[文書化する](limitations.md)
+
+Stage 4 の現在の完了範囲は application reply loss までである。physical RS485 interruption、Drive reboot をまたぐ mission
+reconciliation、durable state は対象外または follow-up とし、[既知の制約](limitations.md) に記録している。
+この範囲は 2026-10-20 に3台の実機で確認し、Stage 4 を完了とした。
 
 ## 今回は対象としないこと
 

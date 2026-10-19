@@ -449,7 +449,8 @@ ROBOT_MODE=multinode ROBOT_ROLE=drive ATOMVM_UART_SPEED=115200 \
 
 Controller では `ROBOT_COMMAND_RETRIES` を1以上にします。試験時間を短縮する場合も、`ROBOT_COMMAND_TIMEOUT_MS` は正常時の
 application RTT より十分長くしてください。この injection は reply loss だけを再現し、Drive reboot や cache eviction 後の
-重複排除は保証しません。通常の実行では必ず既定値 `false` を使用します。host test と実機検証待ちの build 条件は
+重複排除は保証しません。通常の実行では必ず既定値 `false` を使用します。host test、build 条件、3台実機で4 request すべてが
+same-ID retry に成功した結果は
 [reply loss fault injection worklog](docs/worklog/2026-10-20-stage-4-reply-loss-fault-injection.md) に記録しています。
 
 ## 境界
