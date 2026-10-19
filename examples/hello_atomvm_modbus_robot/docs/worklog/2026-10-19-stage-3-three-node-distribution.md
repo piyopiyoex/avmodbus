@@ -91,10 +91,67 @@ modbus_robot_multinode: complete Drive and Sensors remote messaging
 完了後も含めて Controller console を reset から 90 秒間監視した。複数の 15 秒 tick interval をまたぎ、`net_kernel` crash、
 distribution timeout、再接続は記録されなかった。
 
-## 結論と残る作業
+## 初回 run の結論
 
 1 本の Modbus RTU UART 上で 2 個の FC-100 stream を多重化し、Controller と 2 remote node の genuine distributed Erlang を
 同時に成立させられた。専用 `modbus_dist` carrier はこの基本疎通には不要だった。
 
-一方、現在の結果は local AtomVM patch と 115,200 baud を必要とする experimental baseline である。remote node の独立 reboot、
-一方の timeout が他方へ与える影響、継続 application traffic、Drive / Sensors 間 relay、長時間 fairness は未検証である。
+## remote node の独立 reboot recovery
+
+初回の実装では readiness message の PID が変わった場合を reboot と判定した。Drive を単独 reset すると FC-100 session change と
+distribution handshake は成功したが、Controller は新しい readiness を duplicate heartbeat と判定した。ESP32-C5 上の AtomVM が
+application process の PID を再利用し、Controller から reboot 前後の PID が同じ値に見えたためである。
+
+readiness message に起動ごとの 32-bit boot session ID を追加し、PID と session ID の両方が一致する場合だけ duplicate とした。
+接続済み remote の heartbeat は bus traffic を抑えるため 30 秒間隔とした。詳細は
+[ADR 0006](../adr/0006-identify-remote-boots-with-session-ids.md) に記録した。
+
+更新した 3 role を flash し、初回の Drive / Sensors probe 完了後に Drive、Sensors の順で単独 reset した。両方で FC-100 peer
+session change により古い `serial_dist_controller` reader が `{serial_read_error, closed}` で終了し、新しい distribution connection が
+確立された。AtomVM は reader の crash report を出力するが、Controller の `net_kernel` と他方の connection は継続した。
+
+Drive reboot 後:
+
+```text
+modbus_robot_multinode: reconnected role=drive node=:drive@modbus.local
+modbus_robot_multinode: probe reply role=drive node=:drive@modbus.local
+modbus_robot_multinode: probe reply role=sensors node=:sensors@modbus.local
+modbus_robot_multinode: recovery complete restarted=drive peer=sensors
+```
+
+Sensors reboot 後:
+
+```text
+modbus_robot_multinode: reconnected role=sensors node=:sensors@modbus.local
+modbus_robot_multinode: probe reply role=sensors node=:sensors@modbus.local
+modbus_robot_multinode: probe reply role=drive node=:drive@modbus.local
+modbus_robot_multinode: recovery complete restarted=sensors peer=drive
+```
+
+2 回目の recovery 完了後も 30 秒を超えて監視し、追加の `net_kernel` crash、distribution timeout、再接続はなかった。
+
+## Controller の単独 reboot recovery
+
+Drive と Sensors を動作させたまま Controller だけを reset した。新しい Controller は両 FC-100 peer を認識して 2 個の
+distribution connection を再確立した。Drive と Sensors は再起動していないため接続済み loop に残っていたが、30 秒間隔の
+readiness heartbeat により新しい Controller へ再登録した。Controller は両 role を認識し、通常の初回 probe sequence を完了した。
+
+```text
+modbus_robot_multinode: connected role=drive node=:drive@modbus.local
+modbus_robot_multinode: connected role=sensors node=:sensors@modbus.local
+modbus_robot_multinode: both remote nodes connected
+modbus_robot_multinode: probe reply role=drive node=:drive@modbus.local
+modbus_robot_multinode: probe reply role=sensors node=:sensors@modbus.local
+modbus_robot_multinode: complete Drive and Sensors remote messaging
+```
+
+probe 完了後も 30 秒監視し、両 heartbeat の delivery と connection 継続を確認した。
+
+## 更新した結論と残る作業
+
+1 本の Modbus RTU UART 上で 2 個の FC-100 stream を多重化し、Controller と 2 remote node の genuine distributed Erlang を
+同時に成立させ、3 role のいずれか 1 台を独立 reboot した後にも再接続できた。一方の remote reboot 後にもう一方への application
+probe も成功した。
+
+現在の結果は local AtomVM patch と 115,200 baud を必要とする experimental baseline である。一方の長時間 timeout が他方へ
+与える影響、継続 application traffic、Drive / Sensors 間 relay、長時間 fairness は未検証である。

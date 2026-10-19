@@ -76,14 +76,15 @@ termination / bias の電気測定と長時間 soak は未実施であり、現�
 - [x] `controller <-> drive` と `controller <-> sensors` の connection を確立する
 - [x] 両 remote node の registered process と message を交換する
 - [ ] Server node 間の message を controller で relay する必要があるか検証する
-- [ ] 片方の Server reboot がもう一方の connection に与える影響を確認する
+- [x] 片方の Server reboot 後に再接続し、もう一方の connection が継続することを確認する
+- [x] Controller reboot 後に両 Server が再接続して application messaging を再開することを確認する
 - [x] 基本疎通に dedicated carrier は不要と判断する
 - [ ] AtomVM の multi-connection tick fix を upstream へ提案する
 - [ ] 継続 traffic と長時間 polling fairness を測定する
 
 完了条件は、controller と 2 台の remote node の genuine distribution を実証するか、必要な AtomVM / carrier
-変更と blocker を再現可能な形で記録することです。基本疎通は 2026-10-19 に達成しましたが、local AtomVM patch が必要なため
-Stage 3 は follow-up を残しています。Modbus Server 同士が bus を直接駆動する構成は仮定しません。
+変更と blocker を再現可能な形で記録することです。基本疎通、3 role の独立 reboot recovery は 2026-10-19 に達成しましたが、
+local AtomVM patch が必要なため Stage 3 は follow-up を残しています。Modbus Server 同士が bus を直接駆動する構成は仮定しません。
 
 ## Stage 4: virtual sensors と fault tolerance
 

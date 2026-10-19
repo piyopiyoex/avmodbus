@@ -12,6 +12,7 @@ defmodule RobotSim.MultinodeDistributed do
 
   alias AVModbus.Client
   alias DisterlProbe.ModbusUART
+  alias DisterlProbe.Session
   alias RobotSim.Drive
 
   @mode Application.compile_env(:robot_sim, :mode, :distributed)
@@ -31,6 +32,7 @@ defmodule RobotSim.MultinodeDistributed do
   @trace_queue Application.compile_env(:robot_sim, :trace_queue, false)
   @cookie Application.compile_env(:robot_sim, :cookie, "AtomVM")
   @probe_timeout_ms Application.compile_env(:robot_sim, :mission_timeout_ms, 60_000)
+  @announce_ms Application.compile_env(:robot_sim, :multinode_announce_ms, 30_000)
 
   @controller_name :modbus_robot_controller
   @remote_name :modbus_robot_remote
@@ -56,6 +58,18 @@ defmodule RobotSim.MultinodeDistributed do
   @spec targets(1..247, 1..247) :: [{:drive | :sensors, 1..247}]
   def targets(drive_unit_id \\ 1, sensors_unit_id \\ 2),
     do: [{:drive, drive_unit_id}, {:sensors, sensors_unit_id}]
+
+  @doc "Classify a remote readiness announcement against the Controller state."
+  @spec classify_readiness(map(), :drive | :sensors, node(), pid(), pos_integer()) ::
+          :new | :duplicate | :unexpected
+  def classify_readiness(remotes, role, remote_node, pid, boot_id)
+      when role in [:drive, :sensors] and is_pid(pid) and is_integer(boot_id) and boot_id > 0 do
+    cond do
+      remote_node != identity(role) -> :unexpected
+      Map.get(remotes, role) == %{pid: pid, boot_id: boot_id} -> :duplicate
+      true -> :new
+    end
+  end
 
   defp start_controller do
     case Client.start_link(
@@ -121,7 +135,7 @@ defmodule RobotSim.MultinodeDistributed do
         start_role_process(role)
         true = :erlang.register(@remote_name, self())
         IO.puts("modbus_robot_multinode: #{role} distribution ready unit=#{@unit_id}")
-        remote_loop(role)
+        remote_loop(role, Session.new_id())
 
       other ->
         halt("#{role} net_kernel start failed", other)
@@ -135,48 +149,55 @@ defmodule RobotSim.MultinodeDistributed do
 
   defp start_role_process(:sensors), do: :ok
 
-  defp remote_loop(role) do
-    announce(role)
+  defp remote_loop(role, boot_id) do
+    announce(role, boot_id)
 
     receive do
       {:multinode_ack, ^role} ->
         IO.puts("modbus_robot_multinode: #{role} acknowledged by Controller")
-        connected_remote_loop(role)
+        connected_remote_loop(role, boot_id)
 
       {:multinode_probe, from, reference} when is_pid(from) ->
         send(from, {:multinode_probe_reply, reference, role, node()})
-        remote_loop(role)
+        remote_loop(role, boot_id)
     after
-      2_000 -> remote_loop(role)
+      2_000 -> remote_loop(role, boot_id)
     end
   end
 
-  defp connected_remote_loop(role) do
+  defp connected_remote_loop(role, boot_id) do
     receive do
       {:multinode_ack, ^role} ->
-        connected_remote_loop(role)
+        connected_remote_loop(role, boot_id)
 
       {:multinode_probe, from, reference} when is_pid(from) ->
         send(from, {:multinode_probe_reply, reference, role, node()})
-        connected_remote_loop(role)
+        connected_remote_loop(role, boot_id)
+    after
+      @announce_ms ->
+        announce(role, boot_id)
+        connected_remote_loop(role, boot_id)
     end
   end
 
-  defp announce(role) do
+  defp announce(role, boot_id) do
     send(
       {@controller_name, identity(:controller)},
-      {:multinode_ready, role, node(), self()}
+      {:multinode_ready, role, node(), self(), boot_id}
     )
   end
 
-  defp await_remotes(%{drive: drive, sensors: sensors})
-       when is_pid(drive) and is_pid(sensors) do
+  defp await_remotes(%{
+         drive: %{pid: drive_pid} = drive,
+         sensors: %{pid: sensors_pid} = sensors
+       })
+       when is_pid(drive_pid) and is_pid(sensors_pid) do
     IO.puts("modbus_robot_multinode: both remote nodes connected")
 
     with :ok <- probe_remote(:drive, identity(:drive)),
          :ok <- probe_remote(:sensors, identity(:sensors)) do
       IO.puts("modbus_robot_multinode: complete Drive and Sensors remote messaging")
-      Process.sleep(:infinity)
+      controller_loop(%{drive: drive, sensors: sensors})
     else
       {:error, reason} -> halt("remote probe failed", reason)
     end
@@ -184,24 +205,71 @@ defmodule RobotSim.MultinodeDistributed do
 
   defp await_remotes(remotes) do
     receive do
-      {:multinode_ready, role, remote_node, pid}
-      when role in [:drive, :sensors] and is_pid(pid) ->
-        expected_node = identity(role)
+      {:multinode_ready, role, remote_node, pid, boot_id}
+      when role in [:drive, :sensors] and is_pid(pid) and is_integer(boot_id) and boot_id > 0 ->
+        case classify_readiness(remotes, role, remote_node, pid, boot_id) do
+          :new ->
+            send(pid, {:multinode_ack, role})
+            IO.puts("modbus_robot_multinode: connected role=#{role} node=#{inspect(remote_node)}")
+            await_remotes(Map.put(remotes, role, %{pid: pid, boot_id: boot_id}))
 
-        if remote_node == expected_node do
-          send(pid, {:multinode_ack, role})
-          IO.puts("modbus_robot_multinode: connected role=#{role} node=#{inspect(remote_node)}")
-          await_remotes(Map.put(remotes, role, pid))
-        else
-          IO.puts(
-            "modbus_robot_multinode: ignored unexpected node role=#{role} node=#{inspect(remote_node)}"
-          )
+          :duplicate ->
+            send(pid, {:multinode_ack, role})
+            await_remotes(remotes)
 
-          await_remotes(remotes)
+          :unexpected ->
+            log_unexpected_node(role, remote_node)
+            await_remotes(remotes)
         end
     after
       @probe_timeout_ms -> halt("timed out waiting for remote nodes", remotes)
     end
+  end
+
+  defp controller_loop(remotes) do
+    receive do
+      {:multinode_ready, role, remote_node, pid, boot_id}
+      when role in [:drive, :sensors] and is_pid(pid) and is_integer(boot_id) and boot_id > 0 ->
+        case classify_readiness(remotes, role, remote_node, pid, boot_id) do
+          :duplicate ->
+            send(pid, {:multinode_ack, role})
+            controller_loop(remotes)
+
+          :new ->
+            send(pid, {:multinode_ack, role})
+
+            IO.puts(
+              "modbus_robot_multinode: reconnected role=#{role} node=#{inspect(remote_node)}"
+            )
+
+            verify_recovery(role)
+            controller_loop(Map.put(remotes, role, %{pid: pid, boot_id: boot_id}))
+
+          :unexpected ->
+            log_unexpected_node(role, remote_node)
+            controller_loop(remotes)
+        end
+    end
+  end
+
+  defp verify_recovery(restarted_role) do
+    peer_role = if restarted_role == :drive, do: :sensors, else: :drive
+
+    with :ok <- probe_remote(restarted_role, identity(restarted_role)),
+         :ok <- probe_remote(peer_role, identity(peer_role)) do
+      IO.puts(
+        "modbus_robot_multinode: recovery complete restarted=#{restarted_role} peer=#{peer_role}"
+      )
+    else
+      {:error, reason} ->
+        IO.puts("modbus_robot_multinode: recovery probe failed #{inspect(reason)}")
+    end
+  end
+
+  defp log_unexpected_node(role, remote_node) do
+    IO.puts(
+      "modbus_robot_multinode: ignored unexpected node role=#{role} node=#{inspect(remote_node)}"
+    )
   end
 
   defp probe_remote(role, remote_node) do

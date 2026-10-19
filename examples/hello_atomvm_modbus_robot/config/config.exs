@@ -77,6 +77,7 @@ max_queued_chunks = parse_integer.("MODBUS_MAX_QUEUED_CHUNKS", 256)
 mission_timeout_ms = parse_integer.("ROBOT_COMMAND_TIMEOUT_MS", 60_000)
 mission_retries = parse_integer.("ROBOT_COMMAND_RETRIES", 1)
 mission_start_delay_ms = parse_integer.("ROBOT_MISSION_START_DELAY_MS", 2_000)
+multinode_announce_ms = parse_integer.("ROBOT_MULTINODE_ANNOUNCE_MS", 30_000)
 wait_for_peer = parse_boolean.("MODBUS_WAIT_FOR_PEER", role == :controller)
 
 if mode == :distributed and role == :sensors do
@@ -125,6 +126,10 @@ end
 
 if mission_start_delay_ms < 0 do
   raise ArgumentError, "ROBOT_MISSION_START_DELAY_MS must be a non-negative integer"
+end
+
+if multinode_announce_ms < 1 do
+  raise ArgumentError, "ROBOT_MULTINODE_ANNOUNCE_MS must be a positive integer"
 end
 
 serial = [
@@ -178,4 +183,5 @@ config :robot_sim,
   mission_timeout_ms: mission_timeout_ms,
   mission_retries: mission_retries,
   mission_start_delay_ms: mission_start_delay_ms,
+  multinode_announce_ms: multinode_announce_ms,
   first_request_id: parse_integer.("ROBOT_FIRST_REQUEST_ID", 1)

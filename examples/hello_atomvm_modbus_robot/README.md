@@ -291,7 +291,8 @@ modbus_robot_multidrop: complete result={:ok, %{successes: 6, failures: 0, ...}}
 Stage 3 は `serial_dist` の `uart_ports` に 2 個の virtual UART handle を渡します。Controller 側の各 adapter は独立した
 sequence / ACK / session / byte-stream state を持ちますが、外部所有の 1 個の `AVModbus.Client` を共有します。これにより、
 physical UART と active Modbus transaction は常に 1 個の Client process が所有します。Drive と Sensors は自分の stream から
-Controller への distribution connection を開始します。
+Controller への distribution connection を開始します。readiness message は起動ごとの boot session ID を持つため、AtomVM が
+reboot 前後で同じ PID を再利用しても remote restart を識別できます。
 
 現在の実機 baseline は `ATOMVM_UART_SPEED=115200` です。9,600 baud では 2 connection の handshake が AtomVM の固定 7 秒
 setup timer に収まりませんでした。また、複数 connection の最初の tick で `net_kernel` が crash する AtomVM bug が見つかり、
@@ -337,9 +338,23 @@ modbus_robot_multinode: probe reply role=sensors node=:sensors@modbus.local
 modbus_robot_multinode: complete Drive and Sensors remote messaging
 ```
 
+remote を単独で reset すると、Controller は再接続した role と接続を維持した peer の両方へ probe を送ります。
+
+```text
+modbus_robot_multinode: reconnected role=drive node=:drive@modbus.local
+modbus_robot_multinode: probe reply role=drive node=:drive@modbus.local
+modbus_robot_multinode: probe reply role=sensors node=:sensors@modbus.local
+modbus_robot_multinode: recovery complete restarted=drive peer=sensors
+```
+
+`ROBOT_MULTINODE_ANNOUNCE_MS` の既定値は `30000` です。これは接続済み remote が Controller へ readiness heartbeat を送る間隔で、
+remote reboot の検出には起動直後の announce を使います。Controller 単独 reboot 後も、両 remote が heartbeat で再登録して
+probe を完了することを実機確認しています。
+
 shared Client と `uart_ports` を採用した理由は
-[ADR 0005](docs/adr/0005-share-one-client-across-distribution-streams.md) を参照してください。remote reboot recovery、
-Drive / Sensors 間 relay、application traffic の長時間試験は未完了です。
+[ADR 0005](docs/adr/0005-share-one-client-across-distribution-streams.md)、boot session ID の判断は
+[ADR 0006](docs/adr/0006-identify-remote-boots-with-session-ids.md) を参照してください。Drive / Sensors の独立 reboot recovery は実機確認済みです。
+Controller reboot recovery も実機確認済みです。Drive / Sensors 間 relay、application traffic の長時間試験は未完了です。
 
 ## 境界
 

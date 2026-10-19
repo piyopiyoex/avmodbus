@@ -19,3 +19,4 @@
 - [0003: 既存 example の experimental carrier を再利用する](0003-reuse-the-existing-experimental-carrier.md)
 - [0004: 3-node distribution より先に standard multidrop を検証する](0004-validate-standard-multidrop-before-distribution.md)
 - [0005: 1 個の Modbus Client を複数 distribution stream で共有する](0005-share-one-client-across-distribution-streams.md)
+- [0006: boot session ID で remote node の再起動を識別する](0006-identify-remote-boots-with-session-ids.md)
