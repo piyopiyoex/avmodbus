@@ -14,8 +14,8 @@
 | 0 | 完了 | host-only virtual rover |
 | 1 | 完了 | 2-node mission と in-flight Drive reboot の境界を実機確認 |
 | 2 | 完了 | 3-device standard Modbus multidrop、120-request soak、独立Server reboot |
-| 3 | 基本実証 | 2 remote node の同時接続と messaging、複数 tick を実機確認 |
-| 4 | 未着手 | virtual sensors と fault tolerance |
+| 3 | 基本実証 | 2 remote node の同時接続、Controller relay、複数 tick を実機確認 |
+| 4 | 着手 | virtual distance / battery sample を追加。mission 判断と fault tolerance は未着手 |
 
 ## Stage 0: local virtual rover simulation
 
@@ -75,7 +75,7 @@ termination / bias の電気測定と長時間 soak は未実施であり、現�
 - [x] 複数の virtual UART stream を `serial_dist` / `net_kernel` に渡す方法を調査する
 - [x] `controller <-> drive` と `controller <-> sensors` の connection を確立する
 - [x] 両 remote node の registered process と message を交換する
-- [ ] Server node 間の message を controller で relay する必要があるか検証する
+- [x] Server node 間の message を controller で relay する必要があるか検証する
 - [x] 片方の Server reboot 後に再接続し、もう一方の connection が継続することを確認する
 - [x] Controller reboot 後に両 Server が再接続して application messaging を再開することを確認する
 - [x] 基本疎通に dedicated carrier は不要と判断する
@@ -86,13 +86,13 @@ termination / bias の電気測定と長時間 soak は未実施であり、現�
 
 完了条件は、controller と 2 台の remote node の genuine distribution を実証するか、必要な AtomVM / carrier
 変更と blocker を再現可能な形で記録することです。基本疎通、3 role の独立 reboot recovery、60 application round trip の短時間
-fairness baseline、traffic 中の両 remote reboot recovery は 2026-10-19 に達成しましたが、local AtomVM patch が必要なため
-Stage 3 は follow-up を残しています。Modbus Server 同士が bus を直接駆動する構成は仮定しません。
+fairness baseline、traffic 中の両 remote reboot recovery、Sensors から Drive への Controller relay は 2026-10-19 に達成しました。
+local AtomVM patch が必要なため Stage 3 は follow-up を残しています。Modbus Server 同士が bus を直接駆動する構成は仮定しません。
 
 ## Stage 4: virtual sensors と fault tolerance
 
-- [ ] virtual distance / obstacle sensor を追加する
-- [ ] simulated battery status を追加する
+- [x] deterministic な virtual distance sample を追加する
+- [x] simulated battery sample を追加する
 - [ ] sensor data に基づいて controller が mission を変更する
 - [ ] process monitoring と independent node restart を検証する
 - [ ] mission 中の communication interruption を検証する

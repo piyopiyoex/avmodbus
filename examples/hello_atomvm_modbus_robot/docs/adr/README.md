@@ -20,3 +20,4 @@
 - [0004: 3-node distribution より先に standard multidrop を検証する](0004-validate-standard-multidrop-before-distribution.md)
 - [0005: 1 個の Modbus Client を複数 distribution stream で共有する](0005-share-one-client-across-distribution-streams.md)
 - [0006: boot session ID で remote node の再起動を識別する](0006-identify-remote-boots-with-session-ids.md)
+- [0007: Server 間の application message は Controller で中継する](0007-relay-server-application-messages-through-controller.md)

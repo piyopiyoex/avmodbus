@@ -12,7 +12,7 @@ defmodule RobotSim.MultinodeDistributed do
 
   alias AVModbus.Client
   alias DisterlProbe.{ModbusUART, Payload, Session}
-  alias RobotSim.{Drive, MultinodeStats}
+  alias RobotSim.{Drive, MultinodeStats, Relay, Sensors}
 
   @mode Application.compile_env(:robot_sim, :mode, :distributed)
   @role Application.compile_env(:robot_sim, :role, :controller)
@@ -40,6 +40,7 @@ defmodule RobotSim.MultinodeDistributed do
   @controller_name :modbus_robot_controller
   @remote_name :modbus_robot_remote
   @drive_name :modbus_robot_drive
+  @sensors_name :modbus_robot_sensors
 
   @doc "Start the configured Stage 3 role."
   @spec start() :: no_return()
@@ -182,7 +183,10 @@ defmodule RobotSim.MultinodeDistributed do
     IO.puts("modbus_robot_multinode: Drive process registered as #{inspect(@drive_name)}")
   end
 
-  defp start_role_process(:sensors), do: :ok
+  defp start_role_process(:sensors) do
+    {:ok, _sensors} = Sensors.start_link(name: @sensors_name)
+    IO.puts("modbus_robot_multinode: Sensors process registered as #{inspect(@sensors_name)}")
+  end
 
   defp remote_loop(role, boot_id) do
     announce(role, boot_id)
@@ -240,7 +244,8 @@ defmodule RobotSim.MultinodeDistributed do
     IO.puts("modbus_robot_multinode: both remote nodes connected")
 
     with :ok <- probe_remote(:drive, identity(:drive)),
-         :ok <- probe_remote(:sensors, identity(:sensors)) do
+         :ok <- probe_remote(:sensors, identity(:sensors)),
+         :ok <- relay_sensor_sample() do
       IO.puts("modbus_robot_multinode: complete Drive and Sensors remote messaging")
       remotes = run_soak_if_enabled(%{drive: drive, sensors: sensors})
       controller_loop(remotes)
@@ -328,6 +333,25 @@ defmodule RobotSim.MultinodeDistributed do
         :ok
     after
       @probe_timeout_ms -> {:error, {:probe_timeout, role, remote_node}}
+    end
+  end
+
+  defp relay_sensor_sample do
+    case Relay.run(
+           {@sensors_name, identity(:sensors)},
+           {@drive_name, identity(:drive)},
+           timeout_ms: @probe_timeout_ms
+         ) do
+      {:ok, result} ->
+        IO.puts(
+          "modbus_robot_multinode: relay complete sensors=#{inspect(result.sensors_node)} " <>
+            "drive=#{inspect(result.drive_node)} sample=#{inspect(result.sample)}"
+        )
+
+        :ok
+
+      {:error, reason} ->
+        {:error, {:sensor_relay_failed, reason}}
     end
   end
 

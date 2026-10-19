@@ -8,7 +8,7 @@ defmodule RobotSim.Drive do
 
   use GenServer
 
-  alias RobotSim.{Protocol, Rover}
+  alias RobotSim.{Protocol, Rover, Sensors}
 
   @default_max_completed 32
 
@@ -16,7 +16,8 @@ defmodule RobotSim.Drive do
           rover: Rover.t(),
           completed: [{Protocol.request_id(), Rover.command(), Protocol.result()}],
           max_completed: pos_integer(),
-          trace: boolean()
+          trace: boolean(),
+          last_sensor_sample: nil | %{source_node: node(), sample: Sensors.sample()}
         }
 
   @doc "Start a drive process with optional `:initial`, `:max_completed`, `:name`, and `:trace` settings."
@@ -36,14 +37,29 @@ defmodule RobotSim.Drive do
   @spec state(GenServer.server()) :: Rover.t()
   def state(server), do: GenServer.call(server, :state)
 
+  @doc "Return the last sensor sample accepted through the Controller relay."
+  @spec last_sensor_sample(GenServer.server()) ::
+          nil | %{source_node: node(), sample: Sensors.sample()}
+  def last_sensor_sample(server), do: GenServer.call(server, :last_sensor_sample)
+
   @impl true
   def init({%Rover{} = initial, max_completed, trace})
       when is_integer(max_completed) and max_completed > 0 and is_boolean(trace) do
-    {:ok, %{rover: initial, completed: [], max_completed: max_completed, trace: trace}}
+    {:ok,
+     %{
+       rover: initial,
+       completed: [],
+       max_completed: max_completed,
+       trace: trace,
+       last_sensor_sample: nil
+     }}
   end
 
   @impl true
   def handle_call(:state, _from, state), do: {:reply, state.rover, state}
+
+  def handle_call(:last_sensor_sample, _from, state),
+    do: {:reply, state.last_sensor_sample, state}
 
   # Explicit fallbacks avoid Elixir's generated callback path through
   # erlang:phash2/2, which AtomVM v0.7.0-beta.0 does not provide.
@@ -59,6 +75,17 @@ defmodule RobotSim.Drive do
     trace(state, request_id, command, result)
     send(reply_to, Protocol.reply(request_id, result))
     {:noreply, next_state}
+  end
+
+  def handle_info({:relayed_sensor_sample, reply_to, reference, source_node, sample}, state)
+      when is_pid(reply_to) do
+    if Sensors.valid_sample?(sample) do
+      send(reply_to, {:sensor_sample_accepted, reference, node(), sample})
+      {:noreply, %{state | last_sensor_sample: %{source_node: source_node, sample: sample}}}
+    else
+      send(reply_to, {:sensor_sample_rejected, reference, node(), :invalid_sample})
+      {:noreply, state}
+    end
   end
 
   def handle_info(_message, state), do: {:noreply, state}

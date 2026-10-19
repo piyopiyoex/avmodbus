@@ -4,13 +4,15 @@ AtomVM の distributed Erlang over Modbus RTU を、通信確認だけでなく�
 独立した実験用 Mix project です。ロボットは software 上で再現するため、motor、sensor、車体は必要ありません。
 
 現在は **Stage 0: host 上の rover simulation**、**Stage 1: 2-node distributed robot**、および
-**Stage 2: 3-device standard Modbus multidrop** を完了し、**Stage 3: 3-node distributed Erlang** の基本疎通まで
+**Stage 2: 3-device standard Modbus multidrop** を完了し、**Stage 3: 3-node distributed Erlang** の基本疎通と
+Controller-mediated sensor relay まで
 実証しています。2 台構成では genuine distributed Erlang を確立し、
 Controller から Drive の registered process へ command を送り、最終 state `(100, 50, 90°)` を確認しました。3 台構成では
 1 台の Controller が shared RS485 bus 上の Drive Unit 1 と Sensors Unit 2 を順番に poll し、115,200 baud では
 両 remote node と同時に genuine distribution connection を確立しました。既存の
 [`hello_atomvm_modbus_disterl`](../hello_atomvm_modbus_disterl/README.md) を local path dependency として再利用し、
-128-byte payload の 60 application round trip と 3 role の独立 reboot recovery も確認しています。AVModbus core と既存 example の
+128-byte payload の 60 application round trip、3 role の独立 reboot recovery、および
+`Sensors -> Controller -> Drive` の virtual sensor sample 転送も確認しています。AVModbus core と既存 example の
 source は変更していません。
 
 ## 現在できること
@@ -29,6 +31,8 @@ source は変更していません。
 - 1 本の physical UART 上に Unit ごとの FC-100 stream を作り、Drive / Sensors と同時に remote message を交換する
 - Drive / Sensors への payload echo を交互順で継続し、role 別の RTT と失敗数を集計する
 - payload echo の進行中に remote を再起動し、新 session へ同じ idempotent probe を再送する
+- deterministic な virtual distance / battery sample を Sensors node で生成する
+- Controller が Sensors から受け取った sample を検証し、Drive へ中継して ACK を確認する
 
 各 Stage の進捗と完了条件は [ロードマップ](docs/roadmap.md) を参照してください。
 
@@ -144,8 +148,9 @@ Elixir では次の command 列です。
 ```
 
 Stage 1 では `controller` と `drive` の 2 node で distribution を検証しました。Stage 2 では 3 台を同じ bus に接続して
-standard Modbus RTU multidrop を検証しましたが、Erlang distribution は起動していません。図の 3-node distribution は
-Stage 3 の研究目標であり、現在サポートしている topology ではありません。
+standard Modbus RTU multidrop を検証しました。Stage 3 では Controller から Drive / Sensors への 2 本の distribution
+connection を同時に確立しています。Drive と Sensors の直接 connection は作らず、Server 間の application data は
+Controller が中継します。
 
 ## Stage 1 の build と実機実行
 
@@ -297,6 +302,11 @@ physical UART と active Modbus transaction は常に 1 個の Client process �
 Controller への distribution connection を開始します。readiness message は起動ごとの boot session ID を持つため、AtomVM が
 reboot 前後で同じ PID を再利用しても remote restart を識別できます。
 
+application relay は transport routing ではありません。Controller は `:modbus_robot_sensors` へ sample を要求し、値を検証してから
+`:modbus_robot_drive` へ転送します。Drive が同じ sample を含む ACK を返した時点で完了とします。physical bus 上では両区間とも
+Controller の Modbus Client が transaction を開始します。この境界の判断は
+[ADR 0007](docs/adr/0007-relay-server-application-messages-through-controller.md) に記録しています。
+
 現在の実機 baseline は `ATOMVM_UART_SPEED=115200` です。9,600 baud では 2 connection の handshake が AtomVM の固定 7 秒
 setup timer に収まりませんでした。また、複数 connection の最初の tick で `net_kernel` が crash する AtomVM bug が見つかり、
 local patch で修正して 90 秒間 connection を維持しました。公式 AtomVM image のまま長時間利用できるという意味ではありません。
@@ -368,6 +378,7 @@ modbus_robot_multinode: connected role=sensors node=:sensors@modbus.local
 modbus_robot_multinode: both remote nodes connected
 modbus_robot_multinode: probe reply role=drive node=:drive@modbus.local
 modbus_robot_multinode: probe reply role=sensors node=:sensors@modbus.local
+modbus_robot_multinode: relay complete sensors=:sensors@modbus.local drive=:drive@modbus.local sample=%{sequence: 1, distance_mm: 500, battery_percent: 100}
 modbus_robot_multinode: complete Drive and Sensors remote messaging
 ```
 
@@ -384,11 +395,15 @@ modbus_robot_multinode: recovery complete restarted=drive peer=sensors
 remote reboot の検出には起動直後の announce を使います。Controller 単独 reboot 後も、両 remote が heartbeat で再登録して
 probe を完了することを実機確認しています。
 
+この relay は 2026-10-19 に 3 台の実機で確認しました。sample、Drive の last sample、sequence は volatile であり、reboot をまたぐ
+durable delivery や exactly-once semantics はありません。host test と実機条件は
+[Controller-mediated sensor relay](docs/worklog/2026-10-19-stage-3-controller-relay.md) に記録しています。
+
 shared Client と `uart_ports` を採用した理由は
 [ADR 0005](docs/adr/0005-share-one-client-across-distribution-streams.md)、boot session ID の判断は
 [ADR 0006](docs/adr/0006-identify-remote-boots-with-session-ids.md) を参照してください。Drive / Sensors の独立 reboot recovery は実機確認済みです。
-Controller reboot recovery と application traffic の短時間 fairness baseline も実機確認済みです。Drive / Sensors 間 relay、
-より長時間の soak、concurrent producer の fairness は未完了です。
+Controller reboot recovery、application traffic の短時間 fairness baseline、Drive / Sensors 間の Controller relay も実機確認済みです。
+より長時間の soak、concurrent producer の fairness、sensor data に基づく mission decision は未完了です。
 
 ## 境界
 
