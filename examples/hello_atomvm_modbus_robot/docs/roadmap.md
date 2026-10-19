@@ -13,7 +13,7 @@
 | --- | --- | --- |
 | 0 | 完了 | host-only virtual rover |
 | 1 | 完了 | 2-node mission と in-flight Drive reboot の境界を実機確認 |
-| 2 | 未着手 | 3-device standard Modbus multidrop |
+| 2 | 完了 | 3-device standard Modbus multidrop、120-request soak、独立Server reboot |
 | 3 | research | 3-node distributed Erlang |
 | 4 | 未着手 | virtual sensors と fault tolerance |
 
@@ -57,14 +57,16 @@ Controller は final state の不一致を mission failure として検出しま
 
 この Stage では Erlang distribution を使わず、standard Modbus RTU の multidrop を先に検証します。
 
-- [ ] 3 台目の XIAO ESP32-C5 と HW-519 を shared two-wire bus へ接続する
-- [ ] drive を Unit ID 1、sensors を Unit ID 2 にする
-- [ ] controller の single UART から両方の Server を順番に poll する
-- [ ] transaction が重ならない bus scheduling と UART ownership を確認する
-- [ ] termination / bias、fairness、latency、timeout、error behavior を記録する
-- [ ] 各 Server を独立に reboot して recovery を確認する
+- [x] 3 台目の XIAO ESP32-C5 と HW-519 を shared two-wire bus へ接続する
+- [x] drive を Unit ID 1、sensors を Unit ID 2 にする
+- [x] controller の single UART から両方の Server を順番に poll する
+- [x] transaction が重ならない bus scheduling と UART ownership を確認する
+- [x] wiring 条件、fairness、latency、timeout、error behavior を記録する
+- [x] 各 Server を独立に reboot して recovery を確認する
 
 完了条件は、1 台の Client が 2 台の Server と同じ RS485 bus 上で安定して standard Modbus 通信できることです。
+2026-10-19 に 60 cycle / 120 request を error 0 で完了し、Drive / Sensors の独立 reboot も read retry 内で回復しました。
+termination / bias の電気測定と長時間 soak は未実施であり、現在の hardware profile を超える保証には含めません。
 
 ## Stage 3: three-node distributed Erlang
 

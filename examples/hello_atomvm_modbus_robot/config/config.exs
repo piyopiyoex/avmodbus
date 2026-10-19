@@ -23,8 +23,50 @@ parse_boolean = fn name, default ->
   end
 end
 
-role = if System.get_env("ROBOT_ROLE") == "drive", do: :drive, else: :controller
-transport_role = if role == :drive, do: :server, else: :client
+mode =
+  case System.get_env("ROBOT_MODE") do
+    nil ->
+      :distributed
+
+    "distributed" ->
+      :distributed
+
+    "multidrop" ->
+      :multidrop
+
+    value ->
+      raise ArgumentError, "ROBOT_MODE must be distributed or multidrop; got #{inspect(value)}"
+  end
+
+role =
+  case System.get_env("ROBOT_ROLE") do
+    nil ->
+      :controller
+
+    "controller" ->
+      :controller
+
+    "drive" ->
+      :drive
+
+    "sensors" ->
+      :sensors
+
+    value ->
+      raise ArgumentError,
+            "ROBOT_ROLE must be controller, drive, or sensors; got #{inspect(value)}"
+  end
+
+transport_role = if role == :controller, do: :client, else: :server
+distributed_role = if role == :drive, do: :drive, else: :controller
+default_unit_id = if role == :sensors, do: 2, else: 1
+unit_id = parse_integer.("MODBUS_UNIT_ID", default_unit_id)
+drive_unit_id = parse_integer.("ROBOT_DRIVE_UNIT_ID", 1)
+sensors_unit_id = parse_integer.("ROBOT_SENSORS_UNIT_ID", 2)
+multidrop_cycles = parse_integer.("ROBOT_MULTIDROP_CYCLES", 3)
+multidrop_interval_ms = parse_integer.("ROBOT_MULTIDROP_INTERVAL_MS", 1_000)
+multidrop_start_delay_ms = parse_integer.("ROBOT_MULTIDROP_START_DELAY_MS", 2_000)
+multidrop_gap_ms = parse_integer.("ROBOT_MULTIDROP_GAP_MS", 20)
 chunk_payload_bytes = parse_integer.("MODBUS_CHUNK_PAYLOAD_BYTES", 96)
 max_queued_bytes = parse_integer.("MODBUS_MAX_QUEUED_BYTES", 8_192)
 max_queued_chunks = parse_integer.("MODBUS_MAX_QUEUED_CHUNKS", 256)
@@ -32,6 +74,30 @@ mission_timeout_ms = parse_integer.("ROBOT_COMMAND_TIMEOUT_MS", 60_000)
 mission_retries = parse_integer.("ROBOT_COMMAND_RETRIES", 1)
 mission_start_delay_ms = parse_integer.("ROBOT_MISSION_START_DELAY_MS", 2_000)
 wait_for_peer = parse_boolean.("MODBUS_WAIT_FOR_PEER", role == :controller)
+
+if mode == :distributed and role == :sensors do
+  raise ArgumentError, "ROBOT_ROLE=sensors is supported only with ROBOT_MODE=multidrop"
+end
+
+if unit_id < 1 or unit_id > 247 do
+  raise ArgumentError, "MODBUS_UNIT_ID must be between 1 and 247"
+end
+
+if drive_unit_id < 1 or drive_unit_id > 247 or sensors_unit_id < 1 or sensors_unit_id > 247 do
+  raise ArgumentError, "ROBOT_DRIVE_UNIT_ID and ROBOT_SENSORS_UNIT_ID must be between 1 and 247"
+end
+
+if drive_unit_id == sensors_unit_id do
+  raise ArgumentError, "ROBOT_DRIVE_UNIT_ID and ROBOT_SENSORS_UNIT_ID must be different"
+end
+
+if multidrop_cycles < 1 do
+  raise ArgumentError, "ROBOT_MULTIDROP_CYCLES must be a positive integer"
+end
+
+if multidrop_interval_ms < 0 or multidrop_start_delay_ms < 0 or multidrop_gap_ms < 0 do
+  raise ArgumentError, "multidrop timing values must be non-negative integers"
+end
 
 if chunk_payload_bytes < 1 or chunk_payload_bytes > 232 do
   raise ArgumentError, "MODBUS_CHUNK_PAYLOAD_BYTES must be between 1 and 232"
@@ -82,10 +148,18 @@ config :avmodbus,
   modbus_silence_ms: 20
 
 config :robot_sim,
+  mode: mode,
   role: role,
+  distributed_role: distributed_role,
   transport_role: transport_role,
   serial: serial,
-  unit_id: parse_integer.("MODBUS_UNIT_ID", 1),
+  unit_id: unit_id,
+  drive_unit_id: drive_unit_id,
+  sensors_unit_id: sensors_unit_id,
+  multidrop_cycles: multidrop_cycles,
+  multidrop_interval_ms: multidrop_interval_ms,
+  multidrop_start_delay_ms: multidrop_start_delay_ms,
+  multidrop_gap_ms: multidrop_gap_ms,
   timeout_ms: parse_integer.("MODBUS_RESPONSE_TIMEOUT_MS", 500),
   bulk_timeout_ms: parse_integer.("MODBUS_BULK_RESPONSE_TIMEOUT_MS", 2_000),
   chunk_payload_bytes: chunk_payload_bytes,

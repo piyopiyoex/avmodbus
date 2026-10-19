@@ -10,3 +10,4 @@ host test、実機試験、障害調査など、再現可能な時系列の記�
 - [2026-10-18: Stage 1 AtomVM build scaffold](2026-10-18-stage-1-atomvm-build.md)
 - [2026-10-18: Stage 1 two-board distributed mission](2026-10-18-stage-1-two-board-mission.md)
 - [2026-10-18: Stage 1 in-flight Drive reboot](2026-10-18-stage-1-drive-reboot.md)
+- [2026-10-19: Stage 2 three-device standard Modbus multidrop](2026-10-19-stage-2-multidrop.md)

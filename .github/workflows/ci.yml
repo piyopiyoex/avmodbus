@@ -89,12 +89,20 @@ jobs:
           mix format --check-formatted
           mix test
 
-      - name: Check virtual robot controller and drive builds
+      - name: Check two-node distributed robot builds
         working-directory: examples/hello_atomvm_modbus_robot
         run: |
           for role in controller drive; do
-            mix clean
-            ROBOT_ROLE="$role" MIX_ENV=prod mix atomvm.check
+            MIX_ENV=prod mix clean
+            ROBOT_MODE=distributed ROBOT_ROLE="$role" MIX_ENV=prod mix atomvm.check
+          done
+
+      - name: Check three-device multidrop builds
+        working-directory: examples/hello_atomvm_modbus_robot
+        run: |
+          for role in controller drive sensors; do
+            MIX_ENV=prod mix clean
+            ROBOT_MODE=multidrop ROBOT_ROLE="$role" MIX_ENV=prod mix atomvm.check
           done
 
   interoperability:

@@ -11,7 +11,7 @@ defmodule RobotSim.Distributed do
   alias RobotSim.{Controller, Drive}
 
   @drive_name :modbus_robot_drive
-  @role Application.compile_env(:robot_sim, :role, :controller)
+  @role Application.compile_env(:robot_sim, :distributed_role, :controller)
   @transport_role Application.compile_env(:robot_sim, :transport_role, :client)
   @serial Application.compile_env(:robot_sim, :serial, [])
   @unit_id Application.compile_env(:robot_sim, :unit_id, 1)

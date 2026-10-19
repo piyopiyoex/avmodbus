@@ -4,7 +4,7 @@
 
 ## 利用方法
 
-- [サンプル README](../README.md) — host simulation、Stage 1 実機実行、座標規則、command、目標構成
+- [サンプル README](../README.md) — host simulation、Stage 1 distribution、Stage 2 multidrop、座標規則、設定
 
 現在動く機能と再現手順はサンプル README を正とします。
 

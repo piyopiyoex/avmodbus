@@ -8,7 +8,7 @@ defmodule RobotSim.MixProject do
       elixir: "~> 1.19.0",
       deps: deps(),
       description: "Virtual rover experiment for distributed Erlang over Modbus RTU",
-      atomvm: [start: RobotSim.Distributed],
+      atomvm: [start: RobotSim.Firmware],
       start_permanent: Mix.env() == :prod
     ]
   end

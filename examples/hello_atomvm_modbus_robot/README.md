@@ -3,9 +3,10 @@
 AtomVM の distributed Erlang over Modbus RTU を、通信確認だけでなく分散 application に利用するための
 独立した実験用 Mix project です。ロボットは software 上で再現するため、motor、sensor、車体は必要ありません。
 
-現在は **Stage 0: host 上の rover simulation** と、**Stage 1: 2-node distributed robot** の基準 mission を
-完了しています。2 台の XIAO ESP32-C5 上で genuine distributed Erlang を確立し、Controller から Drive の registered
-process へ command を送り、最終 state `(100, 50, 90°)` を確認しました。既存の
+現在は **Stage 0: host 上の rover simulation**、**Stage 1: 2-node distributed robot**、および
+**Stage 2: 3-device standard Modbus multidrop** を完了しています。2 台構成では genuine distributed Erlang を確立し、
+Controller から Drive の registered process へ command を送り、最終 state `(100, 50, 90°)` を確認しました。3 台構成では
+1 台の Controller が shared RS485 bus 上の Drive Unit 1 と Sensors Unit 2 を順番に poll しました。既存の
 [`hello_atomvm_modbus_disterl`](../hello_atomvm_modbus_disterl/README.md) を local path dependency として再利用し、
 AVModbus core と既存 example の source は変更していません。
 
@@ -21,8 +22,9 @@ AVModbus core と既存 example の source は変更していません。
 - 直近の同一 request を再実行せず、cache 済み result を返す
 - 2 台の AtomVM node 間で reference mission を remote 実行する
 - Controller が final status を期待値と比較し、不一致を mission failure として検出する
+- standard Modbus RTU mode で Drive と Sensors を同じ bus 上から順番に poll する
 
-今後の Stage 1–4 と完了条件は [ロードマップ](docs/roadmap.md) を参照してください。
+各 Stage の進捗と完了条件は [ロードマップ](docs/roadmap.md) を参照してください。
 
 ## Host で実行する
 
@@ -135,9 +137,9 @@ Elixir では次の command 列です。
   virtual movement          virtual sensors
 ```
 
-最初の実機 milestone では `controller` と `drive` の 2 node だけを使います。3 台目は、standard Modbus RTU の
-multidrop と、1 本の UART 上に複数の独立した distribution stream を構成できるかを別々に検証してから追加します。
-図は目標であり、現在サポートしている topology ではありません。
+Stage 1 では `controller` と `drive` の 2 node で distribution を検証しました。Stage 2 では 3 台を同じ bus に接続して
+standard Modbus RTU multidrop を検証しましたが、Erlang distribution は起動していません。図の 3-node distribution は
+Stage 3 の研究目標であり、現在サポートしている topology ではありません。
 
 ## Stage 1 の build と実機実行
 
@@ -204,11 +206,89 @@ map field の表示順は AtomVM build により異なる場合があります�
 UART pin、chunk、queue、trace の environment variable は既存の
 [distributed Erlang example](../hello_atomvm_modbus_disterl/README.md#build-time-configuration) と同じです。
 
+## Stage 2: 3-device standard Modbus multidrop
+
+Stage 2 は Erlang distribution を開始せず、AVModbus の標準 Function Code 3 で holding register を読みます。
+Controller だけが UART を所有して request を開始し、Drive は Unit 1、Sensors は Unit 2 として自分宛ての request だけに
+応答します。
+
+| Role | default Unit ID | identity registers `[address 0, address 1]` |
+| --- | ---: | --- |
+| Drive | 1 | `[1, 1]` |
+| Sensors | 2 | `[2, 2]` |
+
+各 role は compile-time configuration です。現在の接続例では USB serial を確認し、次の port へ flash します。
+`ttyACM` 番号は接続順で変わるため、実際の作業では USB serial または `/dev/serial/by-id/` を優先してください。
+
+```text
+Drive:      /dev/ttyACM0  38:44:BE:A5:04:DC
+Sensors:    /dev/ttyACM1  10:BD:A3:CF:09:04
+Controller: /dev/ttyACM2  38:44:BE:A5:05:14
+```
+
+Drive:
+
+```sh
+MIX_ENV=prod mix clean
+ROBOT_MODE=multidrop ROBOT_ROLE=drive MIX_ENV=prod mix atomvm.check
+ROBOT_MODE=multidrop ROBOT_ROLE=drive MIX_ENV=prod mix atomvm.packbeam
+ROBOT_MODE=multidrop ROBOT_ROLE=drive MIX_ENV=prod \
+  mix atomvm.esp32.flash --port /dev/ttyACM0
+```
+
+Sensors:
+
+```sh
+MIX_ENV=prod mix clean
+ROBOT_MODE=multidrop ROBOT_ROLE=sensors MIX_ENV=prod mix atomvm.check
+ROBOT_MODE=multidrop ROBOT_ROLE=sensors MIX_ENV=prod mix atomvm.packbeam
+ROBOT_MODE=multidrop ROBOT_ROLE=sensors MIX_ENV=prod \
+  mix atomvm.esp32.flash --port /dev/ttyACM1
+```
+
+Controller:
+
+```sh
+MIX_ENV=prod mix clean
+ROBOT_MODE=multidrop ROBOT_ROLE=controller MIX_ENV=prod mix atomvm.check
+ROBOT_MODE=multidrop ROBOT_ROLE=controller MIX_ENV=prod mix atomvm.packbeam
+ROBOT_MODE=multidrop ROBOT_ROLE=controller MIX_ENV=prod \
+  mix atomvm.esp32.flash --port /dev/ttyACM2
+```
+
+2 台の Server を先に起動し、次に Controller を起動します。default 3 cycle が成功すると次の summary を出力します。
+
+```text
+modbus_robot_multidrop: cycle=1 role=drive unit=1 ... reply={:ok, [1, 1]}
+modbus_robot_multidrop: cycle=1 role=sensors unit=2 ... reply={:ok, [2, 2]}
+modbus_robot_multidrop: complete result={:ok, %{successes: 6, failures: 0, ...}}
+```
+
+主な Stage 2 build-time configuration:
+
+| environment variable | default | 意味 |
+| --- | --- | --- |
+| `ROBOT_MODE` | `distributed` | Stage 2では`multidrop` |
+| `ROBOT_ROLE` | `controller` | `controller`、`drive`、`sensors` |
+| `ROBOT_DRIVE_UNIT_ID` | `1` | Controller が poll する Drive Unit ID |
+| `ROBOT_SENSORS_UNIT_ID` | `2` | Controller が poll する Sensors Unit ID |
+| `MODBUS_UNIT_ID` | role 依存 | Server 自身の Unit ID。Drive 1、Sensors 2 |
+| `ROBOT_MULTIDROP_CYCLES` | `3` | Drive→Sensors poll を繰り返す回数 |
+| `ROBOT_MULTIDROP_INTERVAL_MS` | `1000` | cycle 間隔 |
+| `ROBOT_MULTIDROP_START_DELAY_MS` | `2000` | Controller が最初の request を送るまでの delay |
+| `ROBOT_MULTIDROP_GAP_MS` | `20` | 各 RTU 送信前の minimum gap |
+| `MODBUS_RESPONSE_TIMEOUT_MS` | `500` | 1 回の response timeout |
+
+60 cycle / 120 request の soak と両 Server の独立 reboot 結果は
+[Stage 2 実機検証](docs/worklog/2026-10-19-stage-2-multidrop.md) に記録しています。Stage 2 と Stage 3 を分離する理由は
+[ADR 0004](docs/adr/0004-validate-standard-multidrop-before-distribution.md) を参照してください。
+
 ## 境界
 
 - simulation logic と transport / process lifecycle を分離する
 - AVModbus core と既存の distributed Erlang example を変更しない
 - carrier の再利用境界を ADR 0003 に保ち、大量の source copy を避ける
+- standard multidrop と 3-node distribution を別の mode・milestone として扱う
 - automatic retry の前に command ID と重複実行防止を設計する
 - physical actuator、real-time control、safety-critical control を対象にしない
 
