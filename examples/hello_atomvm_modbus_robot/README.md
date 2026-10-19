@@ -365,6 +365,7 @@ ROBOT_MODE=multinode ROBOT_ROLE=controller ATOMVM_UART_SPEED=115200 \
 | `ROBOT_MULTINODE_HEALTH_CHECK_MS` | `5000` | Controller が role 別 lease を確認する間隔 |
 | `ROBOT_MULTINODE_LEASE_MS` | `75000` | 最後の readiness から remote unavailable とするまでの期限 |
 | `ROBOT_SENSOR_MISSION_STEPS` | `3` | 起動後に直列実行する sensor-driven mission の step 数 |
+| `ROBOT_DRIVE_DROP_FIRST_REPLY_PER_REQUEST` | `false` | Drive が各 request の初回 reply を破棄する fault injection |
 
 odd cycle は Drive、even cycle は Sensors を先に実行し、固定順による測定 bias を減らします。2026-10-19 の 30-cycle run は
 60 round trip を 198,745 ms で完了し、両 role とも 30 / 30 成功、失敗 0 でした。Drive の平均 RTT は 3,184 ms、Sensors は
@@ -433,6 +434,23 @@ connection を維持し、復帰 node と peer の両方へ probe が成功し�
 [ADR 0009](docs/adr/0009-use-readiness-leases-for-remote-health.md)、実機結果は
 [remote health worklog](docs/worklog/2026-10-19-stage-4-remote-health.md) に記録しています。lease を短くしすぎると queued heartbeat による
 false positive が起きるため、`ROBOT_MULTINODE_LEASE_MS` は heartbeat interval と transport latency に十分な余裕を持たせる必要があります。
+
+movement retry の重複排除を調べる fault injection は opt-in です。Drive で
+`ROBOT_DRIVE_DROP_FIRST_REPLY_PER_REQUEST=true` を指定すると、新しい request を実行した直後の reply だけを破棄します。同じ
+request ID の retry には cache 済み result を返すため、state transition は再実行しません。たとえば3-node構成では Drive を次のように
+buildします。
+
+```sh
+MIX_ENV=prod mix clean
+ROBOT_MODE=multinode ROBOT_ROLE=drive ATOMVM_UART_SPEED=115200 \
+  ROBOT_DRIVE_DROP_FIRST_REPLY_PER_REQUEST=true \
+  MIX_ENV=prod mix atomvm.packbeam
+```
+
+Controller では `ROBOT_COMMAND_RETRIES` を1以上にします。試験時間を短縮する場合も、`ROBOT_COMMAND_TIMEOUT_MS` は正常時の
+application RTT より十分長くしてください。この injection は reply loss だけを再現し、Drive reboot や cache eviction 後の
+重複排除は保証しません。通常の実行では必ず既定値 `false` を使用します。host test と実機検証待ちの build 条件は
+[reply loss fault injection worklog](docs/worklog/2026-10-20-stage-4-reply-loss-fault-injection.md) に記録しています。
 
 ## 境界
 

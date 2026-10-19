@@ -54,6 +54,15 @@ defmodule RobotSim.DriveTest do
     assert %Rover{x_mm: 100} = Drive.state(drive)
   end
 
+  test "Drive can inject one lost reply per request without executing a retry twice" do
+    drive = start_supervised!({Drive, drop_first_reply_per_request: true})
+
+    assert {:ok, %Rover{x_mm: 100}} =
+             Controller.command(drive, 8, {:forward, 100}, timeout_ms: 20, max_retries: 1)
+
+    assert %Rover{x_mm: 100} = Drive.state(drive)
+  end
+
   test "the controller reports timeout after exhausting retries" do
     sink = spawn_link(fn -> discard_requests(2) end)
 
@@ -67,6 +76,7 @@ defmodule RobotSim.DriveTest do
       completed: [],
       max_completed: 32,
       trace: false,
+      drop_first_reply_per_request: false,
       last_sensor_sample: nil
     }
 

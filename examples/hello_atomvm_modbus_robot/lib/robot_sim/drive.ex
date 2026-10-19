@@ -17,19 +17,33 @@ defmodule RobotSim.Drive do
           completed: [{Protocol.request_id(), Rover.command(), Protocol.result()}],
           max_completed: pos_integer(),
           trace: boolean(),
+          drop_first_reply_per_request: boolean(),
           last_sensor_sample: nil | %{source_node: node(), sample: Sensors.sample()}
         }
 
-  @doc "Start a drive process with optional `:initial`, `:max_completed`, `:name`, and `:trace` settings."
+  @doc "Start a drive process with optional state, naming, tracing, and reply fault-injection settings."
   @spec start_link(keyword()) :: GenServer.on_start()
   def start_link(options \\ []) do
     initial = Keyword.get(options, :initial, Rover.new())
     max_completed = Keyword.get(options, :max_completed, @default_max_completed)
     trace = Keyword.get(options, :trace, false)
 
+    drop_first_reply_per_request =
+      Keyword.get(options, :drop_first_reply_per_request, false)
+
     case Keyword.get(options, :name) do
-      nil -> GenServer.start_link(__MODULE__, {initial, max_completed, trace})
-      name -> GenServer.start_link(__MODULE__, {initial, max_completed, trace}, name: name)
+      nil ->
+        GenServer.start_link(
+          __MODULE__,
+          {initial, max_completed, trace, drop_first_reply_per_request}
+        )
+
+      name ->
+        GenServer.start_link(
+          __MODULE__,
+          {initial, max_completed, trace, drop_first_reply_per_request},
+          name: name
+        )
     end
   end
 
@@ -43,14 +57,16 @@ defmodule RobotSim.Drive do
   def last_sensor_sample(server), do: GenServer.call(server, :last_sensor_sample)
 
   @impl true
-  def init({%Rover{} = initial, max_completed, trace})
-      when is_integer(max_completed) and max_completed > 0 and is_boolean(trace) do
+  def init({%Rover{} = initial, max_completed, trace, drop_first_reply_per_request})
+      when is_integer(max_completed) and max_completed > 0 and is_boolean(trace) and
+             is_boolean(drop_first_reply_per_request) do
     {:ok,
      %{
        rover: initial,
        completed: [],
        max_completed: max_completed,
        trace: trace,
+       drop_first_reply_per_request: drop_first_reply_per_request,
        last_sensor_sample: nil
      }}
   end
@@ -71,9 +87,9 @@ defmodule RobotSim.Drive do
   @impl true
   def handle_info({:robot_command, reply_to, request_id, command}, state)
       when is_pid(reply_to) and is_integer(request_id) and request_id >= 0 do
-    {result, next_state} = execute_once(state, request_id, command)
+    {result, next_state, disposition} = execute_once(state, request_id, command)
     trace(state, request_id, command, result)
-    send(reply_to, Protocol.reply(request_id, result))
+    reply_or_inject_loss(state, reply_to, request_id, result, disposition)
     {:noreply, next_state}
   end
 
@@ -93,17 +109,31 @@ defmodule RobotSim.Drive do
   defp execute_once(state, request_id, command) do
     case find_completed(state.completed, request_id) do
       {^request_id, ^command, result} ->
-        {result, state}
+        {result, state, :cached}
 
       {^request_id, _different_command, _result} ->
-        {{:error, :request_id_conflict}, state}
+        {{:error, :request_id_conflict}, state, :conflict}
 
       nil ->
         result = Rover.execute(state.rover, command)
         rover = accepted_rover(result, state.rover)
         completed = remember(state.completed, {request_id, command, result}, state.max_completed)
-        {result, %{state | rover: rover, completed: completed}}
+        {result, %{state | rover: rover, completed: completed}, :executed}
     end
+  end
+
+  defp reply_or_inject_loss(
+         %{drop_first_reply_per_request: true},
+         _reply_to,
+         request_id,
+         _result,
+         :executed
+       ) do
+    IO.puts("modbus_robot_drive: injected reply loss request_id=#{request_id}")
+  end
+
+  defp reply_or_inject_loss(_state, reply_to, request_id, result, _disposition) do
+    send(reply_to, Protocol.reply(request_id, result))
   end
 
   defp find_completed(completed, request_id) do

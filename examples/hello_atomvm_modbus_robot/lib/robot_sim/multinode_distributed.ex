@@ -40,6 +40,11 @@ defmodule RobotSim.MultinodeDistributed do
   @soak_retries Application.compile_env(:robot_sim, :multinode_soak_retries, 1)
   @sensor_mission_steps Application.compile_env(:robot_sim, :sensor_mission_steps, 3)
   @mission_retries Application.compile_env(:robot_sim, :mission_retries, 1)
+  @drive_drop_first_reply_per_request Application.compile_env(
+                                        :robot_sim,
+                                        :drive_drop_first_reply_per_request,
+                                        false
+                                      )
 
   @controller_name :modbus_robot_controller
   @remote_name :modbus_robot_remote
@@ -205,7 +210,12 @@ defmodule RobotSim.MultinodeDistributed do
   end
 
   defp start_role_process(:drive) do
-    {:ok, _drive} = Drive.start_link(name: @drive_name)
+    {:ok, _drive} =
+      Drive.start_link(
+        name: @drive_name,
+        drop_first_reply_per_request: @drive_drop_first_reply_per_request
+      )
+
     IO.puts("modbus_robot_multinode: Drive process registered as #{inspect(@drive_name)}")
   end
 

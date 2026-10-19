@@ -95,8 +95,8 @@ local AtomVM patch が必要なため Stage 3 は follow-up を残していま�
 - [x] simulated battery sample を追加する
 - [x] sensor data に基づいて controller が mission を変更する
 - [x] distributed process monitor の blocker を記録し、readiness lease で independent node restart を検証する
-- [ ] mission 中の communication interruption を検証する
-- [ ] retried movement command の重複実行を防ぐ
+- [ ] mission 中の communication interruption を検証する（reply loss injection の host test は完了、3台実機は未検証）
+- [ ] retried movement command の重複実行を防ぐ（bounded cache は実装済み、3台での injected reply loss は未検証）
 - [ ] bounded queue、recovery behavior、残る制約を記録する
 
 ## 今回は対象としないこと

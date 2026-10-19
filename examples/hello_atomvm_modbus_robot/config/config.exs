@@ -85,6 +85,10 @@ multinode_soak_payload_bytes = parse_integer.("ROBOT_MULTINODE_SOAK_PAYLOAD_BYTE
 multinode_soak_interval_ms = parse_integer.("ROBOT_MULTINODE_SOAK_INTERVAL_MS", 250)
 multinode_soak_retries = parse_integer.("ROBOT_MULTINODE_SOAK_RETRIES", 1)
 sensor_mission_steps = parse_integer.("ROBOT_SENSOR_MISSION_STEPS", 3)
+
+drive_drop_first_reply_per_request =
+  parse_boolean.("ROBOT_DRIVE_DROP_FIRST_REPLY_PER_REQUEST", false)
+
 wait_for_peer = parse_boolean.("MODBUS_WAIT_FOR_PEER", role == :controller)
 
 if mode == :distributed and role == :sensors do
@@ -231,4 +235,5 @@ config :robot_sim,
   multinode_soak_interval_ms: multinode_soak_interval_ms,
   multinode_soak_retries: multinode_soak_retries,
   sensor_mission_steps: sensor_mission_steps,
+  drive_drop_first_reply_per_request: drive_drop_first_reply_per_request,
   first_request_id: parse_integer.("ROBOT_FIRST_REQUEST_ID", 1)
