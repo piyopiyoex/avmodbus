@@ -66,4 +66,5 @@ Controller だけを 30 cycle configuration で再 build / flash し、動作中
 workload では、shared Client の一方が停止または顕著に遅延する現象は観測されなかった。
 
 これは polling scheduler の一般的な fairness 証明ではない。長時間運転、concurrent producer、異なる payload size、timeout を伴う
-traffic、soak 中の remote reboot は未検証である。
+traffic は未検証である。soak 中の remote reboot は後続の
+[recovery 試験](2026-10-19-stage-3-soak-reboot.md) で確認した。

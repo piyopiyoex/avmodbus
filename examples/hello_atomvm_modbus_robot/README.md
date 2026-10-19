@@ -28,6 +28,7 @@ source は変更していません。
 - standard Modbus RTU mode で Drive と Sensors を同じ bus 上から順番に poll する
 - 1 本の physical UART 上に Unit ごとの FC-100 stream を作り、Drive / Sensors と同時に remote message を交換する
 - Drive / Sensors への payload echo を交互順で継続し、role 別の RTT と失敗数を集計する
+- payload echo の進行中に remote を再起動し、新 session へ同じ idempotent probe を再送する
 
 各 Stage の進捗と完了条件は [ロードマップ](docs/roadmap.md) を参照してください。
 
@@ -346,12 +347,18 @@ ROBOT_MODE=multinode ROBOT_ROLE=controller ATOMVM_UART_SPEED=115200 \
 | `ROBOT_MULTINODE_SOAK_CYCLES` | `0` | `0` は無効。1 cycle で両 role へ 1 回ずつ送る |
 | `ROBOT_MULTINODE_SOAK_PAYLOAD_BYTES` | `128` | echo して内容を照合する application payload size |
 | `ROBOT_MULTINODE_SOAK_INTERVAL_MS` | `250` | cycle 間の待ち時間 |
+| `ROBOT_MULTINODE_SOAK_RETRIES` | `1` | 対象 role の reboot を検出した場合の再送回数 |
 | `ROBOT_MULTINODE_ANNOUNCE_MS` | `30000` | 接続済み remote の readiness heartbeat 間隔 |
 
 odd cycle は Drive、even cycle は Sensors を先に実行し、固定順による測定 bias を減らします。2026-10-19 の 30-cycle run は
 60 round trip を 198,745 ms で完了し、両 role とも 30 / 30 成功、失敗 0 でした。Drive の平均 RTT は 3,184 ms、Sensors は
 3,180 ms で、差は 4 ms でした。詳細は
 [application traffic soak](docs/worklog/2026-10-19-stage-3-application-soak.md) に記録しています。
+
+20-cycle run の進行中に Drive と Sensors を 1 回ずつ reset した試験でも、各 role は 20 / 20 成功しました。reboot をまたいだ
+Drive probe は 11,847 ms、Sensors probe は 9,887 ms で、どちらも新 boot session の検出後に 1 回再送して成功しています。
+この retry は echo probe が idempotent であることを前提とし、一般の robot command に exactly-once semantics を与えるものでは
+ありません。詳細は [traffic 中の reboot](docs/worklog/2026-10-19-stage-3-soak-reboot.md) を参照してください。
 
 成功時、Controller は次の log を出します。
 
@@ -381,7 +388,7 @@ shared Client と `uart_ports` を採用した理由は
 [ADR 0005](docs/adr/0005-share-one-client-across-distribution-streams.md)、boot session ID の判断は
 [ADR 0006](docs/adr/0006-identify-remote-boots-with-session-ids.md) を参照してください。Drive / Sensors の独立 reboot recovery は実機確認済みです。
 Controller reboot recovery と application traffic の短時間 fairness baseline も実機確認済みです。Drive / Sensors 間 relay、
-より長時間の soak、traffic 中の reboot は未完了です。
+より長時間の soak、concurrent producer の fairness は未完了です。
 
 ## 境界
 

@@ -77,4 +77,53 @@ defmodule RobotSim.MultinodeDistributedTest do
              100
            ) == :unexpected
   end
+
+  test "retries an in-flight soak probe when its remote boot session changes" do
+    old_pid = self()
+    new_pid = spawn(fn -> :ok end)
+    remotes = %{drive: %{pid: old_pid, boot_id: 100}, sensors: nil}
+
+    assert {:retry, next_remotes} =
+             MultinodeDistributed.soak_readiness_transition(
+               remotes,
+               :drive,
+               :drive,
+               :"drive@modbus.local",
+               new_pid,
+               101
+             )
+
+    assert next_remotes.drive == %{pid: new_pid, boot_id: 101}
+  end
+
+  test "continues waiting when the other soak role reconnects" do
+    new_pid = spawn(fn -> :ok end)
+    remotes = %{drive: nil, sensors: nil}
+
+    assert {:continue, next_remotes} =
+             MultinodeDistributed.soak_readiness_transition(
+               remotes,
+               :drive,
+               :sensors,
+               :"sensors@modbus.local",
+               new_pid,
+               200
+             )
+
+    assert next_remotes.sensors == %{pid: new_pid, boot_id: 200}
+  end
+
+  test "does not retry an in-flight soak probe for a duplicate heartbeat" do
+    remotes = %{drive: %{pid: self(), boot_id: 100}, sensors: nil}
+
+    assert {:duplicate, ^remotes} =
+             MultinodeDistributed.soak_readiness_transition(
+               remotes,
+               :drive,
+               :drive,
+               :"drive@modbus.local",
+               self(),
+               100
+             )
+  end
 end
