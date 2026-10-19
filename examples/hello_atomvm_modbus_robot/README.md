@@ -34,6 +34,7 @@ source は変更していません。
 - Controller が Sensors から受け取った sample を検証し、Drive へ中継して ACK を確認する
 - distance と battery に基づいて Controller が前進、右旋回、位置保持を選ぶ
 - 3 台の実機で `forward -> forward -> right turn` の adaptive mission を実行する
+- role ごとの readiness lease で Drive / Sensors の停止を検出し、復帰後に両 connection を再確認する
 
 各 Stage の進捗と完了条件は [ロードマップ](docs/roadmap.md) を参照してください。
 
@@ -361,6 +362,8 @@ ROBOT_MODE=multinode ROBOT_ROLE=controller ATOMVM_UART_SPEED=115200 \
 | `ROBOT_MULTINODE_SOAK_INTERVAL_MS` | `250` | cycle 間の待ち時間 |
 | `ROBOT_MULTINODE_SOAK_RETRIES` | `1` | 対象 role の reboot を検出した場合の再送回数 |
 | `ROBOT_MULTINODE_ANNOUNCE_MS` | `30000` | 接続済み remote の readiness heartbeat 間隔 |
+| `ROBOT_MULTINODE_HEALTH_CHECK_MS` | `5000` | Controller が role 別 lease を確認する間隔 |
+| `ROBOT_MULTINODE_LEASE_MS` | `75000` | 最後の readiness から remote unavailable とするまでの期限 |
 | `ROBOT_SENSOR_MISSION_STEPS` | `3` | 起動後に直列実行する sensor-driven mission の step 数 |
 
 odd cycle は Drive、even cycle は Sensors を先に実行し、固定順による測定 bias を減らします。2026-10-19 の 30-cycle run は
@@ -422,6 +425,14 @@ Drive の final state は `(x=200, y=0, heading=90°)` になります。Control
 開始し、timeout retry に限って同じ ID を再利用します。判断理由は
 [ADR 0008](docs/adr/0008-make-navigation-decisions-in-controller.md)、host test と3台の実機結果は
 [Stage 4 adaptive mission worklog](docs/worklog/2026-10-19-stage-4-adaptive-mission.md) を参照してください。
+
+remote PID に対する native distributed `Process.monitor/1` も試しましたが、現在の AtomVM-to-AtomVM / alternative carrier 構成では
+`erlang:monitor/2` が `badarg` となりました。そのため、現在は readiness heartbeat の最終受信時刻を role ごとに保持し、75秒の
+default lease を超えた role だけを unavailable とします。Drive / Sensors を個別に停止した実機試験では、稼働中 peer の lease と
+connection を維持し、復帰 node と peer の両方へ probe が成功しました。設計判断は
+[ADR 0009](docs/adr/0009-use-readiness-leases-for-remote-health.md)、実機結果は
+[remote health worklog](docs/worklog/2026-10-19-stage-4-remote-health.md) に記録しています。lease を短くしすぎると queued heartbeat による
+false positive が起きるため、`ROBOT_MULTINODE_LEASE_MS` は heartbeat interval と transport latency に十分な余裕を持たせる必要があります。
 
 ## 境界
 

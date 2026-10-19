@@ -16,3 +16,4 @@ host test、実機試験、障害調査など、再現可能な時系列の記�
 - [2026-10-19: Stage 3 remote reboot during traffic](2026-10-19-stage-3-soak-reboot.md)
 - [2026-10-19: Stage 3 Controller-mediated sensor relay](2026-10-19-stage-3-controller-relay.md)
 - [2026-10-19: Stage 4 sensor-driven adaptive mission](2026-10-19-stage-4-adaptive-mission.md)
+- [2026-10-19: Stage 4 remote health and independent recovery](2026-10-19-stage-4-remote-health.md)

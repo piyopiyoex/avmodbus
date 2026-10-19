@@ -32,6 +32,8 @@ defmodule RobotSim.MultinodeDistributed do
   @cookie Application.compile_env(:robot_sim, :cookie, "AtomVM")
   @probe_timeout_ms Application.compile_env(:robot_sim, :mission_timeout_ms, 60_000)
   @announce_ms Application.compile_env(:robot_sim, :multinode_announce_ms, 30_000)
+  @health_check_ms Application.compile_env(:robot_sim, :multinode_health_check_ms, 5_000)
+  @lease_ms Application.compile_env(:robot_sim, :multinode_lease_ms, 75_000)
   @soak_cycles Application.compile_env(:robot_sim, :multinode_soak_cycles, 0)
   @soak_payload_bytes Application.compile_env(:robot_sim, :multinode_soak_payload_bytes, 128)
   @soak_interval_ms Application.compile_env(:robot_sim, :multinode_soak_interval_ms, 250)
@@ -78,9 +80,18 @@ defmodule RobotSim.MultinodeDistributed do
       when role in [:drive, :sensors] and is_pid(pid) and is_integer(boot_id) and boot_id > 0 do
     cond do
       remote_node != identity(role) -> :unexpected
-      Map.get(remotes, role) == %{pid: pid, boot_id: boot_id} -> :duplicate
-      true -> :new
+      true -> classify_known_remote(Map.get(remotes, role), pid, boot_id)
     end
+  end
+
+  @doc "Expire remote readiness leases whose most recent heartbeat is too old."
+  @spec expire_stale_remotes(map(), integer(), pos_integer()) ::
+          {[:drive | :sensors], map()}
+  def expire_stale_remotes(remotes, now_ms, lease_ms)
+      when is_integer(now_ms) and is_integer(lease_ms) and lease_ms > 0 do
+    {drive_expired, remotes} = expire_remote(remotes, :drive, now_ms, lease_ms)
+    {sensors_expired, remotes} = expire_remote(remotes, :sensors, now_ms, lease_ms)
+    {drive_expired ++ sensors_expired, remotes}
   end
 
   @doc "Apply a readiness announcement while waiting for one soak role."
@@ -106,6 +117,19 @@ defmodule RobotSim.MultinodeDistributed do
 
       :unexpected ->
         {:unexpected, remotes}
+    end
+  end
+
+  defp classify_known_remote(%{pid: pid, boot_id: boot_id}, pid, boot_id), do: :duplicate
+  defp classify_known_remote(_remote, _pid, _boot_id), do: :new
+
+  defp expire_remote(remotes, role, now_ms, lease_ms) do
+    case Map.get(remotes, role) do
+      %{last_seen_ms: last_seen_ms} when now_ms - last_seen_ms > lease_ms ->
+        {[role], Map.put(remotes, role, nil)}
+
+      _remote ->
+        {[], remotes}
     end
   end
 
@@ -264,11 +288,11 @@ defmodule RobotSim.MultinodeDistributed do
           :new ->
             send(pid, {:multinode_ack, role})
             IO.puts("modbus_robot_multinode: connected role=#{role} node=#{inspect(remote_node)}")
-            await_remotes(Map.put(remotes, role, %{pid: pid, boot_id: boot_id}))
+            await_remotes(track_remote(remotes, role, pid, boot_id))
 
           :duplicate ->
             send(pid, {:multinode_ack, role})
-            await_remotes(remotes)
+            await_remotes(track_remote(remotes, role, pid, boot_id))
 
           :unexpected ->
             log_unexpected_node(role, remote_node)
@@ -286,22 +310,31 @@ defmodule RobotSim.MultinodeDistributed do
         case classify_readiness(remotes, role, remote_node, pid, boot_id) do
           :duplicate ->
             send(pid, {:multinode_ack, role})
-            controller_loop(remotes)
+            controller_loop(track_remote(remotes, role, pid, boot_id))
 
           :new ->
             send(pid, {:multinode_ack, role})
+
+            next_remotes = track_remote(remotes, role, pid, boot_id)
 
             IO.puts(
               "modbus_robot_multinode: reconnected role=#{role} node=#{inspect(remote_node)}"
             )
 
             verify_recovery(role)
-            controller_loop(Map.put(remotes, role, %{pid: pid, boot_id: boot_id}))
+            controller_loop(next_remotes)
 
           :unexpected ->
             log_unexpected_node(role, remote_node)
             controller_loop(remotes)
         end
+    after
+      @health_check_ms ->
+        {expired_roles, next_remotes} =
+          expire_stale_remotes(remotes, monotonic_ms(), @lease_ms)
+
+        log_expired_roles(expired_roles)
+        controller_loop(next_remotes)
     end
   end
 
@@ -323,6 +356,23 @@ defmodule RobotSim.MultinodeDistributed do
     IO.puts(
       "modbus_robot_multinode: ignored unexpected node role=#{role} node=#{inspect(remote_node)}"
     )
+  end
+
+  defp track_remote(remotes, role, pid, boot_id) do
+    Map.put(remotes, role, %{
+      pid: pid,
+      boot_id: boot_id,
+      last_seen_ms: monotonic_ms()
+    })
+  end
+
+  defp monotonic_ms, do: :erlang.monotonic_time(:millisecond)
+
+  defp log_expired_roles([]), do: :ok
+
+  defp log_expired_roles([role | rest]) do
+    IO.puts("modbus_robot_multinode: readiness lease expired role=#{role}")
+    log_expired_roles(rest)
   end
 
   defp probe_remote(role, remote_node) do
@@ -494,10 +544,16 @@ defmodule RobotSim.MultinodeDistributed do
              ) do
           {:duplicate, next_remotes} ->
             send(pid, {:multinode_ack, ready_role})
+
+            next_remotes =
+              track_remote(next_remotes, ready_role, pid, boot_id)
+
             await_soak_reply(role, remote_node, id, payload, reference, next_remotes, deadline)
 
           {action, next_remotes} when action in [:retry, :continue] ->
             send(pid, {:multinode_ack, ready_role})
+
+            next_remotes = track_remote(next_remotes, ready_role, pid, boot_id)
 
             IO.puts(
               "modbus_robot_multinode: reconnected during soak role=#{ready_role} " <>

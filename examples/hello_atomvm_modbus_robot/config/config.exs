@@ -78,6 +78,8 @@ mission_timeout_ms = parse_integer.("ROBOT_COMMAND_TIMEOUT_MS", 60_000)
 mission_retries = parse_integer.("ROBOT_COMMAND_RETRIES", 1)
 mission_start_delay_ms = parse_integer.("ROBOT_MISSION_START_DELAY_MS", 2_000)
 multinode_announce_ms = parse_integer.("ROBOT_MULTINODE_ANNOUNCE_MS", 30_000)
+multinode_health_check_ms = parse_integer.("ROBOT_MULTINODE_HEALTH_CHECK_MS", 5_000)
+multinode_lease_ms = parse_integer.("ROBOT_MULTINODE_LEASE_MS", 75_000)
 multinode_soak_cycles = parse_integer.("ROBOT_MULTINODE_SOAK_CYCLES", 0)
 multinode_soak_payload_bytes = parse_integer.("ROBOT_MULTINODE_SOAK_PAYLOAD_BYTES", 128)
 multinode_soak_interval_ms = parse_integer.("ROBOT_MULTINODE_SOAK_INTERVAL_MS", 250)
@@ -135,6 +137,19 @@ end
 
 if multinode_announce_ms < 1 do
   raise ArgumentError, "ROBOT_MULTINODE_ANNOUNCE_MS must be a positive integer"
+end
+
+if multinode_health_check_ms < 1 do
+  raise ArgumentError, "ROBOT_MULTINODE_HEALTH_CHECK_MS must be a positive integer"
+end
+
+if multinode_lease_ms <= multinode_announce_ms do
+  raise ArgumentError, "ROBOT_MULTINODE_LEASE_MS must be greater than ROBOT_MULTINODE_ANNOUNCE_MS"
+end
+
+if multinode_health_check_ms >= multinode_lease_ms do
+  raise ArgumentError,
+        "ROBOT_MULTINODE_HEALTH_CHECK_MS must be less than ROBOT_MULTINODE_LEASE_MS"
 end
 
 if multinode_soak_cycles < 0 do
@@ -209,6 +224,8 @@ config :robot_sim,
   mission_retries: mission_retries,
   mission_start_delay_ms: mission_start_delay_ms,
   multinode_announce_ms: multinode_announce_ms,
+  multinode_health_check_ms: multinode_health_check_ms,
+  multinode_lease_ms: multinode_lease_ms,
   multinode_soak_cycles: multinode_soak_cycles,
   multinode_soak_payload_bytes: multinode_soak_payload_bytes,
   multinode_soak_interval_ms: multinode_soak_interval_ms,

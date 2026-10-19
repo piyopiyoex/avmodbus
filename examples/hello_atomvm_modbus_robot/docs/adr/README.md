@@ -22,3 +22,4 @@
 - [0006: boot session ID で remote node の再起動を識別する](0006-identify-remote-boots-with-session-ids.md)
 - [0007: Server 間の application message は Controller で中継する](0007-relay-server-application-messages-through-controller.md)
 - [0008: sensor に基づく navigation 判断は Controller で行う](0008-make-navigation-decisions-in-controller.md)
+- [0009: remote health は readiness lease で判定する](0009-use-readiness-leases-for-remote-health.md)

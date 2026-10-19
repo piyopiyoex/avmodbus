@@ -56,6 +56,44 @@ defmodule RobotSim.MultinodeDistributedTest do
            ) == :new
   end
 
+  test "duplicate readiness ignores lease metadata" do
+    remotes = %{
+      drive: %{pid: self(), boot_id: 100, last_seen_ms: 1_000},
+      sensors: nil
+    }
+
+    assert MultinodeDistributed.classify_readiness(
+             remotes,
+             :drive,
+             :"drive@modbus.local",
+             self(),
+             100
+           ) == :duplicate
+  end
+
+  test "expired readiness leases remove only stale remotes" do
+    remotes = %{
+      drive: %{pid: self(), boot_id: 100, last_seen_ms: 1_000},
+      sensors: %{pid: self(), boot_id: 200, last_seen_ms: 4_500}
+    }
+
+    assert {[:drive], next_remotes} =
+             MultinodeDistributed.expire_stale_remotes(remotes, 5_001, 3_000)
+
+    assert next_remotes.drive == nil
+    assert next_remotes.sensors == remotes.sensors
+  end
+
+  test "a readiness lease remains valid at its exact deadline" do
+    remotes = %{
+      drive: %{pid: self(), boot_id: 101, last_seen_ms: 2_000},
+      sensors: nil
+    }
+
+    assert MultinodeDistributed.expire_stale_remotes(remotes, 5_000, 3_000) ==
+             {[], remotes}
+  end
+
   test "a new boot session is new even when AtomVM reuses the same pid" do
     remotes = %{drive: %{pid: self(), boot_id: 100}, sensors: nil}
 
