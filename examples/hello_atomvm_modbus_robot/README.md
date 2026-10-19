@@ -4,9 +4,11 @@ AtomVM の distributed Erlang over Modbus RTU を、通信確認だけでなく�
 独立した実験用 Mix project です。ロボットは software 上で再現するため、motor、sensor、車体は必要ありません。
 
 現在は **Stage 0: host 上の rover simulation**、**Stage 1: 2-node distributed robot**、および
-**Stage 2: 3-device standard Modbus multidrop** を完了しています。2 台構成では genuine distributed Erlang を確立し、
+**Stage 2: 3-device standard Modbus multidrop** を完了し、**Stage 3: 3-node distributed Erlang** の基本疎通まで
+実証しています。2 台構成では genuine distributed Erlang を確立し、
 Controller から Drive の registered process へ command を送り、最終 state `(100, 50, 90°)` を確認しました。3 台構成では
-1 台の Controller が shared RS485 bus 上の Drive Unit 1 と Sensors Unit 2 を順番に poll しました。既存の
+1 台の Controller が shared RS485 bus 上の Drive Unit 1 と Sensors Unit 2 を順番に poll し、115,200 baud では
+両 remote node と同時に genuine distribution connection を確立しました。既存の
 [`hello_atomvm_modbus_disterl`](../hello_atomvm_modbus_disterl/README.md) を local path dependency として再利用し、
 AVModbus core と既存 example の source は変更していません。
 
@@ -23,6 +25,7 @@ AVModbus core と既存 example の source は変更していません。
 - 2 台の AtomVM node 間で reference mission を remote 実行する
 - Controller が final status を期待値と比較し、不一致を mission failure として検出する
 - standard Modbus RTU mode で Drive と Sensors を同じ bus 上から順番に poll する
+- 1 本の physical UART 上に Unit ごとの FC-100 stream を作り、Drive / Sensors と同時に remote message を交換する
 
 各 Stage の進捗と完了条件は [ロードマップ](docs/roadmap.md) を参照してください。
 
@@ -283,12 +286,68 @@ modbus_robot_multidrop: complete result={:ok, %{successes: 6, failures: 0, ...}}
 [Stage 2 実機検証](docs/worklog/2026-10-19-stage-2-multidrop.md) に記録しています。Stage 2 と Stage 3 を分離する理由は
 [ADR 0004](docs/adr/0004-validate-standard-multidrop-before-distribution.md) を参照してください。
 
+## Stage 3: 3-node distributed Erlang probe
+
+Stage 3 は `serial_dist` の `uart_ports` に 2 個の virtual UART handle を渡します。Controller 側の各 adapter は独立した
+sequence / ACK / session / byte-stream state を持ちますが、外部所有の 1 個の `AVModbus.Client` を共有します。これにより、
+physical UART と active Modbus transaction は常に 1 個の Client process が所有します。Drive と Sensors は自分の stream から
+Controller への distribution connection を開始します。
+
+現在の実機 baseline は `ATOMVM_UART_SPEED=115200` です。9,600 baud では 2 connection の handshake が AtomVM の固定 7 秒
+setup timer に収まりませんでした。また、複数 connection の最初の tick で `net_kernel` が crash する AtomVM bug が見つかり、
+local patch で修正して 90 秒間 connection を維持しました。公式 AtomVM image のまま長時間利用できるという意味ではありません。
+必要な patch と build 条件は
+[Stage 3 実機検証](docs/worklog/2026-10-19-stage-3-three-node-distribution.md) に記録しています。
+
+各 role を build する基本形は次のとおりです。port は Stage 2 と同じ対応です。
+
+```sh
+# Controller
+MIX_ENV=prod mix clean
+ROBOT_MODE=multinode ROBOT_ROLE=controller ATOMVM_UART_SPEED=115200 \
+  MIX_ENV=prod mix atomvm.check
+ROBOT_MODE=multinode ROBOT_ROLE=controller ATOMVM_UART_SPEED=115200 \
+  MIX_ENV=prod mix atomvm.packbeam
+ROBOT_MODE=multinode ROBOT_ROLE=controller ATOMVM_UART_SPEED=115200 \
+  MIX_ENV=prod mix atomvm.esp32.flash --port /dev/ttyACM2
+
+# Drive
+MIX_ENV=prod mix clean
+ROBOT_MODE=multinode ROBOT_ROLE=drive ATOMVM_UART_SPEED=115200 \
+  MIX_ENV=prod mix atomvm.packbeam
+ROBOT_MODE=multinode ROBOT_ROLE=drive ATOMVM_UART_SPEED=115200 \
+  MIX_ENV=prod mix atomvm.esp32.flash --port /dev/ttyACM0
+
+# Sensors
+MIX_ENV=prod mix clean
+ROBOT_MODE=multinode ROBOT_ROLE=sensors ATOMVM_UART_SPEED=115200 \
+  MIX_ENV=prod mix atomvm.packbeam
+ROBOT_MODE=multinode ROBOT_ROLE=sensors ATOMVM_UART_SPEED=115200 \
+  MIX_ENV=prod mix atomvm.esp32.flash --port /dev/ttyACM1
+```
+
+成功時、Controller は次の log を出します。
+
+```text
+modbus_robot_multinode: connected role=drive node=:drive@modbus.local
+modbus_robot_multinode: connected role=sensors node=:sensors@modbus.local
+modbus_robot_multinode: both remote nodes connected
+modbus_robot_multinode: probe reply role=drive node=:drive@modbus.local
+modbus_robot_multinode: probe reply role=sensors node=:sensors@modbus.local
+modbus_robot_multinode: complete Drive and Sensors remote messaging
+```
+
+shared Client と `uart_ports` を採用した理由は
+[ADR 0005](docs/adr/0005-share-one-client-across-distribution-streams.md) を参照してください。remote reboot recovery、
+Drive / Sensors 間 relay、application traffic の長時間試験は未完了です。
+
 ## 境界
 
 - simulation logic と transport / process lifecycle を分離する
 - AVModbus core と既存の distributed Erlang example を変更しない
 - carrier の再利用境界を ADR 0003 に保ち、大量の source copy を避ける
 - standard multidrop と 3-node distribution を別の mode・milestone として扱う
+- Stage 3 は local AtomVM patch を必要とする experimental baseline として扱う
 - automatic retry の前に command ID と重複実行防止を設計する
 - physical actuator、real-time control、safety-critical control を対象にしない
 

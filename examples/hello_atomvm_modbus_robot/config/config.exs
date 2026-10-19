@@ -34,8 +34,12 @@ mode =
     "multidrop" ->
       :multidrop
 
+    "multinode" ->
+      :multinode
+
     value ->
-      raise ArgumentError, "ROBOT_MODE must be distributed or multidrop; got #{inspect(value)}"
+      raise ArgumentError,
+            "ROBOT_MODE must be distributed, multidrop, or multinode; got #{inspect(value)}"
   end
 
 role =
@@ -76,7 +80,7 @@ mission_start_delay_ms = parse_integer.("ROBOT_MISSION_START_DELAY_MS", 2_000)
 wait_for_peer = parse_boolean.("MODBUS_WAIT_FOR_PEER", role == :controller)
 
 if mode == :distributed and role == :sensors do
-  raise ArgumentError, "ROBOT_ROLE=sensors is supported only with ROBOT_MODE=multidrop"
+  raise ArgumentError, "ROBOT_ROLE=sensors is not supported with ROBOT_MODE=distributed"
 end
 
 if unit_id < 1 or unit_id > 247 do

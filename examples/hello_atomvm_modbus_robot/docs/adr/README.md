@@ -18,3 +18,4 @@
 - [0002: request ID で command retry を重複排除する](0002-deduplicate-retries-with-request-ids.md)
 - [0003: 既存 example の experimental carrier を再利用する](0003-reuse-the-existing-experimental-carrier.md)
 - [0004: 3-node distribution より先に standard multidrop を検証する](0004-validate-standard-multidrop-before-distribution.md)
+- [0005: 1 個の Modbus Client を複数 distribution stream で共有する](0005-share-one-client-across-distribution-streams.md)

@@ -3,12 +3,13 @@ defmodule RobotSim.Firmware do
 
   @mode Application.compile_env(:robot_sim, :mode, :distributed)
 
-  @doc "Start the configured distributed mission or standard Modbus multidrop probe."
+  @doc "Start the configured robot experiment mode."
   @spec start() :: no_return()
   def start do
     case @mode do
       :distributed -> RobotSim.Distributed.start()
       :multidrop -> RobotSim.Multidrop.start()
+      :multinode -> RobotSim.MultinodeDistributed.start()
     end
   end
 end

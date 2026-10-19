@@ -14,7 +14,7 @@
 | 0 | 完了 | host-only virtual rover |
 | 1 | 完了 | 2-node mission と in-flight Drive reboot の境界を実機確認 |
 | 2 | 完了 | 3-device standard Modbus multidrop、120-request soak、独立Server reboot |
-| 3 | research | 3-node distributed Erlang |
+| 3 | 基本実証 | 2 remote node の同時接続と messaging、複数 tick を実機確認 |
 | 4 | 未着手 | virtual sensors と fault tolerance |
 
 ## Stage 0: local virtual rover simulation
@@ -70,17 +70,20 @@ termination / bias の電気測定と長時間 soak は未実施であり、現�
 
 ## Stage 3: three-node distributed Erlang
 
-- [ ] drive と sensors に独立した sequence / ACK / session / byte-stream state を設計する
-- [ ] 1 本の physical UART を所有する process と公平な polling policy を設計する
-- [ ] 複数の virtual UART stream を `serial_dist` / `net_kernel` に渡す方法を調査する
-- [ ] `controller <-> drive` と `controller <-> sensors` の connection を確立する
-- [ ] 両 remote node の registered process と message を交換する
+- [x] drive と sensors に独立した sequence / ACK / session / byte-stream state を設計する
+- [x] 1 本の physical UART を所有する process と polling policy を設計する
+- [x] 複数の virtual UART stream を `serial_dist` / `net_kernel` に渡す方法を調査する
+- [x] `controller <-> drive` と `controller <-> sensors` の connection を確立する
+- [x] 両 remote node の registered process と message を交換する
 - [ ] Server node 間の message を controller で relay する必要があるか検証する
 - [ ] 片方の Server reboot がもう一方の connection に与える影響を確認する
-- [ ] dedicated carrier または別の transport abstraction が必要か判断する
+- [x] 基本疎通に dedicated carrier は不要と判断する
+- [ ] AtomVM の multi-connection tick fix を upstream へ提案する
+- [ ] 継続 traffic と長時間 polling fairness を測定する
 
 完了条件は、controller と 2 台の remote node の genuine distribution を実証するか、必要な AtomVM / carrier
-変更と blocker を再現可能な形で記録することです。Modbus Server 同士が bus を直接駆動する構成は仮定しません。
+変更と blocker を再現可能な形で記録することです。基本疎通は 2026-10-19 に達成しましたが、local AtomVM patch が必要なため
+Stage 3 は follow-up を残しています。Modbus Server 同士が bus を直接駆動する構成は仮定しません。
 
 ## Stage 4: virtual sensors と fault tolerance
 

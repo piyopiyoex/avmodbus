@@ -105,6 +105,14 @@ jobs:
             ROBOT_MODE=multidrop ROBOT_ROLE="$role" MIX_ENV=prod mix atomvm.check
           done
 
+      - name: Check three-node distributed robot builds
+        working-directory: examples/hello_atomvm_modbus_robot
+        run: |
+          for role in controller drive sensors; do
+            MIX_ENV=prod mix clean
+            ROBOT_MODE=multinode ROBOT_ROLE="$role" MIX_ENV=prod mix atomvm.check
+          done
+
   interoperability:
     runs-on: ubuntu-24.04
 

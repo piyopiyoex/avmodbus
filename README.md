@@ -48,10 +48,11 @@ virtual UART adapter はサンプル内にあり、`lib/avmodbus/` は変更し�
 
 通信確認から分散 application へ進む次の調査として、software だけで動く
 [仮想ロボット example](examples/hello_atomvm_modbus_robot/README.md) を用意しています。host simulation に加え、2 台の
-XIAO ESP32-C5 による distributed mission と、3 台の shared RS485 bus による standard Modbus multidrop を確認済みです。
+XIAO ESP32-C5 による distributed mission、3 台の shared RS485 bus による standard Modbus multidrop、および
+local AtomVM patch を使った 3-node distribution の基本疎通を確認済みです。
 
-次は 1 本の UART 上で複数の distribution stream を扱えるかを調査します。3-node distribution は現在の機能ではなく、
-[ロードマップ](examples/hello_atomvm_modbus_robot/docs/roadmap.md) 上の research objective です。
+3-node 構成は experimental であり、公式 AtomVM image だけで安定動作する機能ではありません。runtime blocker、実測結果、
+残る recovery / fairness の調査は [ロードマップ](examples/hello_atomvm_modbus_robot/docs/roadmap.md) を参照してください。
 
 ## Client の例
 

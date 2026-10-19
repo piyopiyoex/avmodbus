@@ -34,7 +34,7 @@ AVModbus のドキュメントは、利用者向けの説明、開発者向け�
 distributed Erlang example では genuine distribution の動作を実機確認していますが、carrier と
 virtual UART adapter は AVModbus の public API ではありません。実験の lifecycle と記録は
 各サンプル配下で管理します。仮想ロボットでは 2-node distribution と 3-device standard Modbus multidrop を確認済みですが、
-3-node distribution をサポートしていることを意味しません。
+3-node distribution は local AtomVM patch を使った基本実証の段階であり、production support を意味しません。
 
 ## 更新方針
 
