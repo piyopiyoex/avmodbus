@@ -82,6 +82,7 @@ multinode_soak_cycles = parse_integer.("ROBOT_MULTINODE_SOAK_CYCLES", 0)
 multinode_soak_payload_bytes = parse_integer.("ROBOT_MULTINODE_SOAK_PAYLOAD_BYTES", 128)
 multinode_soak_interval_ms = parse_integer.("ROBOT_MULTINODE_SOAK_INTERVAL_MS", 250)
 multinode_soak_retries = parse_integer.("ROBOT_MULTINODE_SOAK_RETRIES", 1)
+sensor_mission_steps = parse_integer.("ROBOT_SENSOR_MISSION_STEPS", 3)
 wait_for_peer = parse_boolean.("MODBUS_WAIT_FOR_PEER", role == :controller)
 
 if mode == :distributed and role == :sensors do
@@ -152,6 +153,10 @@ if multinode_soak_retries < 0 do
   raise ArgumentError, "ROBOT_MULTINODE_SOAK_RETRIES must be a non-negative integer"
 end
 
+if sensor_mission_steps < 1 do
+  raise ArgumentError, "ROBOT_SENSOR_MISSION_STEPS must be a positive integer"
+end
+
 serial = [
   peripheral: System.get_env("ATOMVM_UART_PERIPHERAL") || "UART1",
   speed: parse_integer.("ATOMVM_UART_SPEED", 9_600),
@@ -208,4 +213,5 @@ config :robot_sim,
   multinode_soak_payload_bytes: multinode_soak_payload_bytes,
   multinode_soak_interval_ms: multinode_soak_interval_ms,
   multinode_soak_retries: multinode_soak_retries,
+  sensor_mission_steps: sensor_mission_steps,
   first_request_id: parse_integer.("ROBOT_FIRST_REQUEST_ID", 1)

@@ -5,14 +5,13 @@ AtomVM の distributed Erlang over Modbus RTU を、通信確認だけでなく�
 
 現在は **Stage 0: host 上の rover simulation**、**Stage 1: 2-node distributed robot**、および
 **Stage 2: 3-device standard Modbus multidrop** を完了し、**Stage 3: 3-node distributed Erlang** の基本疎通と
-Controller-mediated sensor relay まで
-実証しています。2 台構成では genuine distributed Erlang を確立し、
+Controller-mediated sensor relay、**Stage 4: sensor-driven mission** まで実証しています。2 台構成では genuine distributed Erlang を確立し、
 Controller から Drive の registered process へ command を送り、最終 state `(100, 50, 90°)` を確認しました。3 台構成では
 1 台の Controller が shared RS485 bus 上の Drive Unit 1 と Sensors Unit 2 を順番に poll し、115,200 baud では
 両 remote node と同時に genuine distribution connection を確立しました。既存の
 [`hello_atomvm_modbus_disterl`](../hello_atomvm_modbus_disterl/README.md) を local path dependency として再利用し、
 128-byte payload の 60 application round trip、3 role の独立 reboot recovery、および
-`Sensors -> Controller -> Drive` の virtual sensor sample 転送も確認しています。AVModbus core と既存 example の
+`Sensors -> Controller -> Drive` の virtual sensor sample 転送と obstacle 回避判断も確認しています。AVModbus core と既存 example の
 source は変更していません。
 
 ## 現在できること
@@ -33,6 +32,8 @@ source は変更していません。
 - payload echo の進行中に remote を再起動し、新 session へ同じ idempotent probe を再送する
 - deterministic な virtual distance / battery sample を Sensors node で生成する
 - Controller が Sensors から受け取った sample を検証し、Drive へ中継して ACK を確認する
+- distance と battery に基づいて Controller が前進、右旋回、位置保持を選ぶ
+- 3 台の実機で `forward -> forward -> right turn` の adaptive mission を実行する
 
 各 Stage の進捗と完了条件は [ロードマップ](docs/roadmap.md) を参照してください。
 
@@ -82,7 +83,8 @@ reference mission の「右へ 90° 旋回した後に `+Y` へ進む」とい�
 | `:status` | state を変更せず現在値を返す |
 
 不正な command は `{:error, :invalid_command}` を返します。pure rover 自体は request ID や retry を扱わず、
-process / protocol layer から独立しています。時間経過、速度、battery、obstacle はまだありません。
+process / protocol layer から独立しています。Rover state 自体に時間経過、速度、battery、obstacle は持たせず、virtual sensor と
+navigation policy は別 module に分離しています。
 
 ## Stage 1 application protocol の host test
 
@@ -359,6 +361,7 @@ ROBOT_MODE=multinode ROBOT_ROLE=controller ATOMVM_UART_SPEED=115200 \
 | `ROBOT_MULTINODE_SOAK_INTERVAL_MS` | `250` | cycle 間の待ち時間 |
 | `ROBOT_MULTINODE_SOAK_RETRIES` | `1` | 対象 role の reboot を検出した場合の再送回数 |
 | `ROBOT_MULTINODE_ANNOUNCE_MS` | `30000` | 接続済み remote の readiness heartbeat 間隔 |
+| `ROBOT_SENSOR_MISSION_STEPS` | `3` | 起動後に直列実行する sensor-driven mission の step 数 |
 
 odd cycle は Drive、even cycle は Sensors を先に実行し、固定順による測定 bias を減らします。2026-10-19 の 30-cycle run は
 60 round trip を 198,745 ms で完了し、両 role とも 30 / 30 成功、失敗 0 でした。Drive の平均 RTT は 3,184 ms、Sensors は
@@ -378,7 +381,10 @@ modbus_robot_multinode: connected role=sensors node=:sensors@modbus.local
 modbus_robot_multinode: both remote nodes connected
 modbus_robot_multinode: probe reply role=drive node=:drive@modbus.local
 modbus_robot_multinode: probe reply role=sensors node=:sensors@modbus.local
-modbus_robot_multinode: relay complete sensors=:sensors@modbus.local drive=:drive@modbus.local sample=%{sequence: 1, distance_mm: 500, battery_percent: 100}
+modbus_robot_multinode: sensor mission step=1 sample=%{sequence: 1, distance_mm: 500, battery_percent: 100} reason=clear_path command={:forward, 100} state=%{...}
+modbus_robot_multinode: sensor mission step=2 sample=%{sequence: 2, distance_mm: 450, battery_percent: 99} reason=clear_path command={:forward, 100} state=%{...}
+modbus_robot_multinode: sensor mission step=3 sample=%{sequence: 3, distance_mm: 400, battery_percent: 98} reason=obstacle command={:turn, :right, 90} state=%{...}
+modbus_robot_multinode: sensor mission complete state=%{... x_mm: 200, y_mm: 0, heading_deg: 90 ...}
 modbus_robot_multinode: complete Drive and Sensors remote messaging
 ```
 
@@ -403,7 +409,19 @@ shared Client と `uart_ports` を採用した理由は
 [ADR 0005](docs/adr/0005-share-one-client-across-distribution-streams.md)、boot session ID の判断は
 [ADR 0006](docs/adr/0006-identify-remote-boots-with-session-ids.md) を参照してください。Drive / Sensors の独立 reboot recovery は実機確認済みです。
 Controller reboot recovery、application traffic の短時間 fairness baseline、Drive / Sensors 間の Controller relay も実機確認済みです。
-より長時間の soak、concurrent producer の fairness、sensor data に基づく mission decision は未完了です。
+より長時間の soak と concurrent producer の fairness は未完了です。
+
+## Stage 4: sensor-driven mission
+
+`RobotSim.Navigator` は sample に対して pure な判断を行います。battery が 20% 以下なら `:status` で位置を保持し、それ以外で
+distance が 400 mm 以下なら右へ 90° 旋回します。どちらにも該当しなければ 100 mm 前進します。low battery を obstacle より
+優先します。
+
+fresh Sensors の最初の 3 sample は 500、450、400 mm です。このため Controller は `forward, forward, right turn` を選び、fresh
+Drive の final state は `(x=200, y=0, heading=90°)` になります。Controller は起動ごとの random ID から command request-ID range を
+開始し、timeout retry に限って同じ ID を再利用します。判断理由は
+[ADR 0008](docs/adr/0008-make-navigation-decisions-in-controller.md)、host test と3台の実機結果は
+[Stage 4 adaptive mission worklog](docs/worklog/2026-10-19-stage-4-adaptive-mission.md) を参照してください。
 
 ## 境界
 
