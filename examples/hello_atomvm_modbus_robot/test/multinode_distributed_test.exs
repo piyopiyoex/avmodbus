@@ -20,6 +20,12 @@ defmodule RobotSim.MultinodeDistributedTest do
     assert MultinodeDistributed.targets(11, 22) == [{:drive, 11}, {:sensors, 22}]
   end
 
+  test "soak probes alternate which role goes first" do
+    assert MultinodeDistributed.soak_targets(1) == [:drive, :sensors]
+    assert MultinodeDistributed.soak_targets(2) == [:sensors, :drive]
+    assert MultinodeDistributed.soak_targets(3) == [:drive, :sensors]
+  end
+
   test "classifies first, duplicate, and replacement readiness announcements" do
     first_pid = self()
     replacement_pid = spawn(fn -> :ok end)

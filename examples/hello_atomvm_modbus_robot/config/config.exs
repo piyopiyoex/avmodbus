@@ -78,6 +78,9 @@ mission_timeout_ms = parse_integer.("ROBOT_COMMAND_TIMEOUT_MS", 60_000)
 mission_retries = parse_integer.("ROBOT_COMMAND_RETRIES", 1)
 mission_start_delay_ms = parse_integer.("ROBOT_MISSION_START_DELAY_MS", 2_000)
 multinode_announce_ms = parse_integer.("ROBOT_MULTINODE_ANNOUNCE_MS", 30_000)
+multinode_soak_cycles = parse_integer.("ROBOT_MULTINODE_SOAK_CYCLES", 0)
+multinode_soak_payload_bytes = parse_integer.("ROBOT_MULTINODE_SOAK_PAYLOAD_BYTES", 128)
+multinode_soak_interval_ms = parse_integer.("ROBOT_MULTINODE_SOAK_INTERVAL_MS", 250)
 wait_for_peer = parse_boolean.("MODBUS_WAIT_FOR_PEER", role == :controller)
 
 if mode == :distributed and role == :sensors do
@@ -132,6 +135,18 @@ if multinode_announce_ms < 1 do
   raise ArgumentError, "ROBOT_MULTINODE_ANNOUNCE_MS must be a positive integer"
 end
 
+if multinode_soak_cycles < 0 do
+  raise ArgumentError, "ROBOT_MULTINODE_SOAK_CYCLES must be a non-negative integer"
+end
+
+if multinode_soak_payload_bytes < 0 or multinode_soak_payload_bytes > 4_096 do
+  raise ArgumentError, "ROBOT_MULTINODE_SOAK_PAYLOAD_BYTES must be between 0 and 4096"
+end
+
+if multinode_soak_interval_ms < 0 do
+  raise ArgumentError, "ROBOT_MULTINODE_SOAK_INTERVAL_MS must be a non-negative integer"
+end
+
 serial = [
   peripheral: System.get_env("ATOMVM_UART_PERIPHERAL") || "UART1",
   speed: parse_integer.("ATOMVM_UART_SPEED", 9_600),
@@ -184,4 +199,7 @@ config :robot_sim,
   mission_retries: mission_retries,
   mission_start_delay_ms: mission_start_delay_ms,
   multinode_announce_ms: multinode_announce_ms,
+  multinode_soak_cycles: multinode_soak_cycles,
+  multinode_soak_payload_bytes: multinode_soak_payload_bytes,
+  multinode_soak_interval_ms: multinode_soak_interval_ms,
   first_request_id: parse_integer.("ROBOT_FIRST_REQUEST_ID", 1)

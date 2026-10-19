@@ -10,7 +10,8 @@ Controller から Drive の registered process へ command を送り、最終 st
 1 台の Controller が shared RS485 bus 上の Drive Unit 1 と Sensors Unit 2 を順番に poll し、115,200 baud では
 両 remote node と同時に genuine distribution connection を確立しました。既存の
 [`hello_atomvm_modbus_disterl`](../hello_atomvm_modbus_disterl/README.md) を local path dependency として再利用し、
-AVModbus core と既存 example の source は変更していません。
+128-byte payload の 60 application round trip と 3 role の独立 reboot recovery も確認しています。AVModbus core と既存 example の
+source は変更していません。
 
 ## 現在できること
 
@@ -26,6 +27,7 @@ AVModbus core と既存 example の source は変更していません。
 - Controller が final status を期待値と比較し、不一致を mission failure として検出する
 - standard Modbus RTU mode で Drive と Sensors を同じ bus 上から順番に poll する
 - 1 本の physical UART 上に Unit ごとの FC-100 stream を作り、Drive / Sensors と同時に remote message を交換する
+- Drive / Sensors への payload echo を交互順で継続し、role 別の RTT と失敗数を集計する
 
 各 Stage の進捗と完了条件は [ロードマップ](docs/roadmap.md) を参照してください。
 
@@ -327,6 +329,30 @@ ROBOT_MODE=multinode ROBOT_ROLE=sensors ATOMVM_UART_SPEED=115200 \
   MIX_ENV=prod mix atomvm.esp32.flash --port /dev/ttyACM1
 ```
 
+Controller の継続 traffic probe は opt-in です。compile-time configuration のため、値を変更する前に `mix clean` を実行します。
+
+```sh
+MIX_ENV=prod mix clean
+ROBOT_MODE=multinode ROBOT_ROLE=controller ATOMVM_UART_SPEED=115200 \
+  ROBOT_MULTINODE_SOAK_CYCLES=30 ROBOT_MULTINODE_SOAK_PAYLOAD_BYTES=128 \
+  MIX_ENV=prod mix atomvm.packbeam
+ROBOT_MODE=multinode ROBOT_ROLE=controller ATOMVM_UART_SPEED=115200 \
+  ROBOT_MULTINODE_SOAK_CYCLES=30 ROBOT_MULTINODE_SOAK_PAYLOAD_BYTES=128 \
+  MIX_ENV=prod mix atomvm.esp32.flash --port /dev/ttyACM2
+```
+
+| 環境変数 | 既定値 | 意味 |
+| --- | ---: | --- |
+| `ROBOT_MULTINODE_SOAK_CYCLES` | `0` | `0` は無効。1 cycle で両 role へ 1 回ずつ送る |
+| `ROBOT_MULTINODE_SOAK_PAYLOAD_BYTES` | `128` | echo して内容を照合する application payload size |
+| `ROBOT_MULTINODE_SOAK_INTERVAL_MS` | `250` | cycle 間の待ち時間 |
+| `ROBOT_MULTINODE_ANNOUNCE_MS` | `30000` | 接続済み remote の readiness heartbeat 間隔 |
+
+odd cycle は Drive、even cycle は Sensors を先に実行し、固定順による測定 bias を減らします。2026-10-19 の 30-cycle run は
+60 round trip を 198,745 ms で完了し、両 role とも 30 / 30 成功、失敗 0 でした。Drive の平均 RTT は 3,184 ms、Sensors は
+3,180 ms で、差は 4 ms でした。詳細は
+[application traffic soak](docs/worklog/2026-10-19-stage-3-application-soak.md) に記録しています。
+
 成功時、Controller は次の log を出します。
 
 ```text
@@ -354,7 +380,8 @@ probe を完了することを実機確認しています。
 shared Client と `uart_ports` を採用した理由は
 [ADR 0005](docs/adr/0005-share-one-client-across-distribution-streams.md)、boot session ID の判断は
 [ADR 0006](docs/adr/0006-identify-remote-boots-with-session-ids.md) を参照してください。Drive / Sensors の独立 reboot recovery は実機確認済みです。
-Controller reboot recovery も実機確認済みです。Drive / Sensors 間 relay、application traffic の長時間試験は未完了です。
+Controller reboot recovery と application traffic の短時間 fairness baseline も実機確認済みです。Drive / Sensors 間 relay、
+より長時間の soak、traffic 中の reboot は未完了です。
 
 ## 境界
 

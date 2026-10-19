@@ -12,3 +12,4 @@ host test、実機試験、障害調査など、再現可能な時系列の記�
 - [2026-10-18: Stage 1 in-flight Drive reboot](2026-10-18-stage-1-drive-reboot.md)
 - [2026-10-19: Stage 2 three-device standard Modbus multidrop](2026-10-19-stage-2-multidrop.md)
 - [2026-10-19: Stage 3 three-node distributed Erlang](2026-10-19-stage-3-three-node-distribution.md)
+- [2026-10-19: Stage 3 application traffic soak](2026-10-19-stage-3-application-soak.md)

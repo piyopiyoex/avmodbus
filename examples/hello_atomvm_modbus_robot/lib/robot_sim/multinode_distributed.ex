@@ -11,9 +11,8 @@ defmodule RobotSim.MultinodeDistributed do
   @compile {:no_warn_undefined, :net_kernel}
 
   alias AVModbus.Client
-  alias DisterlProbe.ModbusUART
-  alias DisterlProbe.Session
-  alias RobotSim.Drive
+  alias DisterlProbe.{ModbusUART, Payload, Session}
+  alias RobotSim.{Drive, MultinodeStats}
 
   @mode Application.compile_env(:robot_sim, :mode, :distributed)
   @role Application.compile_env(:robot_sim, :role, :controller)
@@ -33,6 +32,9 @@ defmodule RobotSim.MultinodeDistributed do
   @cookie Application.compile_env(:robot_sim, :cookie, "AtomVM")
   @probe_timeout_ms Application.compile_env(:robot_sim, :mission_timeout_ms, 60_000)
   @announce_ms Application.compile_env(:robot_sim, :multinode_announce_ms, 30_000)
+  @soak_cycles Application.compile_env(:robot_sim, :multinode_soak_cycles, 0)
+  @soak_payload_bytes Application.compile_env(:robot_sim, :multinode_soak_payload_bytes, 128)
+  @soak_interval_ms Application.compile_env(:robot_sim, :multinode_soak_interval_ms, 250)
 
   @controller_name :modbus_robot_controller
   @remote_name :modbus_robot_remote
@@ -58,6 +60,12 @@ defmodule RobotSim.MultinodeDistributed do
   @spec targets(1..247, 1..247) :: [{:drive | :sensors, 1..247}]
   def targets(drive_unit_id \\ 1, sensors_unit_id \\ 2),
     do: [{:drive, drive_unit_id}, {:sensors, sensors_unit_id}]
+
+  @doc "Return the alternating application-probe order for one soak cycle."
+  @spec soak_targets(pos_integer()) :: [:drive | :sensors]
+  def soak_targets(cycle) when is_integer(cycle) and cycle > 0 do
+    if rem(cycle, 2) == 1, do: [:drive, :sensors], else: [:sensors, :drive]
+  end
 
   @doc "Classify a remote readiness announcement against the Controller state."
   @spec classify_readiness(map(), :drive | :sensors, node(), pid(), pos_integer()) ::
@@ -160,6 +168,11 @@ defmodule RobotSim.MultinodeDistributed do
       {:multinode_probe, from, reference} when is_pid(from) ->
         send(from, {:multinode_probe_reply, reference, role, node()})
         remote_loop(role, boot_id)
+
+      {:multinode_soak, from, reference, id, payload}
+      when is_pid(from) and is_binary(payload) ->
+        reply_to_soak(from, reference, id, role, payload)
+        remote_loop(role, boot_id)
     after
       2_000 -> remote_loop(role, boot_id)
     end
@@ -172,6 +185,11 @@ defmodule RobotSim.MultinodeDistributed do
 
       {:multinode_probe, from, reference} when is_pid(from) ->
         send(from, {:multinode_probe_reply, reference, role, node()})
+        connected_remote_loop(role, boot_id)
+
+      {:multinode_soak, from, reference, id, payload}
+      when is_pid(from) and is_binary(payload) ->
+        reply_to_soak(from, reference, id, role, payload)
         connected_remote_loop(role, boot_id)
     after
       @announce_ms ->
@@ -197,6 +215,7 @@ defmodule RobotSim.MultinodeDistributed do
     with :ok <- probe_remote(:drive, identity(:drive)),
          :ok <- probe_remote(:sensors, identity(:sensors)) do
       IO.puts("modbus_robot_multinode: complete Drive and Sensors remote messaging")
+      run_soak_if_enabled()
       controller_loop(%{drive: drive, sensors: sensors})
     else
       {:error, reason} -> halt("remote probe failed", reason)
@@ -282,6 +301,100 @@ defmodule RobotSim.MultinodeDistributed do
         :ok
     after
       @probe_timeout_ms -> {:error, {:probe_timeout, role, remote_node}}
+    end
+  end
+
+  defp run_soak_if_enabled do
+    if @soak_cycles > 0, do: run_soak(), else: :ok
+  end
+
+  defp run_soak do
+    payload = Payload.build(@soak_payload_bytes)
+    started_at = :erlang.monotonic_time(:millisecond)
+
+    IO.puts(
+      "modbus_robot_multinode: soak start cycles=#{@soak_cycles} payload_bytes=#{@soak_payload_bytes}"
+    )
+
+    stats = %{
+      drive: MultinodeStats.new(),
+      sensors: MultinodeStats.new()
+    }
+
+    final_stats = run_soak_cycle(1, payload, stats)
+    elapsed_ms = :erlang.monotonic_time(:millisecond) - started_at
+    summary = MultinodeStats.fairness(final_stats.drive, final_stats.sensors)
+
+    IO.puts(
+      "modbus_robot_multinode: soak complete cycles=#{@soak_cycles} " <>
+        "payload_bytes=#{@soak_payload_bytes} elapsed_ms=#{elapsed_ms} summary=#{inspect(summary)}"
+    )
+  end
+
+  defp run_soak_cycle(cycle, _payload, stats) when cycle > @soak_cycles, do: stats
+
+  defp run_soak_cycle(cycle, payload, stats) do
+    next_stats = run_soak_targets(cycle, soak_targets(cycle), payload, stats)
+    Process.sleep(@soak_interval_ms)
+    run_soak_cycle(cycle + 1, payload, next_stats)
+  end
+
+  defp run_soak_targets(_cycle, [], _payload, stats), do: stats
+
+  defp run_soak_targets(cycle, [role | rest], payload, stats) do
+    id = {cycle, role}
+
+    case soak_probe(role, identity(role), id, payload) do
+      {:ok, rtt_ms} ->
+        IO.puts(
+          "modbus_robot_multinode: soak cycle=#{cycle} role=#{role} " <>
+            "rtt_ms=#{rtt_ms} payload_bytes=#{byte_size(payload)}"
+        )
+
+        role_stats = MultinodeStats.record_success(Map.get(stats, role), rtt_ms)
+        next_stats = Map.put(stats, role, role_stats)
+        run_soak_targets(cycle, rest, payload, next_stats)
+
+      {:error, reason} ->
+        IO.puts(
+          "modbus_robot_multinode: soak cycle=#{cycle} role=#{role} failed=#{inspect(reason)}"
+        )
+
+        role_stats = MultinodeStats.record_failure(Map.get(stats, role))
+        next_stats = Map.put(stats, role, role_stats)
+        run_soak_targets(cycle, rest, payload, next_stats)
+    end
+  end
+
+  defp soak_probe(role, remote_node, id, payload) do
+    reference = make_ref()
+    started_at = :erlang.monotonic_time(:millisecond)
+    send({@remote_name, remote_node}, {:multinode_soak, self(), reference, id, payload})
+
+    receive do
+      {:multinode_soak_reply, ^reference, ^role, ^remote_node, ^id, reply_payload}
+      when is_binary(reply_payload) ->
+        if reply_payload == payload do
+          {:ok, :erlang.monotonic_time(:millisecond) - started_at}
+        else
+          {:error, {:invalid_payload, role, id, byte_size(reply_payload)}}
+        end
+
+      {:multinode_soak_reply, ^reference, ^role, ^remote_node, ^id, _reply_payload} ->
+        {:error, {:invalid_payload, role, id, :not_binary}}
+
+      {:multinode_soak_error, ^reference, ^role, ^remote_node, ^id, reason} ->
+        {:error, reason}
+    after
+      @probe_timeout_ms -> {:error, {:soak_timeout, role, id}}
+    end
+  end
+
+  defp reply_to_soak(from, reference, id, role, payload) do
+    if Payload.valid?(payload) do
+      send(from, {:multinode_soak_reply, reference, role, node(), id, payload})
+    else
+      send(from, {:multinode_soak_error, reference, role, node(), id, :invalid_payload})
     end
   end
 
