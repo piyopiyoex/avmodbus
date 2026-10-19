@@ -4,13 +4,14 @@
 
 ## 利用方法
 
-- [サンプル README](../README.md) — host simulation、Stage 1–3 の実行方法、座標規則、設定
+- [サンプル README](../README.md) — host simulation、Stage 1–4 の実行方法、座標規則、設定
 
 現在動く機能と再現手順はサンプル README を正とします。
 
 ## 設計資料
 
 - [ロードマップ](roadmap.md) — Stage ごとの完了条件と未着手の調査項目
+- [既知の制約](limitations.md) — application、buffer、recovery、用途の境界
 - [設計判断記録](adr/README.md) — 長期的に維持する application 設計の判断
 
 ## 検証記録

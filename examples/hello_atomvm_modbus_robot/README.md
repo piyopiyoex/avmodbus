@@ -454,6 +454,9 @@ application RTT より十分長くしてください。この injection は repl
 
 ## 境界
 
+buffer、application state、failure detection、recovery guarantee の詳細は
+[既知の制約](docs/limitations.md) にまとめています。
+
 - simulation logic と transport / process lifecycle を分離する
 - AVModbus core と既存の distributed Erlang example を変更しない
 - carrier の再利用境界を ADR 0003 に保ち、大量の source copy を避ける
