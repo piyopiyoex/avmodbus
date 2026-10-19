@@ -300,10 +300,10 @@ defmodule DisterlProbe.ModbusUART do
 
   defp open_transport(:client, serial, state, options) do
     case Keyword.fetch(options, :client) do
-      {:ok, client} when client != nil ->
+      {:ok, client} when is_pid(client) ->
         {:ok, client, false}
 
-      {:ok, nil} ->
+      {:ok, _invalid} ->
         {:error, :invalid_client}
 
       :error ->
