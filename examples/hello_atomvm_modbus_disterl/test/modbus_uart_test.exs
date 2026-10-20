@@ -38,6 +38,45 @@ defmodule DisterlProbe.ModbusUARTTest do
     assert ModbusUART.open(existing: :not_a_pid) == {:error, :invalid_existing_adapter}
   end
 
+  test "a client adapter can use an externally owned managed client" do
+    options = [
+      role: :client,
+      client: self(),
+      serial: [],
+      unit_id: 1,
+      timeout_ms: 500,
+      bulk_timeout_ms: 2_000,
+      chunk_payload_bytes: 96,
+      max_queued_bytes: 8_192,
+      max_queued_chunks: 256,
+      poll_ms: 20
+    ]
+
+    assert {:ok, state} = ModbusUART.init(options)
+    assert state.resource == self()
+    refute state.owns_resource
+    assert :ok = ModbusUART.terminate(:normal, state)
+    assert_receive :poll
+  end
+
+  test "a client adapter rejects an invalid externally owned client" do
+    options = [
+      role: :client,
+      client: :not_a_pid,
+      serial: [],
+      unit_id: 1,
+      timeout_ms: 500,
+      bulk_timeout_ms: 2_000,
+      chunk_payload_bytes: 96,
+      max_queued_bytes: 8_192,
+      max_queued_chunks: 256,
+      poll_ms: 20
+    ]
+
+    assert ModbusUART.init(options) == {:stop, {:error, :invalid_client}}
+    refute_receive :poll
+  end
+
   test "peer readiness follows channel session observation" do
     state = adapter_state(Channel.new(100))
     assert {:reply, false, ^state} = ModbusUART.handle_call(:peer_ready, :unused_from, state)

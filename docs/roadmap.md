@@ -11,6 +11,11 @@ Modbus RTU 上で AtomVM の distributed Erlang を動かす調査は、AVModbus
 で管理しています。実機での remote messaging は確認済みですが、production-ready な carrier
 として AVModbus がサポートしているわけではありません。
 
+その carrier を分散 application で利用する仮想ロボット実験も
+[専用ロードマップ](../examples/hello_atomvm_modbus_robot/docs/roadmap.md) で管理します。現在は 2-node distributed mission と
+3-device standard Modbus multidrop に加え、local AtomVM patch による 3-node adaptive mission、独立 remote recovery、
+application reply loss 後の重複排除を実機確認していますが、AVModbus core の multidrop distribution 対応計画ではありません。
+
 ## 次に確認すること
 
 - [ ] GitHub Actions の相互運用テストが継続して成功することを確認する

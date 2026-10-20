@@ -44,6 +44,18 @@ virtual UART adapter はサンプル内にあり、`lib/avmodbus/` は変更し�
 - [実機試験と測定結果](examples/hello_atomvm_modbus_disterl/docs/worklog/README.md)
 - [既知の制約](https://github.com/piyopiyoex/avmodbus/blob/main/examples/hello_atomvm_modbus_disterl/docs/limitations.md)
 
+## 実験: distributed Erlang 仮想ロボット
+
+通信確認から分散 application へ進む次の調査として、software だけで動く
+[仮想ロボット example](examples/hello_atomvm_modbus_robot/README.md) を用意しています。host simulation に加え、2 台の
+XIAO ESP32-C5 による distributed mission、3 台の shared RS485 bus による standard Modbus multidrop、および
+local AtomVM patch を使った 3-node distribution を確認済みです。3-node application では sensor-driven mission、
+Drive / Sensors の独立 recovery、application reply loss 後の same-ID command retry まで実機検証しています。
+
+3-node 構成は experimental であり、公式 AtomVM image だけで安定動作する機能ではありません。runtime blocker、実測結果、
+残る recovery / fairness の調査は [ロードマップ](examples/hello_atomvm_modbus_robot/docs/roadmap.md)、保証しない範囲は
+[既知の制約](examples/hello_atomvm_modbus_robot/docs/limitations.md) を参照してください。
+
 ## Client の例
 
 Unit ID `1` の Holding Register を、アドレス `0` から 2 個読み取ります。

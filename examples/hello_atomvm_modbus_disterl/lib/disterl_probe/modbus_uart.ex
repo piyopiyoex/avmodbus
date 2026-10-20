@@ -5,6 +5,9 @@ defmodule DisterlProbe.ModbusUART do
   `serial_dist` sees the usual blocking `open/read/write/close` UART API. The
   adapter chunks writes into the FC-100 stop-and-wait channel and reassembles
   delivered chunks for reads. Only the client role polls the Modbus bus.
+
+  A client adapter normally owns its `AVModbus.Client`. Passing `client:` lets
+  multiple logical adapters share an externally owned client and physical UART.
   """
 
   use GenServer
@@ -102,6 +105,7 @@ defmodule DisterlProbe.ModbusUART do
       rx_buffer: <<>>,
       reader: nil,
       resource: nil,
+      owns_resource: true,
       unit_id: Keyword.fetch!(options, :unit_id),
       response_timeout:
         ResponseTimeout.new(
@@ -125,12 +129,12 @@ defmodule DisterlProbe.ModbusUART do
         )
     }
 
-    case open_transport(role, Keyword.fetch!(options, :serial), state) do
-      {:ok, resource} ->
+    case open_transport(role, Keyword.fetch!(options, :serial), state, options) do
+      {:ok, resource, owns_resource} ->
         IO.puts("modbus_uart: opened role=#{role} session=#{state.channel.session}")
         log_queue("opened", state, 0)
         if role == :client, do: send(self(), :poll)
-        {:ok, %{state | resource: resource}}
+        {:ok, %{state | resource: resource, owns_resource: owns_resource}}
 
       {:error, _reason} = error ->
         {:stop, error}
@@ -280,6 +284,8 @@ defmodule DisterlProbe.ModbusUART do
   def handle_info(_message, state), do: {:noreply, state}
 
   @impl true
+  def terminate(_reason, %{owns_resource: false}), do: :ok
+
   def terminate(_reason, %{role: :client, resource: resource}) when resource != nil do
     Client.stop(resource)
     :ok
@@ -292,16 +298,31 @@ defmodule DisterlProbe.ModbusUART do
 
   def terminate(_reason, _state), do: :ok
 
-  defp open_transport(:client, serial, state) do
-    Client.start_link(
-      transport: :rtu,
-      serial: serial,
-      timeout: ResponseTimeout.current(state.response_timeout)
-    )
+  defp open_transport(:client, serial, state, options) do
+    case Keyword.fetch(options, :client) do
+      {:ok, client} when is_pid(client) ->
+        {:ok, client, false}
+
+      {:ok, _invalid} ->
+        {:error, :invalid_client}
+
+      :error ->
+        case Client.start_link(
+               transport: :rtu,
+               serial: serial,
+               timeout: ResponseTimeout.current(state.response_timeout)
+             ) do
+          {:ok, client} -> {:ok, client, true}
+          {:error, _reason} = error -> error
+        end
+    end
   end
 
-  defp open_transport(:server, serial, state) do
-    Server.RTU.start_link({__MODULE__, self()}, units: [state.unit_id], serial: serial)
+  defp open_transport(:server, serial, state, _options) do
+    case Server.RTU.start_link({__MODULE__, self()}, units: [state.unit_id], serial: serial) do
+      {:ok, server} -> {:ok, server, true}
+      {:error, _reason} = error -> error
+    end
   end
 
   defp send_poll(state, request) do
