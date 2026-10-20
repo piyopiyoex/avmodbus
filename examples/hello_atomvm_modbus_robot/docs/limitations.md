@@ -56,6 +56,22 @@
   application workload の再開を保証しません。
 - 3台のconsoleを同時取得した再現runでは、Sensors側のoutgoing queueが`:queue_full`になり、fail-fast resetが発生する順序を確認しました。
   Controllerで取得するadapter metricsはController側の2 queueだけで、Drive / Sensors側のoutgoing queue使用量を表しません。
+- Sensors が request を受理した後の FC-100 response だけを連続して破棄する試験では、Controller は `net_tick_timeout` で接続を閉じましたが、
+  request と tick を受信し続けた Sensors は古い distribution connection を閉じませんでした。response 破棄終了後に Modbus polling と
+  carrier byte delivery は復帰しても、distribution handshake は再開されませんでした。
+- 上記の非対称 half-open 状態では application ACK timeout による same-sequence retry は古い distribution stream に送られ、retry 上限で
+  producer が停止しました。physical carrier の復帰は distribution connection と application workload の復帰を意味しません。
+  stale remote connection を明示的に teardown する必要があります。
+- opt-inのtraffic probeでは、最初のACK timeoutをlocal ownerへ通知し、remote側の`net_kernel`全体をstop / restartする回復を実装しました。
+  16+16 runは同じproducer / sequenceで再開できましたが、これは1 connectionだけを持つDrive / Sensors向けです。特定peerだけのdisconnect、
+  Controller側の複数connectionを保ったまま任意のlinkを閉じるAPI、一般のmission recoveryは提供しません。
+- opt-inのremote health detectorはconnection ID付きreadiness ACKを監視し、application trafficがないresponse blackoutでもSensorsだけを
+  再接続できました。古いconnectionのACKは無視し、restart回数はboard boot単位で制限します。ただしtimeoutはfailureの証明ではなく、
+  bus congestionやscheduler delayでもfalse positiveになり得ます。
+- `net_kernel.stop/0`は終了完了前に`:ok`を返す場合があります。旧`:net_kernel`の登録解除を50 ms間隔、最大40回待ってから再開しますが、
+  2秒以内に停止しなければ回復を終了します。restart上限はrebootで初期化され、正常化後も同じboot中には補充しません。
+- readiness healthは最初のController ACKを受け取った後のconnectionだけを監視します。初回handshakeを確立できないnodeには既存のannounce retryを
+  続け、health restartは行いません。persistent workload ownerとdurable mission resumeは未実装です。
 
 ## 性能と用途
 
@@ -66,6 +82,14 @@
 - 20 messages / role の overload profile は完全配送しましたが、Drive link で1回の2秒 transaction timeoutを観測しました。
   64 messages / role の run はproducer rateがbusの排出速度を上回ってremote queueを飽和させたため未完了です。これはapplication-level
   flow controlなしの負荷条件であり、carrierの安全な持続throughputを示す値ではありません。
-- window 1のapplication ACKを追加した同じ64+64 profileは163,039 msで完全配送しました。単一runの結果であり、通信断中のretry、
-  長時間memory stability、または任意のworkloadに対するsustained throughputを保証しません。
+- window 1のapplication ACKを追加した同じ64+64 profileは163,039 msで完全配送しました。response blackoutからのremote restartを含む
+  16+16 profileも完全配送しましたが、いずれも単一runです。繰り返す通信断、長時間memory stability、任意のworkloadに対する
+  sustained throughputを保証しません。
+- window 1の256+256 profileは627,792 msで完全配送し、queue high-waterはDrive 279 bytes / 4 chunks、Sensors 162 bytes /
+  2 chunksでした。Controller free heapは開始時約89 KB、30秒settled時約85 KB、minimum watermark 70,736 bytesでした。これは単一の
+  10分runであり、数時間のmemory stabilityやremote側VM全体のmemory推移を保証しません。
+- `MODBUS_FAULT_*` はServer responseだけを破棄する診断用設定です。双方向のRS485 cable断、partial frame、電源断を再現せず、
+  通常運用のrecovery機構として使用するものではありません。
+- Server adapterを再生成するとresponse faultのcountとdelayも初期化され、同じfaultが再度armされます。recovery試験ではtraffic完了後に
+  2回目のblackoutが始まったため、settled metricsは通常時のqueue drainを表しませんでした。
 - physical actuator、real-time control、safety-critical control、production robot には使用しません。

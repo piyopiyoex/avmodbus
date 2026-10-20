@@ -74,6 +74,9 @@ multidrop_gap_ms = parse_integer.("ROBOT_MULTIDROP_GAP_MS", 20)
 chunk_payload_bytes = parse_integer.("MODBUS_CHUNK_PAYLOAD_BYTES", 96)
 max_queued_bytes = parse_integer.("MODBUS_MAX_QUEUED_BYTES", 8_192)
 max_queued_chunks = parse_integer.("MODBUS_MAX_QUEUED_CHUNKS", 256)
+fault_drop_responses = parse_integer.("MODBUS_FAULT_DROP_RESPONSES", 0)
+fault_min_payload_bytes = parse_integer.("MODBUS_FAULT_MIN_PAYLOAD_BYTES", 96)
+fault_after_ms = parse_integer.("MODBUS_FAULT_AFTER_MS", 10_000)
 mission_timeout_ms = parse_integer.("ROBOT_COMMAND_TIMEOUT_MS", 60_000)
 mission_retries = parse_integer.("ROBOT_COMMAND_RETRIES", 1)
 mission_start_delay_ms = parse_integer.("ROBOT_MISSION_START_DELAY_MS", 2_000)
@@ -100,6 +103,19 @@ multinode_traffic_ack_timeout_ms =
   parse_integer.("ROBOT_MULTINODE_TRAFFIC_ACK_TIMEOUT_MS", 90_000)
 
 multinode_traffic_ack_retries = parse_integer.("ROBOT_MULTINODE_TRAFFIC_ACK_RETRIES", 1)
+
+multinode_restart_on_traffic_ack_timeout =
+  parse_boolean.("ROBOT_MULTINODE_RESTART_ON_TRAFFIC_ACK_TIMEOUT", false)
+
+multinode_remote_health_enabled =
+  parse_boolean.("ROBOT_MULTINODE_REMOTE_HEALTH_ENABLED", false)
+
+multinode_remote_ack_timeout_ms =
+  parse_integer.("ROBOT_MULTINODE_REMOTE_ACK_TIMEOUT_MS", 90_000)
+
+multinode_remote_max_restarts =
+  parse_integer.("ROBOT_MULTINODE_REMOTE_MAX_RESTARTS", 1)
+
 sensor_mission_steps = parse_integer.("ROBOT_SENSOR_MISSION_STEPS", 3)
 
 drive_drop_first_reply_per_request =
@@ -141,6 +157,18 @@ end
 
 if max_queued_chunks < 1 or max_queued_chunks > 65_535 do
   raise ArgumentError, "MODBUS_MAX_QUEUED_CHUNKS must be between 1 and 65535"
+end
+
+if fault_drop_responses < 0 do
+  raise ArgumentError, "MODBUS_FAULT_DROP_RESPONSES must be a non-negative integer"
+end
+
+if fault_min_payload_bytes < 0 or fault_min_payload_bytes > 232 do
+  raise ArgumentError, "MODBUS_FAULT_MIN_PAYLOAD_BYTES must be between 0 and 232"
+end
+
+if fault_after_ms < 0 do
+  raise ArgumentError, "MODBUS_FAULT_AFTER_MS must be a non-negative integer"
 end
 
 if mission_timeout_ms < 1 do
@@ -188,8 +216,8 @@ if multinode_soak_retries < 0 do
   raise ArgumentError, "ROBOT_MULTINODE_SOAK_RETRIES must be a non-negative integer"
 end
 
-if multinode_traffic_samples < 0 or multinode_traffic_samples > 64 do
-  raise ArgumentError, "ROBOT_MULTINODE_TRAFFIC_SAMPLES must be between 0 and 64"
+if multinode_traffic_samples < 0 or multinode_traffic_samples > 256 do
+  raise ArgumentError, "ROBOT_MULTINODE_TRAFFIC_SAMPLES must be between 0 and 256"
 end
 
 if multinode_traffic_drive_interval_ms < 1 or multinode_traffic_sensors_interval_ms < 1 do
@@ -214,6 +242,16 @@ end
 
 if multinode_traffic_ack_retries < 0 do
   raise ArgumentError, "ROBOT_MULTINODE_TRAFFIC_ACK_RETRIES must be a non-negative integer"
+end
+
+if multinode_remote_health_enabled and
+     multinode_remote_ack_timeout_ms <= multinode_announce_ms do
+  raise ArgumentError,
+        "ROBOT_MULTINODE_REMOTE_ACK_TIMEOUT_MS must be greater than ROBOT_MULTINODE_ANNOUNCE_MS"
+end
+
+if multinode_remote_max_restarts < 0 or multinode_remote_max_restarts > 10 do
+  raise ArgumentError, "ROBOT_MULTINODE_REMOTE_MAX_RESTARTS must be between 0 and 10"
 end
 
 if sensor_mission_steps < 1 do
@@ -262,6 +300,9 @@ config :robot_sim,
   chunk_payload_bytes: chunk_payload_bytes,
   max_queued_bytes: max_queued_bytes,
   max_queued_chunks: max_queued_chunks,
+  fault_drop_responses: fault_drop_responses,
+  fault_min_payload_bytes: fault_min_payload_bytes,
+  fault_after_ms: fault_after_ms,
   poll_ms: parse_integer.("MODBUS_POLL_INTERVAL_MS", 20),
   trace_transactions: System.get_env("MODBUS_TRACE_TRANSACTIONS") in ["1", "true"],
   trace_queue: System.get_env("MODBUS_TRACE_QUEUE") in ["1", "true"],
@@ -286,6 +327,10 @@ config :robot_sim,
   multinode_traffic_settle_ms: multinode_traffic_settle_ms,
   multinode_traffic_ack_timeout_ms: multinode_traffic_ack_timeout_ms,
   multinode_traffic_ack_retries: multinode_traffic_ack_retries,
+  multinode_restart_on_traffic_ack_timeout: multinode_restart_on_traffic_ack_timeout,
+  multinode_remote_health_enabled: multinode_remote_health_enabled,
+  multinode_remote_ack_timeout_ms: multinode_remote_ack_timeout_ms,
+  multinode_remote_max_restarts: multinode_remote_max_restarts,
   sensor_mission_steps: sensor_mission_steps,
   drive_drop_first_reply_per_request: drive_drop_first_reply_per_request,
   first_request_id: parse_integer.("ROBOT_FIRST_REQUEST_ID", 1)

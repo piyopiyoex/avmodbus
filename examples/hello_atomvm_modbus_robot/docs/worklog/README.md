@@ -21,3 +21,7 @@ host test、実機試験、障害調査など、再現可能な時系列の記�
 - [2026-10-20: concurrent producer traffic baseline と moderate profile](2026-10-20-concurrent-traffic.md)
 - [2026-10-20: overload、metrics、longer run の session reset](2026-10-20-overload-and-long-run.md)
 - [2026-10-20: application ACK flow control 実機検証](2026-10-20-ack-flow-control.md)
+- [2026-10-20: Server response blackout と非対称 half-open connection](2026-10-20-response-blackout.md)
+- [2026-10-20: ACK timeout による remote distribution restart](2026-10-20-response-blackout-recovery.md)
+- [2026-10-20: readiness ACK による idle connection recovery](2026-10-20-remote-readiness-health.md)
+- [2026-10-20: 256+256 flow-controlled long run](2026-10-20-extended-flow-controlled-run.md)

@@ -37,6 +37,8 @@ protocol design は変更していません。follow-up では、共有 client �
 - 3 台の実機で `forward -> forward -> right turn` の adaptive mission を実行する
 - role ごとの readiness lease で Drive / Sensors の停止を検出し、復帰後に両 connection を再確認する
 - Drive / Sensors の独立 producer から同時に logical message を送り、role 別 delivery と公平性を集計する
+- opt-in で traffic ACK timeout 時に remote 側 distribution を再起動し、未確認 sequence を再送する
+- opt-in で connection ID 付き readiness ACK を監視し、application traffic がない half-open connection を bounded restart する
 
 各 Stage の進捗と完了条件は [ロードマップ](docs/roadmap.md) を参照してください。
 
@@ -368,6 +370,37 @@ ROBOT_MODE=multinode ROBOT_ROLE=controller ATOMVM_UART_SPEED=115200 \
 | `ROBOT_MULTINODE_LEASE_MS` | `75000` | 最後の readiness から remote unavailable とするまでの期限 |
 | `ROBOT_SENSOR_MISSION_STEPS` | `3` | 起動後に直列実行する sensor-driven mission の step 数 |
 | `ROBOT_DRIVE_DROP_FIRST_REPLY_PER_REQUEST` | `false` | Drive が各 request の初回 reply を破棄する fault injection |
+| `MODBUS_FAULT_DROP_RESPONSES` | `0` | Server が受理後に破棄する FC-100 response 数。`0` は無効 |
+| `MODBUS_FAULT_MIN_PAYLOAD_BYTES` | `96` | response 破棄の対象にする最小 request payload bytes |
+| `MODBUS_FAULT_AFTER_MS` | `10000` | adapter 起動後、response 破棄を開始するまでの時間 |
+| `ROBOT_MULTINODE_RESTART_ON_TRAFFIC_ACK_TIMEOUT` | `false` | traffic ACK timeout 時に remote の distribution を再起動する診断設定 |
+| `ROBOT_MULTINODE_REMOTE_HEALTH_ENABLED` | `false` | remote が readiness ACK timeout で自身の distribution を再起動する診断設定 |
+| `ROBOT_MULTINODE_REMOTE_ACK_TIMEOUT_MS` | `90000` | remote が現在の connection ID の ACK を待つ期限。announce 間隔より大きくする |
+| `ROBOT_MULTINODE_REMOTE_MAX_RESTARTS` | `1` | remote health による board boot ごとの restart 上限。0..10 |
+
+`MODBUS_FAULT_*` は Drive / Sensors 側でだけ意味を持つ transport fault injection です。通常構成では必ず
+`MODBUS_FAULT_DROP_RESPONSES=0` を使用してください。これは request を受理した後の Server response だけを破棄するため、
+双方向の cable 断とは異なる非対称な failure model です。Sensors で 180 response を破棄した実機試験では physical polling は
+自動復帰しましたが、Controller だけが `net_tick_timeout` で古い distribution connection を閉じ、Sensors 側には古い connection が
+残りました。その結果、same-sequence application retry は新しい connection に到達せず上限まで失敗しました。詳細は
+[response blackout worklog](docs/worklog/2026-10-20-response-blackout.md) を参照してください。
+
+follow-upではSensorsだけで`ROBOT_MULTINODE_RESTART_ON_TRAFFIC_ACK_TIMEOUT=true`を指定し、最初のACK timeoutでremote側の
+`net_kernel`をstop / restartしました。ControllerのDrive connectionを維持したままSensorsが再接続し、同じproducerが未確認sequenceを
+retryして16+16 messagesを完全配送しました。この設定はconcurrent traffic probe専用のopt-in診断機能です。remoteが複数の
+distribution connectionを持つ構成や一般のrobot command recoveryへ適用するものではありません。設計は
+[ADR 0011](docs/adr/0011-restart-remote-distribution-after-ack-timeout.md)、実測値は
+[response blackout recovery worklog](docs/worklog/2026-10-20-response-blackout-recovery.md)に記録しています。
+
+application trafficに依存しない診断では、Drive / Sensorsがreadiness heartbeatごとに現在のdistribution connection IDのACKを
+Controllerから受け取ります。`ROBOT_MULTINODE_REMOTE_HEALTH_ENABLED=true`のremoteはACK期限超過時に自身の`net_kernel`を
+stop / restartします。restart回数はboard bootごとに制限され、古いconnection IDのACKはhealthを更新しません。Sensorsだけに
+この機能を有効化したresponse blackout試験では、traffic無効のままACK欠落28,524 msを検出し、Drive connectionを維持してSensorsを
+再接続しました。再armされた2回目のblackoutでは上限到達を記録し、restartを繰り返しませんでした。
+
+この設定は1本だけdistribution connectionを持つremote用のopt-in実験機能です。timeoutはbus congestionでも発生し得るため、通常構成では
+既定の`false`を使用します。設計は[ADR 0012](docs/adr/0012-detect-remote-health-with-readiness-acks.md)、実機結果は
+[idle connection recovery worklog](docs/worklog/2026-10-20-remote-readiness-health.md)に記録しています。
 
 odd cycle は Drive、even cycle は Sensors を先に実行し、固定順による測定 bias を減らします。2026-10-19 の 30-cycle run は
 60 round trip を 198,745 ms で完了し、両 role とも 30 / 30 成功、失敗 0 でした。Drive の平均 RTT は 3,184 ms、Sensors は
@@ -415,8 +448,10 @@ shared Client と `uart_ports` を採用した理由は
 [ADR 0005](docs/adr/0005-share-one-client-across-distribution-streams.md)、boot session ID の判断は
 [ADR 0006](docs/adr/0006-identify-remote-boots-with-session-ids.md) を参照してください。Drive / Sensors の独立 reboot recovery は実機確認済みです。
 Controller reboot recovery、application traffic の短時間 fairness baseline、Drive / Sensors 間の Controller relay も実機確認済みです。
-concurrent producer の baseline と moderate profile は2026-10-20に実機確認しました。より長時間の soak、memory / queue 推移、
-overload 時の公平性は未完了です。
+concurrent producer の baseline、moderate、application ACK 付き 64+64および256+256 profileは2026-10-20に実機確認しました。
+response blackout では物理通信復帰後も非対称な half-open distribution connection が残る境界を確認しています。より長時間の
+数時間のsoakは未完了ですが、10分間のmemory / queue推移を記録しました。traffic ACK timeoutを契機にremote側distributionを明示的に再起動する回復に加え、
+connection ID付きreadiness ACKでapplication trafficがないhalf-open connectionを検出するopt-in recoveryも実機確認済みです。
 
 ## Stage 4: sensor-driven mission
 
@@ -471,7 +506,7 @@ buffer、application state、failure detection、recovery guarantee の詳細は
 
 資料の一覧と更新方針は [docs/README.md](docs/README.md) にあります。
 
-## 次の実験: concurrent producer traffic（負荷検証中）
+## 次の実験: concurrent producer traffic と障害復旧
 
 既存の交互順 soak は Controller が Drive と Sensors に順番に request を送る試験です。
 新しい opt-in probe では、**Drive と Sensors がそれぞれ独立した process から定期的に message を送ります**。
@@ -495,7 +530,7 @@ ROBOT_MODE=multinode ROBOT_ROLE=controller ATOMVM_UART_SPEED=115200 \
 
 | environment variable | default | 用途 |
 | --- | ---: | --- |
-| `ROBOT_MULTINODE_TRAFFIC_SAMPLES` | `0` | 0 は無効。1..64 messages / role |
+| `ROBOT_MULTINODE_TRAFFIC_SAMPLES` | `0` | 0 は無効。1..256 messages / role |
 | `ROBOT_MULTINODE_TRAFFIC_DRIVE_INTERVAL_MS` | `2000` | Drive producer の送信間隔 |
 | `ROBOT_MULTINODE_TRAFFIC_SENSORS_INTERVAL_MS` | `1000` | Sensors producer の送信間隔 |
 | `ROBOT_MULTINODE_TRAFFIC_PAYLOAD_BYTES` | `16` | 0..128 bytes の deterministic payload |
@@ -524,6 +559,7 @@ max_interarrival_ms を示します。`fairness` は role 間の delivery ratio�
 | overload: 20 messages / role、64 bytes | 両 role 20 / 20、Drive transaction timeout 1 | 29,769 ms | 23,579 ms | 1,310 ms |
 | longer: 64 messages / role、64 bytes | Drive 23 / 64、Sensors 24 / 64、session reset後timeout | 300,001 ms | unavailable | unavailable |
 | longer + ACK: 64 messages / role、64 bytes | 両 role 64 / 64、error 0 | 163,039 ms | 156,298 ms | 3,114 ms |
+| extended + ACK: 256 messages / role、64 bytes | 両 role 256 / 256、error 0 | 627,792 ms | 623,957 ms | 1,029 ms |
 
 baseline、moderate、overload の application delivery は missing、duplicate、out-of-order、invalid がすべて0でした。longer run では
 両 carrier session が再生成され、distribution reconnect 後も元の producer は再開されませんでした。短時間に各1 run の結果であり、
@@ -531,6 +567,15 @@ baseline、moderate、overload の application delivery は missing、duplicate�
 Controllerのmetricsはremote側queueを表さないため、長時間安定性やmemory上限を保証しません。詳細は
 [concurrent traffic worklog](docs/worklog/2026-10-20-concurrent-traffic.md)と
 [overload / longer run worklog](docs/worklog/2026-10-20-overload-and-long-run.md)、
-[ACK flow-control worklog](docs/worklog/2026-10-20-ack-flow-control.md)を参照してください。
+[ACK flow-control worklog](docs/worklog/2026-10-20-ack-flow-control.md)を参照してください。さらに ACK 待ち中の Sensors response を
+意図的に破棄した試験では、same-sequence retry 自体は動作したものの、非対称な half-open distribution connection のため完了しませんでした。
+[response blackout worklog](docs/worklog/2026-10-20-response-blackout.md)に失敗境界を記録しています。follow-upのremote-side
+distribution restartでは、同じproducerがsequence 2から再開して両role 16 / 16を完了しました。
+[response blackout recovery worklog](docs/worklog/2026-10-20-response-blackout-recovery.md)も参照してください。
+
+extended profileは10分27.792秒で256+256 messagesを完全配送しました。Unit別transaction failureは各2回、queue high-waterは
+Drive 279 bytes / 4 chunks、Sensors 162 bytes / 2 chunksで、30秒後は両queueとも0でした。Controller free heapは開始時約89 KB、
+settled時約85 KB、minimum watermark 70,736 bytesでした。詳細は
+[extended long-run worklog](docs/worklog/2026-10-20-extended-flow-controlled-run.md)を参照してください。
 
 [実験計画と制約](docs/next-experiments.md)を参照してください。

@@ -27,4 +27,5 @@ carrier queueを増やす、producer間隔を固定値で長くする、applicat
 - 2 roleは独立producerのままだが、それぞれ最大1 messageだけを未確認状態にする。
 - messageごとに逆方向ACKが必要なため、flow controlなしの場合よりthroughputは低下する。
 - application ACKはdurable deliveryやexactly-onceを意味しない。collector crash、node reboot、ACK retry上限超過ではworkloadが停止し得る。
-- connection interruption中のproducer resumeとduplicate behaviorは別のfault-injection試験で検証する。
+- connection interruption中のproducer resumeは、remote側distributionを再起動するopt-in試験で検証した。追加判断は
+  [ADR 0011](0011-restart-remote-distribution-after-ack-timeout.md)に記録する。

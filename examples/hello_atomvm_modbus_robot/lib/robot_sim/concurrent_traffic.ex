@@ -13,6 +13,7 @@ defmodule RobotSim.ConcurrentTraffic do
   alias RobotSim.TrafficStats
 
   @roles [:drive, :sensors]
+  @max_samples 256
   @default_ack_timeout_ms 90_000
   @default_ack_retries 1
 
@@ -47,11 +48,39 @@ defmodule RobotSim.ConcurrentTraffic do
         ack_timeout_ms,
         ack_retries
       )
+      when is_pid(collector) do
+    start_producer(
+      collector,
+      role,
+      run_id,
+      count,
+      interval_ms,
+      payload_bytes,
+      ack_timeout_ms,
+      ack_retries,
+      nil
+    )
+  end
+
+  @doc false
+  def start_producer(
+        collector,
+        role,
+        run_id,
+        count,
+        interval_ms,
+        payload_bytes,
+        ack_timeout_ms,
+        ack_retries,
+        recovery_target
+      )
       when is_pid(collector) and role in @roles and is_integer(run_id) and run_id > 0 and
-             is_integer(count) and count > 0 and count <= 64 and is_integer(interval_ms) and
+             is_integer(count) and count > 0 and count <= @max_samples and
+             is_integer(interval_ms) and
              interval_ms > 0 and is_integer(payload_bytes) and payload_bytes >= 0 and
              payload_bytes <= 128 and is_integer(ack_timeout_ms) and ack_timeout_ms > 0 and
-             is_integer(ack_retries) and ack_retries >= 0 do
+             is_integer(ack_retries) and ack_retries >= 0 and
+             (is_pid(recovery_target) or recovery_target == nil) do
     spawn(fn ->
       payload = Payload.build(payload_bytes)
 
@@ -63,7 +92,10 @@ defmodule RobotSim.ConcurrentTraffic do
                  {:robot_traffic_ack, :started, role, run_id},
                  ack_timeout_ms,
                  ack_retries,
-                 :started
+                 :started,
+                 recovery_target,
+                 role,
+                 run_id
                ),
              :ok <-
                send_samples(
@@ -75,7 +107,8 @@ defmodule RobotSim.ConcurrentTraffic do
                  payload,
                  1,
                  ack_timeout_ms,
-                 ack_retries
+                 ack_retries,
+                 recovery_target
                ) do
           send_with_ack(
             collector,
@@ -83,7 +116,10 @@ defmodule RobotSim.ConcurrentTraffic do
             {:robot_traffic_ack, :finished, role, run_id},
             ack_timeout_ms,
             ack_retries,
-            :finished
+            :finished,
+            recovery_target,
+            role,
+            run_id
           )
         end
 
@@ -100,7 +136,8 @@ defmodule RobotSim.ConcurrentTraffic do
          _payload,
          sequence,
          _ack_timeout_ms,
-         _ack_retries
+         _ack_retries,
+         _recovery_target
        )
        when sequence > count,
        do: :ok
@@ -114,7 +151,8 @@ defmodule RobotSim.ConcurrentTraffic do
          payload,
          sequence,
          ack_timeout_ms,
-         ack_retries
+         ack_retries,
+         recovery_target
        ) do
     result =
       send_with_ack(
@@ -123,7 +161,10 @@ defmodule RobotSim.ConcurrentTraffic do
         {:robot_traffic_ack, :sample, role, run_id, sequence},
         ack_timeout_ms,
         ack_retries,
-        {:sample, sequence}
+        {:sample, sequence},
+        recovery_target,
+        role,
+        run_id
       )
 
     if result == :ok and sequence < count do
@@ -138,7 +179,8 @@ defmodule RobotSim.ConcurrentTraffic do
         payload,
         sequence + 1,
         ack_timeout_ms,
-        ack_retries
+        ack_retries,
+        recovery_target
       )
     else
       result
@@ -151,7 +193,10 @@ defmodule RobotSim.ConcurrentTraffic do
          expected_ack,
          ack_timeout_ms,
          retries_left,
-         context
+         context,
+         recovery_target,
+         role,
+         run_id
        ) do
     send(collector, message)
 
@@ -166,7 +211,10 @@ defmodule RobotSim.ConcurrentTraffic do
           expected_ack,
           ack_timeout_ms,
           retries_left,
-          context
+          context,
+          recovery_target,
+          role,
+          run_id
         )
     end
   end
@@ -177,7 +225,10 @@ defmodule RobotSim.ConcurrentTraffic do
          _expected_ack,
          _ack_timeout_ms,
          0,
-         context
+         context,
+         _recovery_target,
+         _role,
+         _run_id
        ),
        do: {:error, {:ack_timeout, context}}
 
@@ -187,12 +238,17 @@ defmodule RobotSim.ConcurrentTraffic do
          expected_ack,
          ack_timeout_ms,
          retries_left,
-         context
+         context,
+         recovery_target,
+         role,
+         run_id
        ) do
     IO.puts(
       "modbus_robot_traffic: ACK timeout context=#{inspect(context)}; " <>
         "retrying remaining=#{retries_left}"
     )
+
+    notify_recovery_target(recovery_target, role, run_id, context)
 
     send_with_ack(
       collector,
@@ -200,8 +256,18 @@ defmodule RobotSim.ConcurrentTraffic do
       expected_ack,
       ack_timeout_ms,
       retries_left - 1,
-      context
+      context,
+      nil,
+      role,
+      run_id
     )
+  end
+
+  defp notify_recovery_target(nil, _role, _run_id, _context), do: :ok
+
+  defp notify_recovery_target(target, role, run_id, context) do
+    send(target, {:robot_traffic_ack_timeout, self(), role, run_id, context})
+    :ok
   end
 
   defp log_producer_failure(_role, _run_id, :ok), do: :ok

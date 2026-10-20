@@ -24,3 +24,5 @@
 - [0008: sensor に基づく navigation 判断は Controller で行う](0008-make-navigation-decisions-in-controller.md)
 - [0009: remote health は readiness lease で判定する](0009-use-readiness-leases-for-remote-health.md)
 - [0010: concurrent producer を application ACK で制限する](0010-bound-concurrent-producers-with-application-acks.md)
+- [0011: ACK timeout 時は remote 側 distribution を再起動する](0011-restart-remote-distribution-after-ack-timeout.md)
+- [0012: readiness ACK で remote distribution health を判定する](0012-detect-remote-health-with-readiness-acks.md)

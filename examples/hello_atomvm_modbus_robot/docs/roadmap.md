@@ -83,7 +83,7 @@ termination / bias の電気測定と長時間 soak は未実施であり、現�
 - [x] 継続 application traffic と polling fairness の短時間 baseline を測定する
 - [x] application traffic 中に Drive / Sensors を独立 reboot して recovery を確認する
 - [x] concurrent producer の短時間 fairness baseline と moderate profile を検証する
-- [ ] より長時間の soak と memory / queue 推移を検証する
+- [x] 256+256 messagesの10分間soakでmemory / queue推移を検証する
 
 完了条件は、controller と 2 台の remote node の genuine distribution を実証するか、必要な AtomVM / carrier
 変更と blocker を再現可能な形で記録することです。基本疎通、3 role の独立 reboot recovery、60 application round trip の短時間
@@ -113,8 +113,13 @@ reconciliation、durable state は対象外または follow-up とし、[既知�
 - [x] 64 messages / role の longer run で session reset と application recovery の境界を再現する
 - [x] 3台同時consoleでremote outgoing queueの`:queue_full`をsession resetの直接原因として特定する
 - [x] application ACK / in-flight window 1で64+64 longer runを完全配送する
-- [ ] 通信断と remote reboot に対する recovery、長時間の memory / queue 推移を測定する
-- [ ] 通信断中のACK timeout、same-sequence retry、producer resume semanticsを実機検証する
+- [x] Server response blackout中のACK timeoutとsame-sequence retryを実機で発生させる
+- [x] 非対称half-open connectionによりproducer resumeが失敗する境界を記録する
+- [x] remote側のstale distribution connectionを明示的にteardownし、再接続後に同じproducerを再開する
+- [x] application trafficに依存しないremote healthとdistribution lifecycleを設計する
+- [x] connection ID付きreadiness ACK、boot単位のrestart上限、shutdown完了待ちを実機検証する
+- [x] remote rebootに対するrecovery、10分間のmemory / queue推移を測定する
+- [ ] remoteの物理RS485切断・再接続を検証する
 - [ ] mission 実行と health loop を分離し、reboot 時の command outcome を reconcile する
 - [ ] AtomVM runtime の upstream follow-up を進める
 - [ ] 4 台目の追加は上記の測定結果に基づいて判断する

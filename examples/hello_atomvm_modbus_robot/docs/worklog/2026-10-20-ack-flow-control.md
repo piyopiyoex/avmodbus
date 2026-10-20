@@ -70,8 +70,10 @@ window 1のapplication ACKにより、以前約32.5秒で発生したremote queu
 bounded carrier queueを拡大する必要はなかった。一方、所要時間は約163秒であり、この方式はthroughputよりbounded memoryと回復可能性を
 優先する。
 
-次は通信断中にACK timeoutを発生させ、distribution reconnect後に同じsequenceのretryが完了するか、duplicate countとproducer期限を
-含めて確認する。
+follow-upでは通信断中にACK timeoutを発生させた。retryだけでは非対称half-open connectionから回復できなかったが、remote側
+distributionを明示的に再起動すると同じsequenceからproducerを再開できた。結果は
+[response blackout](2026-10-20-response-blackout.md)と
+[response blackout recovery](2026-10-20-response-blackout-recovery.md)を参照してください。
 
 ## 通常構成への復帰確認
 

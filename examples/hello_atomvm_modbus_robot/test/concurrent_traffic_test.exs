@@ -62,7 +62,7 @@ defmodule RobotSim.ConcurrentTrafficTest do
 
   test "a producer retries the same sample after an ACK timeout" do
     producer =
-      ConcurrentTraffic.start_producer(self(), :drive, 123, 1, 1, 4, 20, 1)
+      ConcurrentTraffic.start_producer(self(), :drive, 123, 1, 1, 4, 20, 1, self())
 
     monitor = Process.monitor(producer)
 
@@ -72,11 +72,30 @@ defmodule RobotSim.ConcurrentTrafficTest do
     assert_receive {:robot_traffic_sample, ^producer, :drive, 123, 1, payload}
     assert byte_size(payload) == 4
 
+    assert_receive {:robot_traffic_ack_timeout, ^producer, :drive, 123, {:sample, 1}}, 100
     assert_receive {:robot_traffic_sample, ^producer, :drive, 123, 1, ^payload}, 100
+    refute_receive {:robot_traffic_ack_timeout, ^producer, :drive, 123, {:sample, 1}}, 5
     send(producer, {:robot_traffic_ack, :sample, :drive, 123, 1})
 
     assert_receive {:robot_traffic_finished, ^producer, :drive, 123}
     send(producer, {:robot_traffic_ack, :finished, :drive, 123})
+    assert_receive {:DOWN, ^monitor, :process, ^producer, :normal}
+  end
+
+  test "a producer accepts the bounded 256-sample long-run profile" do
+    producer = ConcurrentTraffic.start_producer(self(), :sensors, 456, 256, 1, 0, 100, 0)
+    monitor = Process.monitor(producer)
+
+    assert_receive {:robot_traffic_started, ^producer, :sensors, 456}
+    send(producer, {:robot_traffic_ack, :started, :sensors, 456})
+
+    Enum.each(1..256, fn sequence ->
+      assert_receive {:robot_traffic_sample, ^producer, :sensors, 456, ^sequence, <<>>}, 100
+      send(producer, {:robot_traffic_ack, :sample, :sensors, 456, sequence})
+    end)
+
+    assert_receive {:robot_traffic_finished, ^producer, :sensors, 456}
+    send(producer, {:robot_traffic_ack, :finished, :sensors, 456})
     assert_receive {:DOWN, ^monitor, :process, ^producer, :normal}
   end
 

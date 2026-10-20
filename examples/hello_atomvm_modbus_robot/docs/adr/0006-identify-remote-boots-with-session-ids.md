@@ -26,3 +26,5 @@ boot session ID には FC-100 carrier の session ID と同じ `DisterlProbe.Ses
 - ID は durable identity ではなく、衝突確率を持つ volatile な識別子である。
 - readiness heartbeat は追加の distribution traffic を発生させるため、5 秒間隔ではなく 30 秒間隔を既定値とする。
 - Controller 自身の reboot 後も、再接続した両 remote が heartbeat で再登録し、application probe を完了することを実機確認した。
+- 同じboard boot内でdistributionだけを再起動する場合はboot session IDを維持し、別のconnection IDを更新する。この追加判断は
+  [ADR 0011](0011-restart-remote-distribution-after-ack-timeout.md)に記録する。

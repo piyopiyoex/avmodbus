@@ -11,10 +11,12 @@ Stage 0–4 の完了結果は[ロードマップ](roadmap.md)と[作業記録](
 - run ID、role、sequence、payload を照合する bounded host-side stats
 - Controller clock だけで計算する role 別 duration、throughput、completion skew、delivery ratio gap
 - Unit別 transaction count / failure / latency、queue high-water、実行前後と30秒後の heap snapshot
-- 64 sample / role、128-byte payload の明示的上限と run timeout
+- 256 sample / role、128-byte payload の明示的上限と run timeout
 - host test で独立 producer、重複、順序違反、missing、無応答 timeout を確認する構成
 - started / sample / finishedごとのapplication ACKとrole別in-flight window 1
 - ACK timeout時のsame-run / same-sequence bounded retry
+- connection ID付きreadiness ACKによるapplication traffic非依存のremote health
+- board boot単位のrestart上限と、`net_kernel.stop/0`後のbounded shutdown待ち
 
 送信は各 remote process が個別に開始しますが、wire 上の Modbus RTU request は
 **Controller が単一 client として順番に送る**既存仕様から変更しません。
@@ -31,8 +33,10 @@ Stage 0–4 の完了結果は[ロードマップ](roadmap.md)と[作業記録](
 | exploratory overload | 250 ms | 250 ms | 20 | 64 bytes |
 | longer run、flow controlなし | 500 ms | 500 ms | 64 | 64 bytes |
 | longer run、ACK window 1 | 500 ms | 500 ms | 64 | 64 bytes |
+| extended run、ACK window 1 | 500 ms | 500 ms | 256 | 64 bytes |
 
-5 profile は 2026-10-20 に実施済みです。flow controlなしのlonger runはsession resetでtimeoutし、ACK window 1では完全配送しました。
+6 profile は 2026-10-20 に実施済みです。flow controlなしのlonger runはsession resetでtimeoutし、ACK window 1の64+64と
+256+256 profileは完全配送しました。
 
 記録する項目:
 
@@ -66,6 +70,7 @@ one-way latency を算出してはいけません。RTT 計測は既存の echo 
 | overload | 20 / 20、803 milli-msg/s | 20 / 20、750 milli-msg/s | 29,769 ms | 23,579 ms | 1,310 ms | 0‰ |
 | longer、flow controlなし | 23 / 64 | 24 / 64 | 300,001 ms timeout | unavailable | unavailable | 16‰ |
 | longer、ACK window 1 | 64 / 64、401 milli-msg/s | 64 / 64、404 milli-msg/s | 163,039 ms | 156,298 ms | 3,114 ms | 0‰ |
+| extended、ACK window 1 | 256 / 256、409 milli-msg/s | 256 / 256、409 milli-msg/s | 627,792 ms | 623,957 ms | 1,029 ms | 0‰ |
 
 baseline の Drive max interarrival は 2,136 ms、Sensors は795 msでした。moderate ではそれぞれ1,195 ms、824 msでした。
 これは Controller 受信時刻による短時間の観測値で、producer の one-way latency や長期的な公平性保証ではありません。
@@ -85,13 +90,37 @@ application ACKでroleごとのin-flight windowを1にした再試験では、mi
 完了しました。queue-full、session change、ACK timeoutは発生せず、30秒後のController側queueは両方0でした。詳細は
 [ACK flow-control worklog](worklog/2026-10-20-ack-flow-control.md)を参照してください。
 
+同じflow-controlled probeでSensorsのFC-100 responseを180回連続して破棄したところ、未確認のsequence 7に対する
+same-sequence retryは10秒ごとに動作しました。しかしControllerだけが`net_tick_timeout`で接続を閉じ、requestを受信していたSensors側は
+古いdistribution connectionを保持しました。response破棄終了後はphysical pollingとcarrier byte deliveryが復帰したものの、session changeや
+distribution reconnectは発生せず、producerは12回のretryを使い切って停止しました。詳細は
+[response blackout worklog](worklog/2026-10-20-response-blackout.md)を参照してください。
+
+follow-upではSensors producerの最初のACK timeoutをlocal ownerへ通知し、Sensors側の`net_kernel`だけをstop / restartした。
+ControllerのDrive connectionを維持したままSensorsが再接続し、同じrun ID / sequence 2からproducerを再開した。16+16 messagesは
+missing / duplicate / out-of-order / invalid 0、63,171 msで完了した。詳細は
+[response blackout recovery worklog](worklog/2026-10-20-response-blackout-recovery.md)を参照してください。
+
+さらにreadiness heartbeatへconnection ID付きACKを返し、remote側でACK期限を判定するopt-in health detectorを追加した。
+application trafficを無効にした状態でも、Sensorsはresponse blackout開始後にACK欠落28,524 msを検出してdistributionを再起動した。
+ControllerはDrive connectionを維持し、Sensorsのreconnect後に両roleのprobeを完了した。faultが再armされた2回目のblackoutでは
+boot単位の上限によりrestartせず、restart stormを抑止した。最初の試行で`net_kernel.stop/0`返却後も旧processが残るraceを再現したため、
+登録解除をbounded pollしてからstartする。詳細は
+[idle connection recovery worklog](worklog/2026-10-20-remote-readiness-health.md)を参照してください。
+
+256+256 extended runは10分27.792秒でcompleteし、missing / duplicate / out-of-order / invalidは両roleとも0だった。Unit別transaction
+failureは各2回、queue high-waterはDrive 279 bytes / 4 chunks、Sensors 162 bytes / 2 chunksで、30秒後は両queueとも0になった。
+Controllerのfree heapは開始時約89 KB、settled時約85 KB、minimum watermark 70,736 bytesだった。詳細は
+[extended long-run worklog](worklog/2026-10-20-extended-flow-controlled-run.md)を参照してください。
+
 ## その次に取り組む候補
 
-1. flow-controlled run中に通信断を入れ、ACK timeout後のsame-sequence retryとdistribution reconnectを確認する。
-2. Drive reboot 中の未確定 movement command を reconcile する。volatile state と request cache を越える exactly-once を安易に約束しない。
-3. Mission 実行を別 process に分離し、Controller readiness lease が同期 request 中も動くようにする。
-4. Remote の物理抜き差し、独立 reboot、長時間 soak を段階的に試す。remote側queue high-waterも追跡する。
-5. AtomVM の multi-connection tick、setup retry、remote process monitor の再現と upstream follow-up を進める。
-6. 3 remote / 4 device への拡張は、3 device fairness と memory の限界を測定した後に検討する。
+1. response faultの再armを避けるone-shot診断方法を用意し、recovery後のsettled queue / memoryを測定する。
+2. Remote の物理RS485抜き差しを試す。remote側queue high-waterも追跡する。
+3. Drive reboot 中の未確定 movement command を reconcile する。volatile state と request cache を越える exactly-once を安易に約束しない。
+4. Mission 実行を別 process に分離し、Controller readiness lease が同期 request 中も動くようにする。
+5. health detectorのtimeoutを負荷profile別に評価し、false positive条件を測定する。
+6. AtomVM の個別disconnect API、multi-connection tick、setup retry、remote process monitorをupstream follow-upする。
+7. 3 remote / 4 device への拡張は、3 device fairness と memory の限界を測定した後に検討する。
 
 AVModbus core と wire protocol は変更しません。既存 carrier には観測専用 metrics API と Unit ID 付き trace だけを追加しています。

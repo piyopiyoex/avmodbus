@@ -29,14 +29,15 @@ defmodule RobotSim.MultinodeDistributedTest do
   test "classifies first, duplicate, and replacement readiness announcements" do
     first_pid = self()
     replacement_pid = spawn(fn -> :ok end)
-    remotes = %{drive: %{pid: first_pid, boot_id: 100}, sensors: nil}
+    remotes = %{drive: %{pid: first_pid, boot_id: 100, connection_id: 1_000}, sensors: nil}
 
     assert MultinodeDistributed.classify_readiness(
              remotes,
              :drive,
              :"drive@modbus.local",
              first_pid,
-             100
+             100,
+             1_000
            ) == :duplicate
 
     assert MultinodeDistributed.classify_readiness(
@@ -44,7 +45,8 @@ defmodule RobotSim.MultinodeDistributedTest do
              :drive,
              :"drive@modbus.local",
              replacement_pid,
-             100
+             100,
+             1_000
            ) == :new
 
     assert MultinodeDistributed.classify_readiness(
@@ -52,13 +54,14 @@ defmodule RobotSim.MultinodeDistributedTest do
              :sensors,
              :"sensors@modbus.local",
              replacement_pid,
-             200
+             200,
+             2_000
            ) == :new
   end
 
   test "duplicate readiness ignores lease metadata" do
     remotes = %{
-      drive: %{pid: self(), boot_id: 100, last_seen_ms: 1_000},
+      drive: %{pid: self(), boot_id: 100, connection_id: 1_000, last_seen_ms: 1_000},
       sensors: nil
     }
 
@@ -67,14 +70,15 @@ defmodule RobotSim.MultinodeDistributedTest do
              :drive,
              :"drive@modbus.local",
              self(),
-             100
+             100,
+             1_000
            ) == :duplicate
   end
 
   test "expired readiness leases remove only stale remotes" do
     remotes = %{
-      drive: %{pid: self(), boot_id: 100, last_seen_ms: 1_000},
-      sensors: %{pid: self(), boot_id: 200, last_seen_ms: 4_500}
+      drive: %{pid: self(), boot_id: 100, connection_id: 1_000, last_seen_ms: 1_000},
+      sensors: %{pid: self(), boot_id: 200, connection_id: 2_000, last_seen_ms: 4_500}
     }
 
     assert {[:drive], next_remotes} =
@@ -86,7 +90,7 @@ defmodule RobotSim.MultinodeDistributedTest do
 
   test "a readiness lease remains valid at its exact deadline" do
     remotes = %{
-      drive: %{pid: self(), boot_id: 101, last_seen_ms: 2_000},
+      drive: %{pid: self(), boot_id: 101, connection_id: 1_000, last_seen_ms: 2_000},
       sensors: nil
     }
 
@@ -95,14 +99,28 @@ defmodule RobotSim.MultinodeDistributedTest do
   end
 
   test "a new boot session is new even when AtomVM reuses the same pid" do
-    remotes = %{drive: %{pid: self(), boot_id: 100}, sensors: nil}
+    remotes = %{drive: %{pid: self(), boot_id: 100, connection_id: 1_000}, sensors: nil}
 
     assert MultinodeDistributed.classify_readiness(
              remotes,
              :drive,
              :"drive@modbus.local",
              self(),
-             101
+             101,
+             1_000
+           ) == :new
+  end
+
+  test "a new distribution connection is new within the same board boot" do
+    remotes = %{drive: %{pid: self(), boot_id: 100, connection_id: 1_000}, sensors: nil}
+
+    assert MultinodeDistributed.classify_readiness(
+             remotes,
+             :drive,
+             :"drive@modbus.local",
+             self(),
+             100,
+             1_001
            ) == :new
   end
 
@@ -112,14 +130,17 @@ defmodule RobotSim.MultinodeDistributedTest do
              :drive,
              :"sensors@modbus.local",
              self(),
-             100
+             100,
+             1_000
            ) == :unexpected
   end
 
   test "retries an in-flight soak probe when its remote boot session changes" do
     old_pid = self()
     new_pid = spawn(fn -> :ok end)
-    remotes = %{drive: %{pid: old_pid, boot_id: 100}, sensors: nil}
+
+    remotes =
+      %{drive: %{pid: old_pid, boot_id: 100, connection_id: 1_000}, sensors: nil}
 
     assert {:retry, next_remotes} =
              MultinodeDistributed.soak_readiness_transition(
@@ -128,10 +149,11 @@ defmodule RobotSim.MultinodeDistributedTest do
                :drive,
                :"drive@modbus.local",
                new_pid,
-               101
+               101,
+               1_001
              )
 
-    assert next_remotes.drive == %{pid: new_pid, boot_id: 101}
+    assert next_remotes.drive == %{pid: new_pid, boot_id: 101, connection_id: 1_001}
   end
 
   test "continues waiting when the other soak role reconnects" do
@@ -145,14 +167,15 @@ defmodule RobotSim.MultinodeDistributedTest do
                :sensors,
                :"sensors@modbus.local",
                new_pid,
-               200
+               200,
+               2_000
              )
 
-    assert next_remotes.sensors == %{pid: new_pid, boot_id: 200}
+    assert next_remotes.sensors == %{pid: new_pid, boot_id: 200, connection_id: 2_000}
   end
 
   test "does not retry an in-flight soak probe for a duplicate heartbeat" do
-    remotes = %{drive: %{pid: self(), boot_id: 100}, sensors: nil}
+    remotes = %{drive: %{pid: self(), boot_id: 100, connection_id: 1_000}, sensors: nil}
 
     assert {:duplicate, ^remotes} =
              MultinodeDistributed.soak_readiness_transition(
@@ -161,7 +184,8 @@ defmodule RobotSim.MultinodeDistributedTest do
                :drive,
                :"drive@modbus.local",
                self(),
-               100
+               100,
+               1_000
              )
   end
 end
