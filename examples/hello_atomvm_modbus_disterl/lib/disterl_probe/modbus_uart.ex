@@ -7,7 +7,8 @@ defmodule DisterlProbe.ModbusUART do
   delivered chunks for reads. Only the client role polls the Modbus bus.
 
   A client adapter normally owns its `AVModbus.Client`. Passing `client:` lets
-  multiple logical adapters share an externally owned client and physical UART.
+  multiple logical adapters share an externally owned serial managed-client
+  handle (or a legacy raw client pid) and physical UART.
   """
 
   use GenServer
@@ -61,6 +62,13 @@ defmodule DisterlProbe.ModbusUART do
 
   @doc false
   def peer_ready?(pid) when is_pid(pid), do: GenServer.call(pid, :peer_ready, :infinity)
+
+  @doc false
+  def metrics_snapshot(pid) when is_pid(pid),
+    do: GenServer.call(pid, :metrics_snapshot, :infinity)
+
+  @doc false
+  def reset_metrics(pid) when is_pid(pid), do: GenServer.call(pid, :reset_metrics, :infinity)
 
   @doc false
   def queue_chunks(channel, data), do: queue_chunks(channel, data, @max_payload)
@@ -118,6 +126,8 @@ defmodule DisterlProbe.ModbusUART do
       stats: TransactionStats.new(Keyword.get(options, :trace_transactions, false)),
       trace_queue: Keyword.get(options, :trace_queue, false),
       trace_queue_active: false,
+      max_queued_bytes_observed: 0,
+      max_outstanding_observed: 0,
       response_fault:
         ResponseFault.new(
           [
@@ -156,6 +166,21 @@ defmodule DisterlProbe.ModbusUART do
 
   def handle_call(:peer_ready, _from, state) do
     {:reply, state.channel.peer_session != nil, state}
+  end
+
+  def handle_call(:metrics_snapshot, _from, state) do
+    {:reply, metrics_snapshot_from_state(state), state}
+  end
+
+  def handle_call(:reset_metrics, _from, state) do
+    next = %{
+      state
+      | stats: TransactionStats.reset(state.stats),
+        max_queued_bytes_observed: state.channel.queued_bytes,
+        max_outstanding_observed: state.channel.outstanding
+    }
+
+    {:reply, :ok, next}
   end
 
   def handle_call({:write, data}, _from, state) do
@@ -218,7 +243,9 @@ defmodule DisterlProbe.ModbusUART do
           state
           | channel: channel,
             response_timeout: response_timeout,
-            trace_queue_active: state.trace_queue_active or traceable_write?(byte_size(data))
+            trace_queue_active: state.trace_queue_active or traceable_write?(byte_size(data)),
+            max_queued_bytes_observed: max(state.max_queued_bytes_observed, channel.queued_bytes),
+            max_outstanding_observed: max(state.max_outstanding_observed, channel.outstanding)
         }
 
         log_queue("accepted", next, byte_size(data))
@@ -226,7 +253,10 @@ defmodule DisterlProbe.ModbusUART do
 
       {:error, _reason} = error ->
         IO.puts(
-          "modbus_uart: queue rejected bytes=#{byte_size(data)} reason=#{inspect(elem(error, 1))}"
+          "modbus_uart: queue rejected unit=#{state.unit_id} write_bytes=#{byte_size(data)} " <>
+            "reason=#{inspect(elem(error, 1))} queued_bytes=#{state.channel.queued_bytes} " <>
+            "outstanding=#{state.channel.outstanding} " <>
+            MemorySnapshot.format(MemorySnapshot.capture())
         )
 
         log_queue("rejected", state, byte_size(data))
@@ -300,11 +330,8 @@ defmodule DisterlProbe.ModbusUART do
 
   defp open_transport(:client, serial, state, options) do
     case Keyword.fetch(options, :client) do
-      {:ok, client} when is_pid(client) ->
-        {:ok, client, false}
-
-      {:ok, _invalid} ->
-        {:error, :invalid_client}
+      {:ok, client} ->
+        if valid_client?(client), do: {:ok, client, false}, else: {:error, :invalid_client}
 
       :error ->
         case Client.start_link(
@@ -324,6 +351,15 @@ defmodule DisterlProbe.ModbusUART do
       {:error, _reason} = error -> error
     end
   end
+
+  # AVModbus.Client preserves raw pid support, while its managed API returns
+  # {AVModbus.Client, server}.  The latter is what a shared multidrop client
+  # created by Client.start_link/1 supplies.
+  defp valid_client?(client) when is_pid(client), do: true
+
+  defp valid_client?({Client, server}) when is_pid(server) or is_atom(server), do: true
+
+  defp valid_client?(_client), do: false
 
   defp send_poll(state, request) do
     stats = TransactionStats.start(state.stats, byte_size(request), now_ms())
@@ -347,14 +383,26 @@ defmodule DisterlProbe.ModbusUART do
 
   defp complete_success(state, response) do
     {stats, event} = TransactionStats.succeed(state.stats, byte_size(response), now_ms())
-    log_transaction(stats, event)
+    log_transaction(state.unit_id, stats, event)
     %{state | stats: stats}
   end
 
   defp complete_failure(state, reason) do
     {stats, event} = TransactionStats.fail(state.stats, reason, now_ms())
-    log_transaction(stats, event)
+    log_transaction(state.unit_id, stats, event)
     %{state | stats: stats}
+  end
+
+  defp metrics_snapshot_from_state(state) do
+    %{
+      unit_id: state.unit_id,
+      queued_bytes: state.channel.queued_bytes,
+      outstanding: state.channel.outstanding,
+      max_queued_bytes: state.max_queued_bytes_observed,
+      max_outstanding: state.max_outstanding_observed,
+      transactions: TransactionStats.summary(state.stats),
+      memory: MemorySnapshot.capture()
+    }
   end
 
   defp receive_exchange(state, binary) do
@@ -459,32 +507,32 @@ defmodule DisterlProbe.ModbusUART do
   defp log_stream_data(action, data),
     do: IO.puts("modbus_uart: #{action} bytes=#{byte_size(data)}")
 
-  defp log_transaction(stats, event) do
+  defp log_transaction(unit_id, stats, event) do
     if TransactionStats.enabled?(stats) and
          TransactionStats.trace_event?(event, Protocol.header_size()) do
-      log_transaction_event(event)
+      log_transaction_event(unit_id, event)
     else
-      log_initial_failure(event)
+      log_initial_failure(unit_id, event)
     end
   end
 
-  defp log_transaction_event(%{outcome: :ok} = event) do
+  defp log_transaction_event(unit_id, %{outcome: :ok} = event) do
     IO.puts(
-      "modbus_uart: transaction poll=#{event.poll} outcome=ok request_bytes=#{event.request_bytes} response_bytes=#{event.response_bytes} elapsed_ms=#{event.elapsed_ms} max_elapsed_ms=#{event.max_elapsed_ms} successes=#{event.successes} failures=#{event.failures}"
+      "modbus_uart: transaction unit=#{unit_id} poll=#{event.poll} outcome=ok request_bytes=#{event.request_bytes} response_bytes=#{event.response_bytes} elapsed_ms=#{event.elapsed_ms} max_elapsed_ms=#{event.max_elapsed_ms} successes=#{event.successes} failures=#{event.failures}"
     )
   end
 
-  defp log_transaction_event(%{outcome: :error} = event) do
+  defp log_transaction_event(unit_id, %{outcome: :error} = event) do
     IO.puts(
-      "modbus_uart: transaction poll=#{event.poll} outcome=error request_bytes=#{event.request_bytes} elapsed_ms=#{event.elapsed_ms} max_elapsed_ms=#{event.max_elapsed_ms} reason=#{inspect(event.reason)} successes=#{event.successes} failures=#{event.failures}"
+      "modbus_uart: transaction unit=#{unit_id} poll=#{event.poll} outcome=error request_bytes=#{event.request_bytes} elapsed_ms=#{event.elapsed_ms} max_elapsed_ms=#{event.max_elapsed_ms} reason=#{inspect(event.reason)} successes=#{event.successes} failures=#{event.failures}"
     )
   end
 
-  defp log_initial_failure(%{outcome: :error, failures: failures, reason: reason})
+  defp log_initial_failure(unit_id, %{outcome: :error, failures: failures, reason: reason})
        when failures <= 3,
-       do: IO.puts("modbus_uart: poll failed #{inspect(reason)}; retrying")
+       do: IO.puts("modbus_uart: poll failed unit=#{unit_id} #{inspect(reason)}; retrying")
 
-  defp log_initial_failure(_event), do: :ok
+  defp log_initial_failure(_unit_id, _event), do: :ok
 
   defp log_adapter_failure(reason),
     do: IO.puts("modbus_uart: invalid exchange #{inspect(reason)}; retrying")
@@ -494,7 +542,7 @@ defmodule DisterlProbe.ModbusUART do
 
   defp log_queue(event, state, write_bytes) do
     IO.puts(
-      "modbus_uart: queue event=#{event} write_bytes=#{write_bytes} " <>
+      "modbus_uart: queue unit=#{state.unit_id} event=#{event} write_bytes=#{write_bytes} " <>
         "queued_bytes=#{state.channel.queued_bytes} outstanding=#{state.channel.outstanding} " <>
         MemorySnapshot.format(MemorySnapshot.capture())
     )

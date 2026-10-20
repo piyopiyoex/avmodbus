@@ -11,7 +11,7 @@
 - Modbus Server である Drive と Sensors は bus を自発的に駆動できません。両者の application message は Controller が relay し、
   すべての physical transaction は1個の Modbus Client が直列化します。
 - Controller は Drive / Sensors ごとに独立した distribution stream を持ちますが、physical UART と AVModbus Client を共有します。
-  同時 producer の一般的な fairness と長時間負荷は未検証です。
+  短時間の同時 producer は両 role とも完全配送しましたが、64 messages / role の継続負荷では両 carrier session が再生成されました。
 - 3-node distribution は AtomVM v0.7.0-beta.0 に対する local multi-connection tick patch を必要とします。公式 image のまま動作する
   production 構成ではありません。
 
@@ -25,6 +25,8 @@
   in-flight の stream data は破棄されるため、回復は application の timeout / retry に依存します。
 - `MODBUS_MAX_QUEUED_BYTES` と `MODBUS_MAX_QUEUED_CHUNKS` は compile-time configuration です。値を増やすことは delivery guarantee
   ではなく、ESP32-C5 の memory 使用量も増やします。
+- concurrent traffic probeはroleごとに1 messageだけを未確認状態にするapplication ACKを使用します。ACK timeout時のretryは
+  boundedですが、collector crashやretry上限超過後のdurable resumeは実装していません。
 
 ## Command delivery と state
 
@@ -49,6 +51,11 @@
   rover state の reconciliation は行いません。
 - peer session change で古い reader を閉じると、回復可能な場合でも AtomVM console に
   `{serial_read_error, closed}` の crash report が表示されます。
+- 64 messages / role の concurrent run では23–24 messages受信後に両 carrier session が変わり、distribution 自体は再接続しましたが、
+  session change 前の producer process は再開されませんでした。collector は残りを欠損として timeout します。transport reconnect は
+  application workload の再開を保証しません。
+- 3台のconsoleを同時取得した再現runでは、Sensors側のoutgoing queueが`:queue_full`になり、fail-fast resetが発生する順序を確認しました。
+  Controllerで取得するadapter metricsはController側の2 queueだけで、Drive / Sensors側のoutgoing queue使用量を表しません。
 
 ## 性能と用途
 
@@ -56,4 +63,9 @@
   115,200 baud の短時間 application soak では両 remote の平均 RTT は約3.18秒でした。
 - reply loss fault injection は application reply の破棄だけを再現します。RS485 cable fault、partial RTU frame、node power loss、
   simultaneous reboot と同じ failure modelではありません。
+- 20 messages / role の overload profile は完全配送しましたが、Drive link で1回の2秒 transaction timeoutを観測しました。
+  64 messages / role の run はproducer rateがbusの排出速度を上回ってremote queueを飽和させたため未完了です。これはapplication-level
+  flow controlなしの負荷条件であり、carrierの安全な持続throughputを示す値ではありません。
+- window 1のapplication ACKを追加した同じ64+64 profileは163,039 msで完全配送しました。単一runの結果であり、通信断中のretry、
+  長時間memory stability、または任意のworkloadに対するsustained throughputを保証しません。
 - physical actuator、real-time control、safety-critical control、production robot には使用しません。

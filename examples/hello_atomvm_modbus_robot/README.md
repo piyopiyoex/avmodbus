@@ -12,7 +12,8 @@ Controller から Drive の registered process へ command を送り、最終 st
 [`hello_atomvm_modbus_disterl`](../hello_atomvm_modbus_disterl/README.md) を local path dependency として再利用し、
 128-byte payload の 60 application round trip、3 role の独立 reboot recovery、および
 `Sensors -> Controller -> Drive` の virtual sensor sample 転送と obstacle 回避判断も確認しています。AVModbus core と既存 example の
-source は変更していません。
+protocol design は変更していません。follow-up では、共有 client を現在の AVModbus managed handle で渡すための互換性修正を
+既存 carrier に加えています。
 
 ## 現在できること
 
@@ -35,6 +36,7 @@ source は変更していません。
 - distance と battery に基づいて Controller が前進、右旋回、位置保持を選ぶ
 - 3 台の実機で `forward -> forward -> right turn` の adaptive mission を実行する
 - role ごとの readiness lease で Drive / Sensors の停止を検出し、復帰後に両 connection を再確認する
+- Drive / Sensors の独立 producer から同時に logical message を送り、role 別 delivery と公平性を集計する
 
 各 Stage の進捗と完了条件は [ロードマップ](docs/roadmap.md) を参照してください。
 
@@ -413,7 +415,8 @@ shared Client と `uart_ports` を採用した理由は
 [ADR 0005](docs/adr/0005-share-one-client-across-distribution-streams.md)、boot session ID の判断は
 [ADR 0006](docs/adr/0006-identify-remote-boots-with-session-ids.md) を参照してください。Drive / Sensors の独立 reboot recovery は実機確認済みです。
 Controller reboot recovery、application traffic の短時間 fairness baseline、Drive / Sensors 間の Controller relay も実機確認済みです。
-より長時間の soak と concurrent producer の fairness は未完了です。
+concurrent producer の baseline と moderate profile は2026-10-20に実機確認しました。より長時間の soak、memory / queue 推移、
+overload 時の公平性は未完了です。
 
 ## Stage 4: sensor-driven mission
 
@@ -459,7 +462,7 @@ buffer、application state、failure detection、recovery guarantee の詳細は
 [既知の制約](docs/limitations.md) にまとめています。
 
 - simulation logic と transport / process lifecycle を分離する
-- AVModbus core と既存の distributed Erlang example を変更しない
+- AVModbus core を変更せず、shared carrier の修正は両 example で必要な汎用的互換性に限定する
 - carrier の再利用境界を ADR 0003 に保ち、大量の source copy を避ける
 - standard multidrop と 3-node distribution を別の mode・milestone として扱う
 - Stage 3 は local AtomVM patch を必要とする experimental baseline として扱う
@@ -467,3 +470,67 @@ buffer、application state、failure detection、recovery guarantee の詳細は
 - physical actuator、real-time control、safety-critical control を対象にしない
 
 資料の一覧と更新方針は [docs/README.md](docs/README.md) にあります。
+
+## 次の実験: concurrent producer traffic（負荷検証中）
+
+既存の交互順 soak は Controller が Drive と Sensors に順番に request を送る試験です。
+新しい opt-in probe では、**Drive と Sensors がそれぞれ独立した process から定期的に message を送ります**。
+Controller は別 process で受信状況を集計するため、通常の readiness lease loop は probe の終了を待ちません。
+通信自体は従来どおり 1 個の Modbus Client が physical bus を占有します。
+
+Controller の compile-time configuration に次の値を指定します。Drive と Sensors も新しい message handler を含む
+firmware へ更新してください。各 role の build 前に `mix clean` が必要です。
+
+```sh
+# Drive と Sensors は上記 Stage 3 と同じ条件で rebuild / flash
+# Controller: default の sensor mission 完了後に concurrent probe を開始
+MIX_ENV=prod mix clean
+ROBOT_MODE=multinode ROBOT_ROLE=controller ATOMVM_UART_SPEED=115200 \
+  ROBOT_MULTINODE_TRAFFIC_SAMPLES=5 \
+  ROBOT_MULTINODE_TRAFFIC_DRIVE_INTERVAL_MS=2000 \
+  ROBOT_MULTINODE_TRAFFIC_SENSORS_INTERVAL_MS=1000 \
+  MIX_ENV=prod mix atomvm.packbeam
+# 上記と同じ environment で Controller へ flash する
+```
+
+| environment variable | default | 用途 |
+| --- | ---: | --- |
+| `ROBOT_MULTINODE_TRAFFIC_SAMPLES` | `0` | 0 は無効。1..64 messages / role |
+| `ROBOT_MULTINODE_TRAFFIC_DRIVE_INTERVAL_MS` | `2000` | Drive producer の送信間隔 |
+| `ROBOT_MULTINODE_TRAFFIC_SENSORS_INTERVAL_MS` | `1000` | Sensors producer の送信間隔 |
+| `ROBOT_MULTINODE_TRAFFIC_PAYLOAD_BYTES` | `16` | 0..128 bytes の deterministic payload |
+| `ROBOT_MULTINODE_TRAFFIC_TIMEOUT_MS` | `120000` | Controller collector の run 全体の timeout |
+| `ROBOT_MULTINODE_TRAFFIC_SETTLE_MS` | `30000` | 完了後の settled metrics を採取するまでの待機時間。0 は無効 |
+| `ROBOT_MULTINODE_TRAFFIC_ACK_TIMEOUT_MS` | `90000` | producerがapplication ACKを待つ期限 |
+| `ROBOT_MULTINODE_TRAFFIC_ACK_RETRIES` | `1` | ACK timeout後に同じrun ID / sequenceを再送する回数 |
+
+各remote producerはstarted、sample、finishedごとにControllerのapplication ACKを待ちます。roleごとのin-flight windowは1で、
+producer intervalはACK受信後の最小待ち時間です。この境界は
+[ADR 0010](docs/adr/0010-bound-concurrent-producers-with-application-acks.md)に記録しています。
+
+`modbus_robot_traffic: complete` の `drive` / `sensors` summary は、それぞれ expected、received、missing、
+duplicates、out_of_order、invalid、duration_ms、sample_span_ms、throughput_milli_messages_per_second、
+max_interarrival_ms を示します。`fairness` は role 間の delivery ratio、completion time、最大受信間隔の差を示します。
+加えて `start_skew_ms` と `active_overlap_ms` で、2 producer の受信 window が実際に重なったかを確認できます。
+**max_interarrival_ms は Controller が観測した受信間隔であり、one-way latency ではありません**。
+別 device の monotonic clock を比較しないためです。
+
+2026-10-20 に3台、115,200 baud で次を確認しました。
+
+| Profile | Result | Elapsed | Active overlap | Completion skew |
+| --- | --- | ---: | ---: | ---: |
+| baseline: 5 messages / role、16 bytes | 両 role 5 / 5、error 0 | 10,588 ms | 4,448 ms | 4,145 ms |
+| moderate: 10 messages / role、32 bytes | 両 role 10 / 10、error 0 | 11,593 ms | 8,655 ms | 937 ms |
+| overload: 20 messages / role、64 bytes | 両 role 20 / 20、Drive transaction timeout 1 | 29,769 ms | 23,579 ms | 1,310 ms |
+| longer: 64 messages / role、64 bytes | Drive 23 / 64、Sensors 24 / 64、session reset後timeout | 300,001 ms | unavailable | unavailable |
+| longer + ACK: 64 messages / role、64 bytes | 両 role 64 / 64、error 0 | 163,039 ms | 156,298 ms | 3,114 ms |
+
+baseline、moderate、overload の application delivery は missing、duplicate、out-of-order、invalid がすべて0でした。longer run では
+両 carrier session が再生成され、distribution reconnect 後も元の producer は再開されませんでした。短時間に各1 run の結果であり、
+3台同時consoleで再試験したところ、Sensors側outgoing queueの`:queue_full`がsession resetの直接原因だと確認できました。
+Controllerのmetricsはremote側queueを表さないため、長時間安定性やmemory上限を保証しません。詳細は
+[concurrent traffic worklog](docs/worklog/2026-10-20-concurrent-traffic.md)と
+[overload / longer run worklog](docs/worklog/2026-10-20-overload-and-long-run.md)、
+[ACK flow-control worklog](docs/worklog/2026-10-20-ack-flow-control.md)を参照してください。
+
+[実験計画と制約](docs/next-experiments.md)を参照してください。

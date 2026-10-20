@@ -82,7 +82,8 @@ termination / bias の電気測定と長時間 soak は未実施であり、現�
 - [ ] AtomVM の multi-connection tick fix を upstream へ提案する
 - [x] 継続 application traffic と polling fairness の短時間 baseline を測定する
 - [x] application traffic 中に Drive / Sensors を独立 reboot して recovery を確認する
-- [ ] より長時間の soak と concurrent producer の fairness を検証する
+- [x] concurrent producer の短時間 fairness baseline と moderate profile を検証する
+- [ ] より長時間の soak と memory / queue 推移を検証する
 
 完了条件は、controller と 2 台の remote node の genuine distribution を実証するか、必要な AtomVM / carrier
 変更と blocker を再現可能な形で記録することです。基本疎通、3 role の独立 reboot recovery、60 application round trip の短時間
@@ -102,6 +103,23 @@ local AtomVM patch が必要なため Stage 3 は follow-up を残していま�
 Stage 4 の現在の完了範囲は application reply loss までである。physical RS485 interruption、Drive reboot をまたぐ mission
 reconciliation、durable state は対象外または follow-up とし、[既知の制約](limitations.md) に記録している。
 この範囲は 2026-10-20 に3台の実機で確認し、Stage 4 を完了とした。
+
+## Follow-up: concurrent traffic と信頼性（実機検証中）
+
+- [x] Drive / Sensors の独立 producer と Controller の非同期 collector を opt-in で追加する
+- [x] host 側で delivery / duplicate / order / timeout の集計を検証できるようにする
+- [x] 3 台の実機で concurrent producer baseline と moderate profile を測定する
+- [x] overload profile で Unit別 transaction、queue high-water、heap を測定する
+- [x] 64 messages / role の longer run で session reset と application recovery の境界を再現する
+- [x] 3台同時consoleでremote outgoing queueの`:queue_full`をsession resetの直接原因として特定する
+- [x] application ACK / in-flight window 1で64+64 longer runを完全配送する
+- [ ] 通信断と remote reboot に対する recovery、長時間の memory / queue 推移を測定する
+- [ ] 通信断中のACK timeout、same-sequence retry、producer resume semanticsを実機検証する
+- [ ] mission 実行と health loop を分離し、reboot 時の command outcome を reconcile する
+- [ ] AtomVM runtime の upstream follow-up を進める
+- [ ] 4 台目の追加は上記の測定結果に基づいて判断する
+
+実行条件、停止条件、測定限界は[次の実験計画](next-experiments.md)に記録します。
 
 ## 今回は対象としないこと
 

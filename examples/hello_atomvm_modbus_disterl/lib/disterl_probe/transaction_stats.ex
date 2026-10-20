@@ -47,6 +47,25 @@ defmodule DisterlProbe.TransactionStats do
 
   def enabled?(stats), do: stats.enabled
 
+  def reset(%{active: nil} = stats), do: new(stats.enabled)
+
+  def reset(stats) do
+    %{new(stats.enabled) | polls: 1, active: stats.active}
+  end
+
+  def summary(stats) do
+    completed = stats.successes + stats.failures
+
+    %{
+      polls: stats.polls,
+      successes: stats.successes,
+      failures: stats.failures,
+      average_elapsed_ms: average(stats.total_elapsed_ms, completed),
+      max_elapsed_ms: stats.max_elapsed_ms,
+      active: stats.active != nil
+    }
+  end
+
   def trace_event?(%{outcome: :error}, _empty_packet_bytes), do: true
 
   def trace_event?(%{outcome: :ok} = event, empty_packet_bytes)
@@ -60,6 +79,9 @@ defmodule DisterlProbe.TransactionStats do
         max_elapsed_ms: max(stats.max_elapsed_ms, elapsed_ms)
     }
   end
+
+  defp average(_total, 0), do: nil
+  defp average(total, completed), do: div(total, completed)
 
   defp finish(stats, event) do
     next = %{stats | active: nil}

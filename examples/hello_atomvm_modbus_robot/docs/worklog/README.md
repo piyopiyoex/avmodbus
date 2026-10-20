@@ -18,3 +18,6 @@ host test、実機試験、障害調査など、再現可能な時系列の記�
 - [2026-10-19: Stage 4 sensor-driven adaptive mission](2026-10-19-stage-4-adaptive-mission.md)
 - [2026-10-19: Stage 4 remote health and independent recovery](2026-10-19-stage-4-remote-health.md)
 - [2026-10-20: Stage 4 reply loss fault injection](2026-10-20-stage-4-reply-loss-fault-injection.md)
+- [2026-10-20: concurrent producer traffic baseline と moderate profile](2026-10-20-concurrent-traffic.md)
+- [2026-10-20: overload、metrics、longer run の session reset](2026-10-20-overload-and-long-run.md)
+- [2026-10-20: application ACK flow control 実機検証](2026-10-20-ack-flow-control.md)

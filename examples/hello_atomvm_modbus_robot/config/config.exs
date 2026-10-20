@@ -84,6 +84,22 @@ multinode_soak_cycles = parse_integer.("ROBOT_MULTINODE_SOAK_CYCLES", 0)
 multinode_soak_payload_bytes = parse_integer.("ROBOT_MULTINODE_SOAK_PAYLOAD_BYTES", 128)
 multinode_soak_interval_ms = parse_integer.("ROBOT_MULTINODE_SOAK_INTERVAL_MS", 250)
 multinode_soak_retries = parse_integer.("ROBOT_MULTINODE_SOAK_RETRIES", 1)
+multinode_traffic_samples = parse_integer.("ROBOT_MULTINODE_TRAFFIC_SAMPLES", 0)
+
+multinode_traffic_drive_interval_ms =
+  parse_integer.("ROBOT_MULTINODE_TRAFFIC_DRIVE_INTERVAL_MS", 2_000)
+
+multinode_traffic_sensors_interval_ms =
+  parse_integer.("ROBOT_MULTINODE_TRAFFIC_SENSORS_INTERVAL_MS", 1_000)
+
+multinode_traffic_payload_bytes = parse_integer.("ROBOT_MULTINODE_TRAFFIC_PAYLOAD_BYTES", 16)
+multinode_traffic_timeout_ms = parse_integer.("ROBOT_MULTINODE_TRAFFIC_TIMEOUT_MS", 120_000)
+multinode_traffic_settle_ms = parse_integer.("ROBOT_MULTINODE_TRAFFIC_SETTLE_MS", 30_000)
+
+multinode_traffic_ack_timeout_ms =
+  parse_integer.("ROBOT_MULTINODE_TRAFFIC_ACK_TIMEOUT_MS", 90_000)
+
+multinode_traffic_ack_retries = parse_integer.("ROBOT_MULTINODE_TRAFFIC_ACK_RETRIES", 1)
 sensor_mission_steps = parse_integer.("ROBOT_SENSOR_MISSION_STEPS", 3)
 
 drive_drop_first_reply_per_request =
@@ -172,6 +188,34 @@ if multinode_soak_retries < 0 do
   raise ArgumentError, "ROBOT_MULTINODE_SOAK_RETRIES must be a non-negative integer"
 end
 
+if multinode_traffic_samples < 0 or multinode_traffic_samples > 64 do
+  raise ArgumentError, "ROBOT_MULTINODE_TRAFFIC_SAMPLES must be between 0 and 64"
+end
+
+if multinode_traffic_drive_interval_ms < 1 or multinode_traffic_sensors_interval_ms < 1 do
+  raise ArgumentError, "traffic producer intervals must be positive integers"
+end
+
+if multinode_traffic_payload_bytes < 0 or multinode_traffic_payload_bytes > 128 do
+  raise ArgumentError, "ROBOT_MULTINODE_TRAFFIC_PAYLOAD_BYTES must be between 0 and 128"
+end
+
+if multinode_traffic_timeout_ms < 1 do
+  raise ArgumentError, "ROBOT_MULTINODE_TRAFFIC_TIMEOUT_MS must be a positive integer"
+end
+
+if multinode_traffic_settle_ms < 0 do
+  raise ArgumentError, "ROBOT_MULTINODE_TRAFFIC_SETTLE_MS must be a non-negative integer"
+end
+
+if multinode_traffic_ack_timeout_ms < 1 do
+  raise ArgumentError, "ROBOT_MULTINODE_TRAFFIC_ACK_TIMEOUT_MS must be a positive integer"
+end
+
+if multinode_traffic_ack_retries < 0 do
+  raise ArgumentError, "ROBOT_MULTINODE_TRAFFIC_ACK_RETRIES must be a non-negative integer"
+end
+
 if sensor_mission_steps < 1 do
   raise ArgumentError, "ROBOT_SENSOR_MISSION_STEPS must be a positive integer"
 end
@@ -234,6 +278,14 @@ config :robot_sim,
   multinode_soak_payload_bytes: multinode_soak_payload_bytes,
   multinode_soak_interval_ms: multinode_soak_interval_ms,
   multinode_soak_retries: multinode_soak_retries,
+  multinode_traffic_samples: multinode_traffic_samples,
+  multinode_traffic_drive_interval_ms: multinode_traffic_drive_interval_ms,
+  multinode_traffic_sensors_interval_ms: multinode_traffic_sensors_interval_ms,
+  multinode_traffic_payload_bytes: multinode_traffic_payload_bytes,
+  multinode_traffic_timeout_ms: multinode_traffic_timeout_ms,
+  multinode_traffic_settle_ms: multinode_traffic_settle_ms,
+  multinode_traffic_ack_timeout_ms: multinode_traffic_ack_timeout_ms,
+  multinode_traffic_ack_retries: multinode_traffic_ack_retries,
   sensor_mission_steps: sensor_mission_steps,
   drive_drop_first_reply_per_request: drive_drop_first_reply_per_request,
   first_request_id: parse_integer.("ROBOT_FIRST_REQUEST_ID", 1)
