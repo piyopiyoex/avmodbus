@@ -11,6 +11,7 @@
 - Modbus Server である Drive と Sensors は bus を自発的に駆動できません。両者の application message は Controller が relay し、
   すべての physical transaction は1個の Modbus Client が直列化します。
 - Controller は Drive / Sensors ごとに独立した distribution stream を持ちますが、physical UART と AVModbus Client を共有します。
+  各adapterのpollはround-robin schedulerが直列に開始し、到達不能なUnitのqueue待ちで正常Unitのrequest deadlineを失わないようにします。
   短時間の同時 producer は両 role とも完全配送しましたが、64 messages / role の継続負荷では両 carrier session が再生成されました。
 - 3-node distribution は AtomVM v0.7.0-beta.0 に対する local multi-connection tick patch を必要とします。公式 image のまま動作する
   production 構成ではありません。
@@ -72,12 +73,27 @@
   2秒以内に停止しなければ回復を終了します。restart上限はrebootで初期化され、正常化後も同じboot中には補充しません。
 - readiness healthは最初のController ACKを受け取った後のconnectionだけを監視します。初回handshakeを確立できないnodeには既存のannounce retryを
   続け、health restartは行いません。persistent workload ownerとdurable mission resumeは未実装です。
+- paired-wire配線でSensorsまたは右端DriveのA/Bを外した試験では、残るpeerも停止しました。物理配置上の位置と電気的なbranch isolationは
+  同義ではなく、trunkをremovable nodeの端子に依存させる配線は独立peer faultの検証に使えません。
+- breadboard上のcontinuous A/B trunkとnode別branchによる初回試験では、Sensorsの最後のACKから48,760 ms後にremote healthが切断を
+  検出し、Drive distributionは切断されずheartbeatを継続しました。ただし反復時には各adapterの独立pollによるshared Clientの
+  deadline starvationを再現し、正常なUnit 1もtimeoutしてDrive connectionを失いました。
+- round-robin poll scheduler導入後の2回のbranch切断では、Unit 2が約2秒timeoutを繰り返す間もUnit 1は約180–225 msで成功し、
+  transaction failure 0のままDrive connectionを維持しました。未使用のrestart budgetを持つrunではACK欠落48,470 msでSensorsを
+  自動再起動し、branch復帰後に手動resetなしでSensors / Drive両probeまで完了しました。
+- handshake中には複数の`unexpected`、`unsupported_name`、`invalid_challenge`、`no_link_manager_response`、timeoutが発生しています。
+  retryは最終的に収束しましたが、復旧時間の上限や任意の電気条件でのfailure isolationを保証しません。termination / biasも個別測定して
+  いません。
+- paired-wire試験では物理link復帰だけで2 linkが完全復旧せずController RESETを要しました。branch配線の成功は、全種類のbus障害から
+  全streamが自動再同期する保証ではありません。
+- remote ACK timeout 25秒は通常mission中に25,537 msのACK gapを障害と誤判定しました。45秒は今回のidle切断試験前には安定しましたが、
+  一般的な安全値ではありません。announce interval、bus負荷、handshake、queue遅延より十分大きく設定する必要があります。
 
 ## 性能と用途
 
 - shared half-duplex bus、polling、stop-and-wait、distribution framing により、direct UART distribution より latency が大きくなります。
   115,200 baud の短時間 application soak では両 remote の平均 RTT は約3.18秒でした。
-- reply loss fault injection は application reply の破棄だけを再現します。RS485 cable fault、partial RTU frame、node power loss、
+- reply loss fault injection は application reply の破棄だけを再現します。今回実施したRS485 A/B切断、partial RTU frame、node power loss、
   simultaneous reboot と同じ failure modelではありません。
 - 20 messages / role の overload profile は完全配送しましたが、Drive link で1回の2秒 transaction timeoutを観測しました。
   64 messages / role の run はproducer rateがbusの排出速度を上回ってremote queueを飽和させたため未完了です。これはapplication-level

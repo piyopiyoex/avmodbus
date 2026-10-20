@@ -113,13 +113,27 @@ failureは各2回、queue high-waterはDrive 279 bytes / 4 chunks、Sensors 162 
 Controllerのfree heapは開始時約89 KB、settled時約85 KB、minimum watermark 70,736 bytesだった。詳細は
 [extended long-run worklog](worklog/2026-10-20-extended-flow-controlled-run.md)を参照してください。
 
+2026-10-21のpaired-wire配線ではSensorsまたは右端DriveのA/Bを外すと残るpeerも停止し、link復帰だけでは2 linkが完全復旧しなかった。
+breadboard上のcontinuous trunkとnode別branchへ変更した初回試験ではDriveを維持できたが、反復試験でshared Clientの
+head-of-line deadline starvationを発見した。各adapterが独立してpollすると、到達不能なUnit 2のqueue待ち中にUnit 1のdeadlineも
+消費され、正常なDriveまで`net_tick_timeout`になった。
+
+pollをround-robin schedulerで直列に開始する変更後は、2回のSensors branch切断中にUnit 2が約2秒timeoutを繰り返しても、Unit 1は
+約180–225 ms、failure 0で継続した。未使用restart budgetでのrunはACK欠落48,470 msでSensorsを自動再起動し、branch復帰後に
+Controller / Sensorsの手動resetなしでSensors reconnectと両peerへのprobeを完了した。handshakeは複数回retryしており、収束時間の上限は
+まだ測定していない。
+
+25,000 msのhealth timeoutは抜線前の通常mission中にfalse positiveとなったため、負荷を考慮せず短く設定できない。breadboard試験も
+外付けterminationなしの短いbench配線における少数runであり、復旧時間の上限や一般的な電気条件を示さない。詳細は
+[物理RS485切断worklog](worklog/2026-10-21-physical-rs485-disconnect.md)を参照してください。
+
 ## その次に取り組む候補
 
-1. response faultの再armを避けるone-shot診断方法を用意し、recovery後のsettled queue / memoryを測定する。
-2. Remote の物理RS485抜き差しを試す。remote側queue high-waterも追跡する。
-3. Drive reboot 中の未確定 movement command を reconcile する。volatile state と request cache を越える exactly-once を安易に約束しない。
-4. Mission 実行を別 process に分離し、Controller readiness lease が同期 request 中も動くようにする。
-5. health detectorのtimeoutを負荷profile別に評価し、false positive条件を測定する。
+1. health detectorのtimeoutを負荷profile別に評価し、25秒で観測したfalse positiveの安全余裕を定量化する。
+2. round-robin schedulerでbreadboard branch切断・復帰をさらに反復し、handshake収束時間、memory / queueのsettlingを測定する。
+3. response faultの再armを避けるone-shot診断方法を用意し、recovery後のsettled queue / memoryを測定する。
+4. Drive reboot 中の未確定 movement command を reconcile する。volatile state と request cache を越える exactly-once を安易に約束しない。
+5. Mission 実行を別 process に分離し、Controller readiness lease が同期 request 中も動くようにする。
 6. AtomVM の個別disconnect API、multi-connection tick、setup retry、remote process monitorをupstream follow-upする。
 7. 3 remote / 4 device への拡張は、3 device fairness と memory の限界を測定した後に検討する。
 

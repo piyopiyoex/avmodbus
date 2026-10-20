@@ -18,6 +18,7 @@ defmodule DisterlProbe.ModbusUART do
   alias DisterlProbe.{
     Channel,
     MemorySnapshot,
+    PollScheduler,
     Protocol,
     ResponseFault,
     ResponseTimeout,
@@ -122,6 +123,7 @@ defmodule DisterlProbe.ModbusUART do
         ),
       chunk_payload_bytes: Keyword.fetch!(options, :chunk_payload_bytes),
       poll_ms: Keyword.fetch!(options, :poll_ms),
+      poll_scheduler: Keyword.get(options, :poll_scheduler),
       request_ref: nil,
       stats: TransactionStats.new(Keyword.get(options, :trace_transactions, false)),
       trace_queue: Keyword.get(options, :trace_queue, false),
@@ -143,7 +145,7 @@ defmodule DisterlProbe.ModbusUART do
       {:ok, resource, owns_resource} ->
         IO.puts("modbus_uart: opened role=#{role} session=#{state.channel.session}")
         log_queue("opened", state, 0)
-        if role == :client, do: send(self(), :poll)
+        if role == :client and state.poll_scheduler == nil, do: send(self(), :poll)
         {:ok, %{state | resource: resource, owns_resource: owns_resource}}
 
       {:error, _reason} = error ->
@@ -277,7 +279,7 @@ defmodule DisterlProbe.ModbusUART do
 
       {:error, reason} ->
         log_adapter_failure(reason)
-        schedule_poll(state.poll_ms)
+        continue_polling(state)
         {:noreply, state}
     end
   end
@@ -287,19 +289,19 @@ defmodule DisterlProbe.ModbusUART do
 
     case receive_exchange(state, response) do
       {:ok, next, _unused_request} ->
-        schedule_poll(next.poll_ms)
+        continue_polling(next)
         {:noreply, %{next | request_ref: nil}}
 
       {:error, reason} ->
         log_adapter_failure(reason)
-        schedule_poll(state.poll_ms)
+        continue_polling(state)
         {:noreply, %{state | request_ref: nil}}
     end
   end
 
   def handle_info({Client, reference, {:error, reason}}, %{request_ref: reference} = state) do
     state = complete_failure(state, reason)
-    schedule_poll(state.poll_ms)
+    continue_polling(state)
     {:noreply, %{state | request_ref: nil}}
   end
 
@@ -376,7 +378,7 @@ defmodule DisterlProbe.ModbusUART do
 
       {:error, reason} ->
         state = complete_failure(%{state | stats: stats}, reason)
-        schedule_poll(state.poll_ms)
+        continue_polling(state)
         {:noreply, state}
     end
   end
@@ -481,7 +483,11 @@ defmodule DisterlProbe.ModbusUART do
     }
   end
 
-  defp schedule_poll(delay), do: Process.send_after(self(), :poll, delay)
+  defp continue_polling(%{poll_scheduler: nil, poll_ms: delay}),
+    do: Process.send_after(self(), :poll, delay)
+
+  defp continue_polling(%{poll_scheduler: scheduler}),
+    do: PollScheduler.complete(scheduler, self())
 
   defp now_ms, do: :erlang.monotonic_time(:millisecond)
 

@@ -70,6 +70,12 @@ Phase 2 ClientはdefaultでModbusUARTをpre-openし、有効なFC-100 response�
 `net_kernel`を開始せず、7秒のdistribution setup timerを消費しません。`proto_dist`は引き続きAtomVMの
 `:serial_dist`を直接使用し、example独自のsetup retry wrapperは挟みません。
 
+複数の`ModbusUART` client adapterが1個の`AVModbus.Client`を共有するconsumer向けに、任意の
+`DisterlProbe.PollScheduler`を提供します。schedulerを指定したadapterは自分でtimer pollを開始せず、round-robinの`:poll` tokenを受けた
+ときだけrequestを送ります。transaction完了後にtokenを返すため、到達不能なUnitのrequest待ち中に別Unitのdeadlineを消費しません。
+この2-node exampleはadapterが1個なのでschedulerを使わず、従来のself-scheduled pollを維持します。3-nodeでの採用理由と実機結果は
+[robot example の ADR 0013](../../hello_atomvm_modbus_robot/docs/adr/0013-schedule-shared-client-polls-round-robin.md)を参照してください。
+
 `MODBUS_TRACE_TRANSACTIONS=1` では Client の non-idle physical transaction と全 failure について request /
 response byte 数、経過時間、poll 番号、最大 latency、累積 success / failure 数を出力します。13-byte の
 empty poll 成功は timing への影響を抑えるため出力せず、counter にだけ含めます。通常実行では最初の

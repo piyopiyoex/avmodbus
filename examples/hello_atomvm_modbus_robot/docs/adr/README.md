@@ -26,3 +26,4 @@
 - [0010: concurrent producer を application ACK で制限する](0010-bound-concurrent-producers-with-application-acks.md)
 - [0011: ACK timeout 時は remote 側 distribution を再起動する](0011-restart-remote-distribution-after-ack-timeout.md)
 - [0012: readiness ACK で remote distribution health を判定する](0012-detect-remote-health-with-readiness-acks.md)
+- [0013: shared Client の poll を round-robin で直列化する](0013-schedule-shared-client-polls-round-robin.md)

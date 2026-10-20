@@ -91,6 +91,53 @@ defmodule DisterlProbe.ModbusUARTTest do
     assert_receive :poll
   end
 
+  test "a scheduled client waits for an external poll token" do
+    options = [
+      role: :client,
+      client: self(),
+      serial: [],
+      unit_id: 1,
+      timeout_ms: 500,
+      bulk_timeout_ms: 2_000,
+      chunk_payload_bytes: 96,
+      max_queued_bytes: 8_192,
+      max_queued_chunks: 256,
+      poll_ms: 20,
+      poll_scheduler: self()
+    ]
+
+    assert {:ok, state} = ModbusUART.init(options)
+    assert state.poll_scheduler == self()
+    refute_receive :poll
+    assert :ok = ModbusUART.terminate(:normal, state)
+  end
+
+  test "a scheduled client returns the poll token after a timeout" do
+    reference = make_ref()
+
+    state =
+      Channel.new()
+      |> adapter_state()
+      |> Map.merge(%{
+        poll_scheduler: self(),
+        poll_ms: 20,
+        request_ref: reference,
+        role: :client,
+        stats: TransactionStats.start(TransactionStats.new(), 13, 0)
+      })
+
+    capture_io(fn ->
+      assert {:noreply, next} =
+               ModbusUART.handle_info({Client, reference, {:error, :timeout}}, state)
+
+      assert next.request_ref == nil
+    end)
+
+    assert_receive {DisterlProbe.PollScheduler, :complete, adapter}
+    assert adapter == self()
+    refute_receive :poll
+  end
+
   test "a client adapter rejects an invalid externally owned client" do
     options = [
       role: :client,

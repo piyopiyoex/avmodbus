@@ -11,7 +11,7 @@ defmodule RobotSim.MultinodeDistributed do
   @compile {:no_warn_undefined, :net_kernel}
 
   alias AVModbus.Client
-  alias DisterlProbe.{ModbusUART, Payload, Session}
+  alias DisterlProbe.{ModbusUART, Payload, PollScheduler, Session}
   alias RobotSim.{ConcurrentTraffic, Drive, MultinodeStats, RemoteHealth, SensorMission, Sensors}
 
   @mode Application.compile_env(:robot_sim, :mode, :distributed)
@@ -215,37 +215,53 @@ defmodule RobotSim.MultinodeDistributed do
   end
 
   defp start_controller do
+    case PollScheduler.start_link(delay_ms: @poll_ms) do
+      {:ok, scheduler} -> start_controller_client(scheduler)
+      {:error, reason} -> halt("poll scheduler start failed", reason)
+    end
+  end
+
+  defp start_controller_client(scheduler) do
     case Client.start_link(
            transport: :rtu,
            serial: @serial,
            gap: @gap_ms,
            timeout: @timeout_ms
          ) do
-      {:ok, client} -> start_controller_adapters(client)
-      {:error, reason} -> halt("shared Modbus client start failed", reason)
+      {:ok, client} ->
+        start_controller_adapters(client, scheduler)
+
+      {:error, reason} ->
+        GenServer.stop(scheduler)
+        halt("shared Modbus client start failed", reason)
     end
   end
 
-  defp start_controller_adapters(client) do
-    case open_client_adapter(client, @drive_unit_id) do
+  defp start_controller_adapters(client, scheduler) do
+    case open_client_adapter(client, @drive_unit_id, scheduler) do
       {:ok, drive_uart} ->
-        case open_client_adapter(client, @sensors_unit_id) do
+        case open_client_adapter(client, @sensors_unit_id, scheduler) do
           {:ok, sensors_uart} ->
-            start_controller_distribution(client, drive_uart, sensors_uart)
+            :ok = PollScheduler.register(scheduler, drive_uart)
+            :ok = PollScheduler.register(scheduler, sensors_uart)
+            :ok = PollScheduler.start(scheduler)
+            start_controller_distribution(client, scheduler, drive_uart, sensors_uart)
 
           {:error, reason} ->
             ModbusUART.close(drive_uart)
             Client.stop(client)
+            GenServer.stop(scheduler)
             halt("Sensors adapter start failed", reason)
         end
 
       {:error, reason} ->
         Client.stop(client)
+        GenServer.stop(scheduler)
         halt("Drive adapter start failed", reason)
     end
   end
 
-  defp start_controller_distribution(client, drive_uart, sensors_uart) do
+  defp start_controller_distribution(client, scheduler, drive_uart, sensors_uart) do
     IO.puts("modbus_robot_multinode: waiting for Drive and Sensors FC-100 peers")
     wait_for_peers([{:drive, drive_uart}, {:sensors, sensors_uart}])
 
@@ -269,6 +285,7 @@ defmodule RobotSim.MultinodeDistributed do
         ModbusUART.close(drive_uart)
         ModbusUART.close(sensors_uart)
         Client.stop(client)
+        GenServer.stop(scheduler)
         halt("Controller net_kernel start failed", other)
     end
   end
@@ -943,8 +960,10 @@ defmodule RobotSim.MultinodeDistributed do
     end
   end
 
-  defp open_client_adapter(client, unit_id) do
-    case ModbusUART.open(uart_options(:client, unit_id, client: client)) do
+  defp open_client_adapter(client, unit_id, scheduler) do
+    case ModbusUART.open(
+           uart_options(:client, unit_id, client: client, poll_scheduler: scheduler)
+         ) do
       pid when is_pid(pid) -> {:ok, pid}
       {:error, _reason} = error -> error
     end

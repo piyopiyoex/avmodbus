@@ -119,12 +119,18 @@ reconciliation、durable state は対象外または follow-up とし、[既知�
 - [x] application trafficに依存しないremote healthとdistribution lifecycleを設計する
 - [x] connection ID付きreadiness ACK、boot単位のrestart上限、shutdown完了待ちを実機検証する
 - [x] remote rebootに対するrecovery、10分間のmemory / queue推移を測定する
-- [ ] remoteの物理RS485切断・再接続を検証する
+- [x] remoteの物理RS485切断・再接続を検証する
+- [x] shared Clientのpollをround-robin化し、単一peer切断中も正常peerを維持する
 - [ ] mission 実行と health loop を分離し、reboot 時の command outcome を reconcile する
 - [ ] AtomVM runtime の upstream follow-up を進める
 - [ ] 4 台目の追加は上記の測定結果に基づいて判断する
 
 実行条件、停止条件、測定限界は[次の実験計画](next-experiments.md)に記録します。
+2026-10-21のpaired-wire試験ではSensorsまたは右端Driveの切断がbus全体へ影響しました。その後、breadboard上のcontinuous trunkと
+node別branchへ変更しました。反復試験でshared Clientのdeadline starvationを発見したためpollをround-robin化し、Sensors branch切断中も
+Unit 1 transaction failure 0でDrive connectionを維持することを2 runで確認しました。未使用restart budgetのrunではbranch復帰後に
+Controller / SensorsをresetせずSensorsが再接続し、両peerのprobeを完了しました。これで独立branchによる単一peer faultとschedulerの
+follow-upは完了です。timeout margin、長時間反復、termination / biasを含む電気条件の評価は残します。
 
 ## 今回は対象としないこと
 

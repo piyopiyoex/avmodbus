@@ -13,7 +13,7 @@ Controller から Drive の registered process へ command を送り、最終 st
 128-byte payload の 60 application round trip、3 role の独立 reboot recovery、および
 `Sensors -> Controller -> Drive` の virtual sensor sample 転送と obstacle 回避判断も確認しています。AVModbus core と既存 example の
 protocol design は変更していません。follow-up では、共有 client を現在の AVModbus managed handle で渡すための互換性修正を
-既存 carrier に加えています。
+既存 carrier に加え、複数adapterのpollをround-robinで開始する任意schedulerを追加しています。
 
 ## 現在できること
 
@@ -39,6 +39,7 @@ protocol design は変更していません。follow-up では、共有 client �
 - Drive / Sensors の独立 producer から同時に logical message を送り、role 別 delivery と公平性を集計する
 - opt-in で traffic ACK timeout 時に remote 側 distribution を再起動し、未確認 sequence を再送する
 - opt-in で connection ID 付き readiness ACK を監視し、application traffic がない half-open connection を bounded restart する
+- 到達不能なUnitがあってもround-robin pollにより正常なpeerのrequest deadlineとdistribution connectionを維持する
 
 各 Stage の進捗と完了条件は [ロードマップ](docs/roadmap.md) を参照してください。
 
@@ -235,6 +236,36 @@ Controller だけが UART を所有して request を開始し、Drive は Unit 
 | Drive | 1 | `[1, 1]` |
 | Sensors | 2 | `[2, 2]` |
 
+### 3台のA/B配線
+
+3台のtransceiverは、1本ずつ連続したA/B trunkへ電気的にparallel接続します。breadboardを使う短いbench配線では、各moduleを
+独立した短いbranchで同じA row、B row、GND rowへ接続できます。
+
+```text
+A trunk  =================================
+              |             |           |
+         Controller A   Sensors A    Drive A
+
+B trunk  =================================
+              |             |           |
+         Controller B   Sensors B    Drive B
+
+GND      =================================
+              |             |           |
+         Controller G   Sensors G    Drive G
+```
+
+物理的なdaisy chainもA同士、B同士のtrunkが連続していればparallel busですが、incoming / outgoing wireの接続点を
+removable nodeの端子だけに依存させないでください。nodeを外す試験では、そのnodeの短いbranchだけを外し、残るtrunkとterminationを
+維持します。breadboardのpower railは中央で分割されている製品があるため、電源offでcontinuityを確認します。A/Bを短く保ち、共通GNDを
+接続してください。termination / biasはHW-519の実装を確認せずに追加せず、2つの物理端だけに必要なterminationが残る構成にします。
+
+2026-10-21のpaired-wire配線ではSensorsだけでなく右端DriveのA/Bを外しても残るpeerが停止しました。その後、breadboard上の
+continuous trunkへ各nodeを短いbranchで接続し直すと、Sensors branchだけを外している間もDrive connectionは継続しました。
+round-robin scheduler導入後の2 runではUnit 1 failure 0でDriveを維持し、Sensors branchを戻した後はControllerをresetせずにSensorsが
+再接続して両peerへのprobeが成功しています。検証時は外付けterminationを追加していません。この結果は短いbench配線での少数試行であり、
+一般的な配線長、termination / bias、抜き差し時のtransientを保証しません。
+
 各 role は compile-time configuration です。現在の接続例では USB serial を確認し、次の port へ flash します。
 `ttyACM` 番号は接続順で変わるため、実際の作業では USB serial または `/dev/serial/by-id/` を優先してください。
 
@@ -305,9 +336,11 @@ modbus_robot_multidrop: complete result={:ok, %{successes: 6, failures: 0, ...}}
 
 Stage 3 は `serial_dist` の `uart_ports` に 2 個の virtual UART handle を渡します。Controller 側の各 adapter は独立した
 sequence / ACK / session / byte-stream state を持ちますが、外部所有の 1 個の `AVModbus.Client` を共有します。これにより、
-physical UART と active Modbus transaction は常に 1 個の Client process が所有します。Drive と Sensors は自分の stream から
-Controller への distribution connection を開始します。readiness message は起動ごとの boot session ID を持つため、AtomVM が
-reboot 前後で同じ PID を再利用しても remote restart を識別できます。
+physical UART と active Modbus transaction は常に 1 個の Client process が所有します。`DisterlProbe.PollScheduler`はDrive / Sensorsへ
+poll tokenをround-robinで1個ずつ渡し、transaction完了後に次のUnitを開始します。到達不能なUnitのrequestがtimeoutしても、正常なUnitは
+Client queue内でdeadlineを失わずに新しいtransactionを開始できます。Drive と Sensors は自分の streamからControllerへのdistribution
+connectionを開始します。readiness messageは起動ごとのboot session IDを持つため、AtomVMがreboot前後で同じPIDを再利用してもremote
+restartを識別できます。
 
 application relay は transport routing ではありません。Controller は `:modbus_robot_sensors` へ sample を要求し、値を検証してから
 `:modbus_robot_drive` へ転送します。Drive が同じ sample を含む ACK を返した時点で完了とします。physical bus 上では両区間とも
@@ -452,6 +485,13 @@ concurrent producer の baseline、moderate、application ACK 付き 64+64およ
 response blackout では物理通信復帰後も非対称な half-open distribution connection が残る境界を確認しています。より長時間の
 数時間のsoakは未完了ですが、10分間のmemory / queue推移を記録しました。traffic ACK timeoutを契機にremote側distributionを明示的に再起動する回復に加え、
 connection ID付きreadiness ACKでapplication trafficがないhalf-open connectionを検出するopt-in recoveryも実機確認済みです。
+paired-wire配線の物理切断試験ではSensors、右端Driveのどちらを外しても残るpeerが停止しました。breadboardでcontinuous trunkと
+node別branchを作った後の反復試験では、shared Clientへ独立pollを投入すると正常なUnit 1もqueue待ちでdeadlineを失うことが分かりました。
+round-robin scheduler導入後はSensors branch切断中もUnit 1が約180–225 ms、failure 0で継続し、Drive connectionを2 runで維持しました。
+restart budget未使用のrunではACK欠落48,470 msでSensorsだけを自動再起動し、branch復帰後はController / Sensors resetなしで再接続と
+Sensors / Drive両probeが成功しました。25秒のremote ACK timeoutは通常mission中にfalse positiveとなったため、45秒を含め固定値を
+一般的な安全値とはしません。配線条件、scheduler導入理由、handshake retryの詳細は
+[物理RS485切断・再接続](docs/worklog/2026-10-21-physical-rs485-disconnect.md)を参照してください。
 
 ## Stage 4: sensor-driven mission
 
