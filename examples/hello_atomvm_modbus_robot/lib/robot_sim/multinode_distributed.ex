@@ -12,7 +12,16 @@ defmodule RobotSim.MultinodeDistributed do
 
   alias AVModbus.Client
   alias DisterlProbe.{ModbusUART, Payload, PollScheduler, Session}
-  alias RobotSim.{ConcurrentTraffic, Drive, MultinodeStats, RemoteHealth, SensorMission, Sensors}
+
+  alias RobotSim.{
+    ConcurrentTraffic,
+    Drive,
+    MissionWorker,
+    MultinodeStats,
+    RecoveryWorker,
+    RemoteHealth,
+    Sensors
+  }
 
   @mode Application.compile_env(:robot_sim, :mode, :distributed)
   @role Application.compile_env(:robot_sim, :role, :controller)
@@ -560,12 +569,10 @@ defmodule RobotSim.MultinodeDistributed do
     IO.puts("modbus_robot_multinode: both remote nodes connected")
 
     with :ok <- probe_remote(:drive, identity(:drive)),
-         :ok <- probe_remote(:sensors, identity(:sensors)),
-         :ok <- run_sensor_mission() do
-      IO.puts("modbus_robot_multinode: complete Drive and Sensors remote messaging")
-      remotes = run_soak_if_enabled(%{drive: drive, sensors: sensors})
-      start_traffic_if_enabled(adapters)
-      controller_loop(remotes, adapters)
+         :ok <- probe_remote(:sensors, identity(:sensors)) do
+      remotes = %{drive: drive, sensors: sensors}
+      mission = start_sensor_mission()
+      controller_loop(remotes, adapters, mission, nil)
     else
       {:error, reason} -> halt("remote initialization failed", reason)
     end
@@ -603,8 +610,34 @@ defmodule RobotSim.MultinodeDistributed do
     end
   end
 
-  defp controller_loop(remotes, adapters) do
+  defp controller_loop(remotes, adapters, mission, recovery) do
     receive do
+      {MissionWorker, ^mission, {:ok, result}} when is_pid(mission) ->
+        IO.puts("modbus_robot_multinode: sensor mission complete state=#{inspect(result.rover)}")
+        IO.puts("modbus_robot_multinode: complete Drive and Sensors remote messaging")
+        remotes = run_soak_if_enabled(remotes)
+        start_traffic_if_enabled(adapters)
+        controller_loop(remotes, adapters, nil, recovery)
+
+      {MissionWorker, ^mission, {:error, reason}} when is_pid(mission) ->
+        IO.puts("modbus_robot_multinode: sensor mission stopped reason=#{inspect(reason)}")
+
+        recovery = start_recovery_if_indeterminate(reason)
+        controller_loop(remotes, adapters, nil, recovery)
+
+      {RecoveryWorker, ^recovery, {:ok, snapshot}} when is_pid(recovery) ->
+        IO.puts(
+          "modbus_robot_multinode: recovery snapshot " <>
+            "boot_id=#{snapshot.boot_id} state=#{inspect(snapshot.rover)} " <>
+            "mission_error=#{inspect(snapshot.mission_error)}"
+        )
+
+        controller_loop(remotes, adapters, mission, nil)
+
+      {RecoveryWorker, ^recovery, {:error, reason}} when is_pid(recovery) ->
+        IO.puts("modbus_robot_multinode: recovery snapshot failed reason=#{inspect(reason)}")
+        controller_loop(remotes, adapters, mission, nil)
+
       {:robot_traffic_complete, run_id, summary} ->
         log_adapter_metrics("after", adapters)
         schedule_settled_metrics(run_id)
@@ -614,12 +647,12 @@ defmodule RobotSim.MultinodeDistributed do
             "outcome=#{summary.outcome}"
         )
 
-        controller_loop(remotes, adapters)
+        controller_loop(remotes, adapters, mission, recovery)
 
       {:robot_traffic_metrics_settled, run_id} ->
         log_adapter_metrics("settled", adapters)
         IO.puts("modbus_robot_metrics: settled run=#{run_id}")
-        controller_loop(remotes, adapters)
+        controller_loop(remotes, adapters, mission, recovery)
 
       {:multinode_ready, role, remote_node, pid, boot_id, connection_id}
       when role in [:drive, :sensors] and is_pid(pid) and is_integer(boot_id) and boot_id > 0 and
@@ -630,7 +663,9 @@ defmodule RobotSim.MultinodeDistributed do
 
             controller_loop(
               track_remote(remotes, role, pid, boot_id, connection_id),
-              adapters
+              adapters,
+              mission,
+              recovery
             )
 
           :new ->
@@ -643,11 +678,11 @@ defmodule RobotSim.MultinodeDistributed do
             )
 
             verify_recovery(role)
-            controller_loop(next_remotes, adapters)
+            controller_loop(next_remotes, adapters, mission, recovery)
 
           :unexpected ->
             log_unexpected_node(role, remote_node)
-            controller_loop(remotes, adapters)
+            controller_loop(remotes, adapters, mission, recovery)
         end
     after
       @health_check_ms ->
@@ -655,7 +690,7 @@ defmodule RobotSim.MultinodeDistributed do
           expire_stale_remotes(remotes, monotonic_ms(), @lease_ms)
 
         log_expired_roles(expired_roles)
-        controller_loop(next_remotes, adapters)
+        controller_loop(next_remotes, adapters, mission, recovery)
     end
   end
 
@@ -710,25 +745,42 @@ defmodule RobotSim.MultinodeDistributed do
     end
   end
 
-  defp run_sensor_mission do
-    case SensorMission.run(
-           {@sensors_name, identity(:sensors)},
-           {@drive_name, identity(:drive)},
-           steps: @sensor_mission_steps,
-           first_request_id: Session.new_id(),
-           timeout_ms: @probe_timeout_ms,
-           max_retries: @mission_retries,
-           trace: true
-         ) do
-      {:ok, result} ->
-        IO.puts("modbus_robot_multinode: sensor mission complete state=#{inspect(result.rover)}")
+  defp start_sensor_mission do
+    MissionWorker.start(
+      self(),
+      {@sensors_name, identity(:sensors)},
+      {@drive_name, identity(:drive)},
+      steps: @sensor_mission_steps,
+      first_request_id: Session.new_id(),
+      timeout_ms: @probe_timeout_ms,
+      max_retries: @mission_retries,
+      trace: true
+    )
+  end
 
-        :ok
-
-      {:error, reason} ->
-        {:error, reason}
+  defp start_recovery_if_indeterminate(reason) do
+    if indeterminate_command?(reason) do
+      RecoveryWorker.start(
+        self(),
+        {@drive_name, identity(:drive)},
+        reason,
+        request_id: Session.new_id(),
+        timeout_ms: @probe_timeout_ms,
+        max_retries: @mission_retries,
+        trace: true
+      )
+    else
+      nil
     end
   end
+
+  defp indeterminate_command?({:indeterminate_command, _request_id, _old_boot, _new_boot}),
+    do: true
+
+  defp indeterminate_command?({:sensor_mission_failed, _step, reason}),
+    do: indeterminate_command?(reason)
+
+  defp indeterminate_command?(_reason), do: false
 
   defp start_traffic_if_enabled(adapters) do
     if @traffic_samples > 0 do

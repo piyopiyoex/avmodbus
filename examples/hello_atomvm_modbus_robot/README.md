@@ -36,6 +36,9 @@ protocol design は変更していません。follow-up では、共有 client �
 - distance と battery に基づいて Controller が前進、右旋回、位置保持を選ぶ
 - 3 台の実機で `forward -> forward -> right turn` の adaptive mission を実行する
 - role ごとの readiness lease で Drive / Sensors の停止を検出し、復帰後に両 connection を再確認する
+- sensor-driven missionをlocal workerで実行し、Controllerのreadiness health loopをremote reply待ちから独立させる
+- sensor-driven mission commandをDrive boot IDへ束縛し、reboot後の自動再実行を止める
+- indeterminate mission後もhealth loopを継続し、新しいDrive bootのread-only stateを記録する
 - Drive / Sensors の独立 producer から同時に logical message を送り、role 別 delivery と公平性を集計する
 - opt-in で traffic ACK timeout 時に remote 側 distribution を再起動し、未確認 sequence を再送する
 - opt-in で connection ID 付き readiness ACK を監視し、application traffic がない half-open connection を bounded restart する
@@ -99,6 +102,14 @@ navigation policy は別 module に分離しています。
 ```elixir
 {:robot_command, reply_to, request_id, rover_command}
 {:robot_reply, request_id, result}
+```
+
+sensor-driven missionでは追加でDriveのvolatile boot IDを取得し、次のguarded messageを使用します。
+
+```elixir
+{:drive_identity_request, reply_to, reference}
+{:drive_identity_reply, reference, boot_id}
+{:robot_guarded_command, reply_to, request_id, expected_boot_id, rover_command}
 ```
 
 host 上では次のように reference mission を実行できます。
@@ -489,7 +500,8 @@ paired-wire配線の物理切断試験ではSensors、右端Driveのどちらを
 node別branchを作った後の反復試験では、shared Clientへ独立pollを投入すると正常なUnit 1もqueue待ちでdeadlineを失うことが分かりました。
 round-robin scheduler導入後はSensors branch切断中もUnit 1が約180–225 ms、failure 0で継続し、Drive connectionを2 runで維持しました。
 restart budget未使用のrunではACK欠落48,470 msでSensorsだけを自動再起動し、branch復帰後はController / Sensors resetなしで再接続と
-Sensors / Drive両probeが成功しました。25秒のremote ACK timeoutは通常mission中にfalse positiveとなったため、45秒を含め固定値を
+Sensors / Drive両probeが成功しました。25秒のremote ACK timeoutは同期mission中にfalse positiveとなりました。その後missionを
+local workerへ分離し、2秒announce / 10秒timeoutの診断構成で約86秒間health restart 0を確認しました。それでも固定timeoutを
 一般的な安全値とはしません。配線条件、scheduler導入理由、handshake retryの詳細は
 [物理RS485切断・再接続](docs/worklog/2026-10-21-physical-rs485-disconnect.md)を参照してください。
 
@@ -504,6 +516,23 @@ Drive の final state は `(x=200, y=0, heading=90°)` になります。Control
 開始し、timeout retry に限って同じ ID を再利用します。判断理由は
 [ADR 0008](docs/adr/0008-make-navigation-decisions-in-controller.md)、host test と3台の実機結果は
 [Stage 4 adaptive mission worklog](docs/worklog/2026-10-19-stage-4-adaptive-mission.md) を参照してください。
+
+missionは`RobotSim.MissionWorker`で実行し、Controller processはその間もreadiness heartbeat、connection ID付きACK、lease期限を
+処理します。これによりapplication reply待ちとhealth判定を分離します。設計判断は
+[ADR 0014](docs/adr/0014-run-missions-outside-the-health-loop.md)、実機結果は
+[Missionとhealth loopの分離](docs/worklog/2026-10-21-mission-health-loop.md)を参照してください。
+
+mission開始時に取得したDrive boot IDは全movementとfinal statusへ付与します。reply未受信のままDriveがrebootした場合、retryは
+新bootでmovementを実行せず`indeterminate_command`としてmissionを停止します。旧bootでの実行有無、rover state復元、自動resumeは
+保証しません。設計判断は[ADR 0015](docs/adr/0015-bind-mission-commands-to-drive-boots.md)、実機結果は
+[Drive command outcomeのreconciliation](docs/worklog/2026-10-21-drive-command-reconciliation.md)を参照してください。
+
+indeterminate outcome後もControllerのhealth loopは継続します。別workerが新しいDrive boot IDを取得し、そのbootにguardした
+read-only `:status`をsnapshotとして記録します。これはoperator向けの観測情報であり、movement再送やmission再開は行いません。
+設計判断は[ADR 0016](docs/adr/0016-continue-health-after-indeterminate-missions.md)、実機結果は
+[recovery snapshot worklog](docs/worklog/2026-10-23-indeterminate-recovery-snapshot.md)を参照してください。
+snapshot確認後にControllerをresetすると、新しいrequest IDと現在のDrive boot guardで別missionを開始できます。Drive stateは
+resetされず保持中のstateから実行するため、旧missionのresumeやstate reconciliationとは区別してください。
 
 remote PID に対する native distributed `Process.monitor/1` も試しましたが、現在の AtomVM-to-AtomVM / alternative carrier 構成では
 `erlang:monitor/2` が `badarg` となりました。そのため、現在は readiness heartbeat の最終受信時刻を role ごとに保持し、75秒の
@@ -526,8 +555,9 @@ ROBOT_MODE=multinode ROBOT_ROLE=drive ATOMVM_UART_SPEED=115200 \
 ```
 
 Controller では `ROBOT_COMMAND_RETRIES` を1以上にします。試験時間を短縮する場合も、`ROBOT_COMMAND_TIMEOUT_MS` は正常時の
-application RTT より十分長くしてください。この injection は reply loss だけを再現し、Drive reboot や cache eviction 後の
-重複排除は保証しません。通常の実行では必ず既定値 `false` を使用します。host test、build 条件、3台実機で4 request すべてが
+application RTT より十分長くしてください。この injection はreply lossだけを再現します。同一bootではcache済みresultを返し、
+Drive rebootをまたぐguarded retryはindeterminate outcomeとして停止します。cache eviction後の古いIDは保護しません。
+通常の実行では必ず既定値 `false` を使用します。host test、build 条件、3台実機で4 request すべてが
 same-ID retry に成功した結果は
 [reply loss fault injection worklog](docs/worklog/2026-10-20-stage-4-reply-loss-fault-injection.md) に記録しています。
 

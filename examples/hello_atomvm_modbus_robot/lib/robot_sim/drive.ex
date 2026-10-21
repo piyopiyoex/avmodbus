@@ -3,17 +3,20 @@ defmodule RobotSim.Drive do
   Process that owns virtual rover state and executes idempotent command requests.
 
   Recent results are cached by request ID. Repeating the same request returns its
-  cached result without applying the rover transition again.
+  cached result without applying the rover transition again. Guarded requests
+  are rejected if they were prepared for another volatile Drive boot.
   """
 
   use GenServer
 
+  alias DisterlProbe.Session
   alias RobotSim.{Protocol, Rover, Sensors}
 
   @default_max_completed 32
 
   @type state :: %{
           rover: Rover.t(),
+          boot_id: Protocol.boot_id(),
           completed: [{Protocol.request_id(), Rover.command(), Protocol.result()}],
           max_completed: pos_integer(),
           trace: boolean(),
@@ -25,6 +28,7 @@ defmodule RobotSim.Drive do
   @spec start_link(keyword()) :: GenServer.on_start()
   def start_link(options \\ []) do
     initial = Keyword.get(options, :initial, Rover.new())
+    boot_id = Keyword.get(options, :boot_id, Session.new_id())
     max_completed = Keyword.get(options, :max_completed, @default_max_completed)
     trace = Keyword.get(options, :trace, false)
 
@@ -35,13 +39,13 @@ defmodule RobotSim.Drive do
       nil ->
         GenServer.start_link(
           __MODULE__,
-          {initial, max_completed, trace, drop_first_reply_per_request}
+          {initial, boot_id, max_completed, trace, drop_first_reply_per_request}
         )
 
       name ->
         GenServer.start_link(
           __MODULE__,
-          {initial, max_completed, trace, drop_first_reply_per_request},
+          {initial, boot_id, max_completed, trace, drop_first_reply_per_request},
           name: name
         )
     end
@@ -57,12 +61,14 @@ defmodule RobotSim.Drive do
   def last_sensor_sample(server), do: GenServer.call(server, :last_sensor_sample)
 
   @impl true
-  def init({%Rover{} = initial, max_completed, trace, drop_first_reply_per_request})
-      when is_integer(max_completed) and max_completed > 0 and is_boolean(trace) and
+  def init({%Rover{} = initial, boot_id, max_completed, trace, drop_first_reply_per_request})
+      when is_integer(boot_id) and boot_id > 0 and is_integer(max_completed) and
+             max_completed > 0 and is_boolean(trace) and
              is_boolean(drop_first_reply_per_request) do
     {:ok,
      %{
        rover: initial,
+       boot_id: boot_id,
        completed: [],
        max_completed: max_completed,
        trace: trace,
@@ -85,12 +91,31 @@ defmodule RobotSim.Drive do
   def handle_cast(message, state), do: {:stop, {:bad_cast, message}, state}
 
   @impl true
+  def handle_info({:drive_identity_request, reply_to, reference}, state)
+      when is_pid(reply_to) and is_reference(reference) do
+    send(reply_to, Protocol.identity_reply(reference, state.boot_id))
+    {:noreply, state}
+  end
+
   def handle_info({:robot_command, reply_to, request_id, command}, state)
       when is_pid(reply_to) and is_integer(request_id) and request_id >= 0 do
-    {result, next_state, disposition} = execute_once(state, request_id, command)
-    trace(state, request_id, command, result)
-    reply_or_inject_loss(state, reply_to, request_id, result, disposition)
-    {:noreply, next_state}
+    handle_command(state, reply_to, request_id, command)
+  end
+
+  def handle_info(
+        {:robot_guarded_command, reply_to, request_id, expected_boot_id, command},
+        state
+      )
+      when is_pid(reply_to) and is_integer(request_id) and request_id >= 0 and
+             is_integer(expected_boot_id) and expected_boot_id > 0 do
+    if expected_boot_id == state.boot_id do
+      handle_command(state, reply_to, request_id, command)
+    else
+      result = {:error, {:drive_boot_changed, state.boot_id}}
+      trace(state, request_id, command, result)
+      send(reply_to, Protocol.reply(request_id, result))
+      {:noreply, state}
+    end
   end
 
   def handle_info({:relayed_sensor_sample, reply_to, reference, source_node, sample}, state)
@@ -105,6 +130,13 @@ defmodule RobotSim.Drive do
   end
 
   def handle_info(_message, state), do: {:noreply, state}
+
+  defp handle_command(state, reply_to, request_id, command) do
+    {result, next_state, disposition} = execute_once(state, request_id, command)
+    trace(state, request_id, command, result)
+    reply_or_inject_loss(state, reply_to, request_id, result, disposition)
+    {:noreply, next_state}
+  end
 
   defp execute_once(state, request_id, command) do
     case find_completed(state.completed, request_id) do

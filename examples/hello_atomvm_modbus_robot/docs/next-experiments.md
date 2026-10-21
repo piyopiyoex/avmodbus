@@ -17,6 +17,9 @@ Stage 0–4 の完了結果は[ロードマップ](roadmap.md)と[作業記録](
 - ACK timeout時のsame-run / same-sequence bounded retry
 - connection ID付きreadiness ACKによるapplication traffic非依存のremote health
 - board boot単位のrestart上限と、`net_kernel.stop/0`後のbounded shutdown待ち
+- sensor-driven missionをlocal workerへ分離し、Controller health loopをremote reply待ちから独立
+- Drive boot ID付きguarded commandにより、rebootをまたぐ未確定movementの自動再実行を停止
+- indeterminate mission後もhealth loopを継続し、新Drive bootのguarded read-only snapshotを取得
 
 送信は各 remote process が個別に開始しますが、wire 上の Modbus RTU request は
 **Controller が単一 client として順番に送る**既存仕様から変更しません。
@@ -123,6 +126,10 @@ pollをround-robin schedulerで直列に開始する変更後は、2回のSensor
 Controller / Sensorsの手動resetなしでSensors reconnectと両peerへのprobeを完了した。handshakeは複数回retryしており、収束時間の上限は
 まだ測定していない。
 
+indeterminate command後のrecovery snapshotを確認したうえでControllerだけをresetするoperator手順も試した。新しいrequest ID rangeと
+現在のDrive boot IDを使う3-step missionは完了した。Driveをresetしていないためrover stateは保持され、これは旧missionのresumeや
+state reconciliationではなく、現在stateから始める別missionである。
+
 25,000 msのhealth timeoutは抜線前の通常mission中にfalse positiveとなったため、負荷を考慮せず短く設定できない。breadboard試験も
 外付けterminationなしの短いbench配線における少数runであり、復旧時間の上限や一般的な電気条件を示さない。詳細は
 [物理RS485切断worklog](worklog/2026-10-21-physical-rs485-disconnect.md)を参照してください。
@@ -132,9 +139,8 @@ Controller / Sensorsの手動resetなしでSensors reconnectと両peerへのprob
 1. health detectorのtimeoutを負荷profile別に評価し、25秒で観測したfalse positiveの安全余裕を定量化する。
 2. round-robin schedulerでbreadboard branch切断・復帰をさらに反復し、handshake収束時間、memory / queueのsettlingを測定する。
 3. response faultの再armを避けるone-shot診断方法を用意し、recovery後のsettled queue / memoryを測定する。
-4. Drive reboot 中の未確定 movement command を reconcile する。volatile state と request cache を越える exactly-once を安易に約束しない。
-5. Mission 実行を別 process に分離し、Controller readiness lease が同期 request 中も動くようにする。
-6. AtomVM の個別disconnect API、multi-connection tick、setup retry、remote process monitorをupstream follow-upする。
-7. 3 remote / 4 device への拡張は、3 device fairness と memory の限界を測定した後に検討する。
+4. Snapshot確認と新mission開始を1つの対話的なapplication protocolにする必要があるか検討する。自動resumeは前提としない。
+5. AtomVM の個別disconnect API、multi-connection tick、setup retry、remote process monitorをupstream follow-upする。
+6. 3 remote / 4 device への拡張は、3 device fairness と memory の限界を測定した後に検討する。
 
 AVModbus core と wire protocol は変更しません。既存 carrier には観測専用 metrics API と Unit ID 付き trace だけを追加しています。

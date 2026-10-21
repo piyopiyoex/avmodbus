@@ -51,7 +51,7 @@
 最終 state を検証することです。この基準は 2026-10-18 に達成しました。in-flight command 中の peer reboot は、
 transport / distribution は再接続した一方、Drive の volatile state と request cache が失われることを実機で確認しました。
 Controller は final state の不一致を mission failure として検出します。永続化または reconciliation による回復は Stage 4
-の対象とします。
+以降の対象としました。2026-10-21のfollow-upではboot guardによるindeterminate outcomeの検出と再実行停止まで追加しました。
 
 ## Stage 2: three-device Modbus multidrop
 
@@ -100,9 +100,9 @@ local AtomVM patch が必要なため Stage 3 は follow-up を残していま�
 - [x] same-ID retry と bounded cache で movement command の重複実行を防ぐ
 - [x] bounded queue、recovery behavior、残る制約を[文書化する](limitations.md)
 
-Stage 4 の現在の完了範囲は application reply loss までである。physical RS485 interruption、Drive reboot をまたぐ mission
-reconciliation、durable state は対象外または follow-up とし、[既知の制約](limitations.md) に記録している。
-この範囲は 2026-10-20 に3台の実機で確認し、Stage 4 を完了とした。
+Stage 4 はapplication reply lossまでを2026-10-20に3台の実機で確認して完了とした。その後のfollow-upでphysical RS485 interruptionと、
+Drive rebootをまたぐ未確定commandの検出・再実行停止を確認した。durable state、state復元、自動mission resumeは対象外とし、
+[既知の制約](limitations.md) に記録している。
 
 ## Follow-up: concurrent traffic と信頼性（実機検証中）
 
@@ -121,7 +121,10 @@ reconciliation、durable state は対象外または follow-up とし、[既知�
 - [x] remote rebootに対するrecovery、10分間のmemory / queue推移を測定する
 - [x] remoteの物理RS485切断・再接続を検証する
 - [x] shared Clientのpollをround-robin化し、単一peer切断中も正常peerを維持する
-- [ ] mission 実行と health loop を分離し、reboot 時の command outcome を reconcile する
+- [x] mission実行をhealth loopから分離し、mission中もreadiness ACK / lease評価を継続する
+- [x] reboot時の未確定commandを新bootで再実行せず、indeterminate outcomeとして停止する
+- [x] indeterminate mission後もhealth loopを継続し、新Driveのread-only snapshotを記録する
+- [x] snapshot確認後のController resetで、現在のDrive stateから新しいguarded missionを開始する
 - [ ] AtomVM runtime の upstream follow-up を進める
 - [ ] 4 台目の追加は上記の測定結果に基づいて判断する
 
@@ -131,6 +134,13 @@ node別branchへ変更しました。反復試験でshared Clientのdeadline sta
 Unit 1 transaction failure 0でDrive connectionを維持することを2 runで確認しました。未使用restart budgetのrunではbranch復帰後に
 Controller / SensorsをresetせずSensorsが再接続し、両peerのprobeを完了しました。これで独立branchによる単一peer faultとschedulerの
 follow-upは完了です。timeout margin、長時間反復、termination / biasを含む電気条件の評価は残します。
+mission実行はlocal workerへ分離し、2秒heartbeat / 10秒ACK timeoutの診断構成で約86秒間health restart 0を確認しました。
+さらにmission commandをDrive boot IDへ束縛しました。実行済みreply-loss command直後のDrive rebootでは、再接続後のretryを
+新bootが拒否し、missionはindeterminate outcomeとして停止しました。state復元と自動resumeは提供しません。
+2026-10-23のfollow-upではmission停止後もController health loopを継続し、新boot IDとguarded `:status`のsnapshotを記録しました。
+snapshot後も両linkのtrafficを処理し、通常firmwareへ戻した3-step missionも完了しました。
+さらにoperatorがControllerだけをresetし、保持中のDrive stateから新しいrequest IDとboot guardを使う別missionが完了しました。
+これはstate reconciliationや自動resumeではありません。
 
 ## 今回は対象としないこと
 

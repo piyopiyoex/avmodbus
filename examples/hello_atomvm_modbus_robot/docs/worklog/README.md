@@ -26,3 +26,6 @@ host test、実機試験、障害調査など、再現可能な時系列の記�
 - [2026-10-20: readiness ACK による idle connection recovery](2026-10-20-remote-readiness-health.md)
 - [2026-10-20: 256+256 flow-controlled long run](2026-10-20-extended-flow-controlled-run.md)
 - [2026-10-21: 物理RS485切断・再接続](2026-10-21-physical-rs485-disconnect.md)
+- [2026-10-21: Missionとhealth loopの分離](2026-10-21-mission-health-loop.md)
+- [2026-10-21: Drive command outcomeのreconciliation](2026-10-21-drive-command-reconciliation.md)
+- [2026-10-23: Indeterminate mission後のrecovery snapshot](2026-10-23-indeterminate-recovery-snapshot.md)

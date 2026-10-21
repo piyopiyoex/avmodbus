@@ -33,8 +33,11 @@
 
 - Drive は直近32件の `{request_id, command, result}` を RAM に保持します。同じ ID / command の近接 retry は cached result を返し、
   movement を再実行しません。
-- cache eviction 後の古い ID、または Drive reboot 後の retry は新規 command として実行されます。rover state、request cache、
-  sensor sequence、last sample は reboot で失われます。
+- unguarded commandではcache eviction後の古いID、またはDrive reboot後のretryが新規commandとして実行されます。sensor-driven missionは
+  開始時のDrive boot IDへcommandを束縛し、別bootでは実行せずindeterminate outcomeとして停止します。同一bootでcache eviction後に
+  古いIDを再利用する場合は保護しません。
+- rover state、request cache、sensor sequence、last sampleはrebootで失われます。boot guardはstateを復元せず、旧bootで未確認commandが
+  実行されたかも確定しません。
 - Controller は起動ごとの random value から request ID range を開始しますが、永続 namespace や過去 boot との collision 検出は
   ありません。durable delivery と exactly-once execution は保証しません。
 - Sensors sample request と Controller relay は idempotent な transaction ID を持ちません。timeout 後の自動 mission resume、partial
@@ -46,10 +49,15 @@
   application readiness lease を使用します。
 - default の heartbeat 30秒、lease 75秒は即時検出を目的としません。message delivery が lease より遅れると false positive が
   発生します。5秒 lease では実機で両 role の誤 expiry を確認しました。
-- Controller は sensor-driven mission を同期的に実行します。mission command の reply 待ち中は readiness lease を評価しないため、
-  remote outage の検出は command timeout または mission 終了後まで遅れます。
-- Drive / Sensors の独立 reboot 後に distribution と application probe が復旧することは確認済みですが、進行中 mission の自動再開や
-  rover state の reconciliation は行いません。
+- sensor-driven missionはlocal workerで実行し、Controller health loopはmission commandのreply待ち中もreadiness ACKとleaseを
+  処理します。ただし起動時probe、recovery probe、任意のsoakには同期処理が残り、すべてのapplication workloadでhealth loopの
+  応答性を保証するものではありません。
+- Drive / Sensorsの独立reboot後にdistributionとapplication probeが復旧することは確認済みです。Drive rebootをまたぐ未確定commandは
+  新bootで再実行せずmissionを停止します。Controllerのhealth loopは継続し、新bootにguardしたread-only `:status`を別workerで
+  snapshotとして記録しますが、旧bootでの実行有無は確定せず、進行中missionの自動再開やrover stateのreconciliationも行いません。
+- snapshot確認後にControllerをresetすると、新しいrequest ID rangeと現在のDrive boot guardで別missionを開始します。Driveを同時に
+  resetしない限りrover stateは保持されます。Controller resetはstate初期化、旧missionのresume、snapshotを承認する対話的protocolでは
+  ありません。
 - peer session change で古い reader を閉じると、回復可能な場合でも AtomVM console に
   `{serial_read_error, closed}` の crash report が表示されます。
 - 64 messages / role の concurrent run では23–24 messages受信後に両 carrier session が変わり、distribution 自体は再接続しましたが、
