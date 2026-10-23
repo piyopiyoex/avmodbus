@@ -1,4 +1,4 @@
-# Application ACK flow control 実機検証 — 2026-10-20
+# Application ACKによるフロー制御の実機検証 — 2026-10-20
 
 ## 目的
 

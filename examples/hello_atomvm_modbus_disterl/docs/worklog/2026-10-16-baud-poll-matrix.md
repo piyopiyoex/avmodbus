@@ -1,4 +1,4 @@
-# Baud-rate / poll-interval matrix — 2026-10-16
+# Baud rateとpoll intervalの組み合わせ試験 — 2026-10-16
 
 ## 目的
 

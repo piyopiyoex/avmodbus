@@ -1,4 +1,4 @@
-# Concurrent producer traffic baseline — 2026-10-20
+# プロデューサー同時通信の基準値と中負荷構成 — 2026-10-20
 
 ## 目的
 
@@ -26,7 +26,7 @@ examples/hello_atomvm_modbus_robot:   52 tests, 0 failures
 repository root:                     228 tests, 6 properties, 0 failures
 ```
 
-## Managed client handle の互換性修正
+## Managed client handleとの互換性修正
 
 最初の Controller 起動は `Drive adapter start failed {:error, :invalid_client}` で停止した。shared multidrop client を
 `DisterlProbe.ModbusUART` へ渡す経路が raw PID だけを受理していた一方、現在の `AVModbus.Client.start_link/1` は
@@ -36,7 +36,7 @@ repository root:                     228 tests, 6 properties, 0 failures
 AVModbus core と FC-100 wire protocol は変更していない。修正後、Controller は1個の managed client を2個の adapter で共有し、
 Drive / Sensors の両 FC-100 peer と接続した。
 
-## Hardware と build
+## ハードウェアとビルド
 
 | Role | Unit ID | Port | USB serial | PackBEAM size |
 | --- | ---: | --- | --- | ---: |
@@ -57,7 +57,7 @@ profile 間では remote session と Controller session を再起動し、古い
 3 role を Drive、Sensors、Controller の順に再起動し、通常の adaptive mission が全 request を attempt 1 で完了して
 final state `(x=200, y=0, heading=90°)` になることも再確認した。
 
-## Baseline
+## 基準測定
 
 設定は Drive 2,000 ms、Sensors 1,000 ms、各5 messages、16-byte payload である。
 
@@ -80,7 +80,7 @@ modbus_robot_multinode: concurrent traffic report run=4103977675 outcome=complet
 run elapsed は10,588 ms、start skew は186 ms、active overlap は4,448 ms、completion skew は4,145 ms、
 delivery ratio gap は0‰、max interarrival gap は1,341 msだった。両 producer の受信 window が実際に重なり、baseline の成功条件を満たした。
 
-## Moderate profile
+## 中負荷構成
 
 設定は Drive 1,000 ms、Sensors 500 ms、各10 messages、32-byte payload である。
 

@@ -1,4 +1,4 @@
-# 0006: boot session ID で remote node の再起動を識別する
+# 0006: 起動session IDでリモートノードの再起動を識別する
 
 - Status: accepted
 - Date: 2026-10-19

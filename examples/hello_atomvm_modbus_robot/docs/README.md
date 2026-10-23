@@ -4,20 +4,20 @@
 
 ## 利用方法
 
-- [サンプル README](../README.md) — host simulation、Stage 1–4 の実行方法、座標規則、設定
+- [サンプル README](../README.md) — ホストシミュレーション、Stage 1–5の実行方法、座標規則、設定
 
 現在動く機能と再現手順はサンプル README を正とします。
 
 ## 設計資料
 
 - [ロードマップ](roadmap.md) — Stage ごとの完了条件と未着手の調査項目
-- [multinode host model](next-experiments.md) — N remote peer、fairness、failure、resource budget の条件と結果
+- [マルチノードホストモデル](next-experiments.md) — N個のremote peer、公平性、障害、リソース上限の条件と結果
 - [既知の制約](limitations.md) — application、buffer、recovery、用途の境界
 - [設計判断記録](adr/README.md) — 長期的に維持する application 設計の判断
 
 ## 検証記録
 
-- [作業記録](worklog/README.md) — host test、実機試験、障害調査の時系列記録
+- [作業記録](worklog/README.md) — ホストテスト、実機試験、障害調査の時系列記録
 
 ## 更新方針
 

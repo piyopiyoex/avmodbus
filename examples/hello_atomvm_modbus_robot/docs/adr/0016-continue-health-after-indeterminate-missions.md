@@ -1,4 +1,4 @@
-# 0016: indeterminate mission後もhealth loopを継続する
+# 0016: 結果不明のミッション後もヘルスチェックループを継続する
 
 ## 状態
 

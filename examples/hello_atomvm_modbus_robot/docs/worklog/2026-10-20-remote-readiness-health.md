@@ -1,4 +1,4 @@
-# readiness ACK による idle connection recovery — 2026-10-20
+# Readiness ACKによるアイドル接続の復旧 — 2026-10-20
 
 ## 目的
 
@@ -56,7 +56,7 @@ concurrent traffic を無効にした idle な3-node構成で、Sensorsだけの
 restart開始から新distribution startまでは179 ms、Controllerのreconnect認識までは5,628 ms、両probe完了までは10,610 msだった。
 restart時のblocking read終了とControllerのpeer session changeに伴うcrash reportは表示されたが、新handshakeを阻害しなかった。
 
-## Bounded restart
+## 上限付き再起動
 
 Server adapterの再生成でfault delayも再armされ、20:55:20.792に2回目のblackoutが始まった。20:55:49.032にSensorsは
 `remote health restart budget exhausted ... restarts=1`を記録し、2回目の`net_kernel` restartは行わなかった。これにより、連続する

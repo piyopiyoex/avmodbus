@@ -1,4 +1,4 @@
-# 0010: concurrent producer を application ACK で制限する
+# 0010: 同時プロデューサーをapplication ACKで制限する
 
 - Status: accepted
 - Date: 2026-10-20

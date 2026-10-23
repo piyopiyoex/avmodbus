@@ -1,4 +1,4 @@
-# One-shot response faultとsettling — 2026-10-23
+# 1回限りの応答障害と安定化確認 — 2026-10-23
 
 ## 目的
 
@@ -59,7 +59,7 @@ fault開始90秒、health timeout 25秒のrunは起動区間をconsoleで取得�
 
 restart前にSensors producerはsequence 6で4回timeoutし、restart後のretry remaining 8から再開した。Drive distributionは維持された。
 
-## Application結果
+## アプリケーションの結果
 
 | Metric | Drive | Sensors |
 | --- | ---: | ---: |
@@ -72,7 +72,7 @@ restart前にSensors producerはsequence 6で4回timeoutし、restart後のretry
 
 run elapsedは105,285 ms、active overlapは44,763 ms、completion skewは58,379 ms、delivery ratio gapは0‰だった。
 
-## Queueとmemory
+## キューとメモリーの測定
 
 | Phase / role | success / failure | queue bytes / chunks | max queue bytes / chunks | free heap | minimum |
 | --- | ---: | ---: | ---: | ---: | ---: |

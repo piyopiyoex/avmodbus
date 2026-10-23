@@ -1,4 +1,4 @@
-# ACK timeout による remote distribution restart — 2026-10-20
+# ACK timeoutによるリモート分散接続の再起動 — 2026-10-20
 
 ## 目的
 
@@ -30,7 +30,7 @@ teardownする。新しいconnectionを確立した後、停止させずに残�
 
 試験firmwareはDrive 250,496 bytes、Sensors 251,096 bytes、Controller 255,892 bytesだった。traffic run IDは`11157342`である。
 
-## Recovery timeline
+## 復旧の時系列
 
 | 時刻 | 観測 |
 | --- | --- |
@@ -50,7 +50,7 @@ teardownする。新しいconnectionを確立した後、停止させずに残�
 remoteの`net_kernel.stop/0`に伴い、Sensors consoleにはblocking read中の`serial_dist_controller` crash reportが表示された。
 Controllerでもpeer session changeにより古いreaderの`{serial_read_error, closed}`が表示された。どちらも新handshakeを阻害しなかった。
 
-## Application result
+## アプリケーションの結果
 
 | Metric | Drive | Sensors |
 | --- | ---: | ---: |

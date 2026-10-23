@@ -1,4 +1,4 @@
-# 0017: response faultはboard bootごとにone-shotとする
+# 0017: 応答障害はボード起動ごとに1回だけ有効にする
 
 ## 状態
 

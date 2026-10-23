@@ -18,7 +18,7 @@
 | 4 | 完了 | adaptive mission、readiness lease、reply-loss retry を実機確認 |
 | 5 | 完了 | N remote peer host model、fairness、failure isolation、resource budget |
 
-## Stage 0: local virtual rover simulation
+## Stage 0: ローカル仮想ローバーシミュレーション
 
 - [x] 独立した Mix example project を追加する
 - [x] position と heading を持つ virtual rover を pure function で実装する
@@ -33,7 +33,7 @@
 完了条件は、host test が成功し、reference mission が
 `{x_mm: 100, y_mm: 50, heading_deg: 90}` で終了することです。
 
-## Stage 1: two-node distributed robot
+## Stage 1: 2ノード分散ロボット
 
 - [x] 既存 FC-100 / virtual UART carrier の再利用境界を決める
 - [x] `controller@modbus.local` と `drive@modbus.local` を構成する
@@ -54,7 +54,7 @@ transport / distribution は再接続した一方、Drive の volatile state と
 Controller は final state の不一致を mission failure として検出します。永続化または reconciliation による回復は Stage 4
 以降の対象としました。2026-10-21のfollow-upではboot guardによるindeterminate outcomeの検出と再実行停止まで追加しました。
 
-## Stage 2: three-device Modbus multidrop
+## Stage 2: 3台のModbusマルチドロップ
 
 この Stage では Erlang distribution を使わず、standard Modbus RTU の multidrop を先に検証します。
 
@@ -69,7 +69,7 @@ Controller は final state の不一致を mission failure として検出しま
 2026-10-19 に 60 cycle / 120 request を error 0 で完了し、Drive / Sensors の独立 reboot も read retry 内で回復しました。
 termination / bias の電気測定と長時間 soak は未実施であり、現在の hardware profile を超える保証には含めません。
 
-## Stage 3: three-node distributed Erlang
+## Stage 3: 3ノード分散Erlang
 
 - [x] drive と sensors に独立した sequence / ACK / session / byte-stream state を設計する
 - [x] 1 本の physical UART を所有する process と polling policy を設計する
@@ -94,7 +94,7 @@ roadmapに含めず、対象v0.7 snapshotが更新されたときにlocal patch�
 仮定しません。2026-10-23には`18b35870`へpatch `a1069573`を適用したruntimeを3台へ導入し、2 connection、両remoteのprobe、
 sensor-driven mission、mission後90秒の接続維持を確認しました。
 
-## Stage 4: virtual sensors と fault tolerance
+## Stage 4: 仮想センサーと障害耐性
 
 - [x] deterministic な virtual distance sample を追加する
 - [x] simulated battery sample を追加する
@@ -108,7 +108,7 @@ Stage 4 はapplication reply lossまでを2026-10-20に3台の実機で確認し
 Drive rebootをまたぐ未確定commandの検出・再実行停止を確認した。durable state、state復元、自動mission resumeは対象外とし、
 [既知の制約](limitations.md) に記録している。
 
-## Follow-up: concurrent traffic と信頼性（完了）
+## 追試: 同時通信と信頼性（完了）
 
 - [x] independent producer、application ACK window 1、bounded retryを実装する
 - [x] overload、queue-full、half-open connection、reply lossの境界を記録する
@@ -121,7 +121,7 @@ Drive rebootをまたぐ未確定commandの検出・再実行停止を確認し�
 
 個別の条件と数値は[作業記録](worklog/README.md)、残る保証外の範囲は[既知の制約](limitations.md)を正とする。
 
-## Stage 5: scalable multinode model
+## Stage 5: スケーラブルなマルチノードモデル
 
 - [x] Controller transport setupをpeer descriptor list駆動にする
 - [x] 3台をphysical integration baselineとして固定し、deviceを1台ずつ増やす試験を必須にしないと決める

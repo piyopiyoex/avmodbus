@@ -1,4 +1,4 @@
-# 0007: Server 間の application message は Controller で中継する
+# 0007: Server間のアプリケーションメッセージはControllerで中継する
 
 - Status: accepted
 - Date: 2026-10-19

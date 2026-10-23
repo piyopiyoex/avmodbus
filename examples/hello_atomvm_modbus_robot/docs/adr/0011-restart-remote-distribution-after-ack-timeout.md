@@ -1,4 +1,4 @@
-# 0011: ACK timeout 時は remote 側 distribution を再起動する
+# 0011: ACK timeout時はリモート分散接続を再起動する
 
 - Status: accepted for the experimental probe
 - Date: 2026-10-20

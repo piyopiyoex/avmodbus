@@ -1,4 +1,4 @@
-# 4 KiB 転送中の Server reboot recovery — 2026-10-16
+# 4 KiB転送中のServer再起動復旧 — 2026-10-16
 
 ## 目的
 

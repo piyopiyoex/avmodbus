@@ -1,4 +1,4 @@
-# Peer-driven Controller transport setup — 2026-10-24
+# Peer descriptor駆動のControllerトランスポート構成 — 2026-10-24
 
 ## 目的
 
@@ -23,13 +23,13 @@ Controllerはこのlistからadapterを順に生成し、PollScheduler登録、p
 
 robot applicationのDrive / Sensors固有処理は変更していない。descriptor APIと既存`targets/2`の順序をhost testで照合した。
 
-## AtomVM compatibility
+## AtomVM互換性
 
 最初の実装はadapter listからmapを作るため`Map.new/2`を使用した。host testは成功したが、Controllerの
 `mix atomvm.check`がAtomVM 0.7.0-beta.0で未提供と警告した。実機flash前に`Enum.reduce/3`と`Map.put/3`へ置き換え、
 Drive、Sensors、Controllerの3 roleでcompatibility warning 0とPackBEAM build成功を確認した。
 
-## Firmware
+## ファームウェア
 
 | Role | Size | SHA-256 |
 | --- | ---: | --- |

@@ -50,7 +50,7 @@ bounded queue、session recovery、resource budgetをhost上で検証しまし�
 
 各 Stage の進捗と完了条件は [ロードマップ](docs/roadmap.md) を参照してください。
 
-## Host で実行する
+## ホストで実行する
 
 repository root から次を実行します。
 
@@ -84,7 +84,7 @@ clockwise に増加します。この規則では `90°` が `+Y` 方向です�
 reference mission の「右へ 90° 旋回した後に `+Y` へ進む」という期待値を曖昧なく表すための規則です。
 判断理由は [ADR 0001](docs/adr/0001-use-clockwise-heading-from-positive-x.md) に記録しています。
 
-## Command
+## コマンド
 
 `RobotSim.Rover.execute/2` は rover state と command を受け取り、新しい state を返す pure function です。
 
@@ -99,7 +99,7 @@ reference mission の「右へ 90° 旋回した後に `+Y` へ進む」とい�
 process / protocol layer から独立しています。Rover state 自体に時間経過、速度、battery、obstacle は持たせず、virtual sensor と
 navigation policy は別 module に分離しています。
 
-## Stage 1 application protocol の host test
+## Stage 1: アプリケーションプロトコルのホストテスト
 
 `RobotSim.Drive` は rover state を所有し、`RobotSim.Controller` から次の message を受け取ります。
 
@@ -136,7 +136,7 @@ Drive で別の mission を開始する場合は、以前と重ならない `:fi
 [ADR 0002](docs/adr/0002-deduplicate-retries-with-request-ids.md)、実機結果は
 [Drive reboot worklog](docs/worklog/2026-10-18-stage-1-drive-reboot.md) に記録しています。
 
-## Reference mission
+## リファレンスミッション
 
 ```text
 開始: (0, 0), heading 0°
@@ -175,7 +175,7 @@ standard Modbus RTU multidrop を検証しました。Stage 3 では Controller 
 connection を同時に確立しています。Drive と Sensors の直接 connection は作らず、Server 間の application data は
 Controller が中継します。
 
-## Stage 1 の build と実機実行
+## Stage 1: ビルドと実機実行
 
 Stage 1 は既存 example を local path dependency とし、`DisterlProbe.ModbusUART` をそのまま利用します。FC-100
 protocol、session、queue、virtual UART source は複製しません。この依存関係は experimental example 間の暫定境界であり、
@@ -240,7 +240,7 @@ map field の表示順は AtomVM build により異なる場合があります�
 UART pin、chunk、queue、trace の environment variable は既存の
 [distributed Erlang example](../hello_atomvm_modbus_disterl/README.md#build-time-configuration) と同じです。
 
-## Stage 2: 3-device standard Modbus multidrop
+## Stage 2: 3台の標準Modbusマルチドロップ
 
 Stage 2 は Erlang distribution を開始せず、AVModbus の標準 Function Code 3 で holding register を読みます。
 Controller だけが UART を所有して request を開始し、Drive は Unit 1、Sensors は Unit 2 として自分宛ての request だけに
@@ -347,7 +347,7 @@ modbus_robot_multidrop: complete result={:ok, %{successes: 6, failures: 0, ...}}
 [Stage 2 実機検証](docs/worklog/2026-10-19-stage-2-multidrop.md) に記録しています。Stage 2 と Stage 3 を分離する理由は
 [ADR 0004](docs/adr/0004-validate-standard-multidrop-before-distribution.md) を参照してください。
 
-## Stage 3: 3-node distributed Erlang probe
+## Stage 3: 3ノード分散Erlang疎通
 
 Stage 3 は `serial_dist` の `uart_ports` に 2 個の virtual UART handle を渡します。Controller 側の各 adapter は独立した
 sequence / ACK / session / byte-stream state を持ちますが、外部所有の 1 個の `AVModbus.Client` を共有します。これにより、
@@ -538,7 +538,7 @@ local workerへ分離し、2秒announce / 10秒timeoutの診断構成で約86秒
 配線条件、scheduler導入理由、handshake retryの詳細は
 [物理RS485切断・再接続](docs/worklog/2026-10-21-physical-rs485-disconnect.md)を参照してください。
 
-## Stage 4: sensor-driven mission
+## Stage 4: センサー駆動ミッション
 
 `RobotSim.Navigator` は sample に対して pure な判断を行います。battery が 20% 以下なら `:status` で位置を保持し、それ以外で
 distance が 400 mm 以下なら右へ 90° 旋回します。どちらにも該当しなければ 100 mm 前進します。low battery を obstacle より
@@ -594,7 +594,7 @@ Drive rebootをまたぐguarded retryはindeterminate outcomeとして停止し�
 same-ID retry に成功した結果は
 [reply loss fault injection worklog](docs/worklog/2026-10-20-stage-4-reply-loss-fault-injection.md) に記録しています。
 
-## Host-only multinode scale model
+## ホスト専用マルチノード規模モデル
 
 3台をphysical integration baselineとし、追加deviceの代わりに1、2、3、8、32 remote peersをdeterministic host modelで
 検証できます。
@@ -632,7 +632,7 @@ buffer、application state、failure detection、recovery guarantee の詳細は
 
 資料の一覧と更新方針は [docs/README.md](docs/README.md) にあります。
 
-## 任意診断: concurrent producer traffic
+## 任意診断: プロデューサー同時通信
 
 既存の交互順 soak は Controller が Drive と Sensors に順番に request を送る試験です。
 opt-in probeでは、**Drive と Sensors がそれぞれ独立した process から定期的に message を送ります**。

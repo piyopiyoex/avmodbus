@@ -1,4 +1,4 @@
-# 0019: 4台化の前にController transport setupをpeer list駆動にする
+# 0019: Controllerのトランスポート構成をpeer descriptorリスト駆動にする
 
 ## 状態
 

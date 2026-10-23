@@ -1,4 +1,4 @@
-# FC-100 peer readiness gate実機検証 — 2026-10-16
+# FC-100 peer readiness gateの実機検証 — 2026-10-16
 
 ## 目的
 

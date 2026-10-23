@@ -1,4 +1,4 @@
-# Stage 3 Controller-mediated sensor relay — 2026-10-19
+# Stage 3 Controller経由のセンサー中継 — 2026-10-19
 
 ## 目的
 

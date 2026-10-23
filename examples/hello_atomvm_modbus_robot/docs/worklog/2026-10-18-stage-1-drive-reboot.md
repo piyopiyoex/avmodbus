@@ -1,4 +1,4 @@
-# Stage 1 in-flight Drive reboot — 2026-10-18
+# Stage 1 実行中のDrive再起動 — 2026-10-18
 
 ## 目的
 
@@ -22,7 +22,7 @@ hardware と UART 条件は [通常 mission の実機記録](2026-10-18-stage-1-
 
 初期位置を 10 mm ずらした host test を追加し、誤った final state を拒否することを確認した。
 
-## Fault injection
+## 障害注入
 
 Drive を先に起動し、Controller を通常どおり起動した。Drive monitor の `tio` script は request 2 の log を待ち、
 state transition の直後に RTS を toggle して board を reset した。

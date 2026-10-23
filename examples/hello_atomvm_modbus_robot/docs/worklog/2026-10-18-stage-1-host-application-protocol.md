@@ -1,4 +1,4 @@
-# Stage 1 host application protocol — 2026-10-18
+# Stage 1 ホストアプリケーションプロトコル — 2026-10-18
 
 ## 目的
 
@@ -14,7 +14,7 @@ AtomVM distribution と Modbus carrier を追加する前に、Controller / Driv
 Drive は同じ request ID と command を再受信すると cache 済み result を返します。同じ ID の異なる command は
 `:request_id_conflict` として拒否します。
 
-## Fault scenario
+## 障害シナリオ
 
 test proxy が最初の request を Drive へ転送し、Drive からの最初の reply だけを破棄しました。Controller は 20 ms の
 timeout 後に同じ request ID で retry し、Drive は movement を再実行せず cache 済み result を返しました。

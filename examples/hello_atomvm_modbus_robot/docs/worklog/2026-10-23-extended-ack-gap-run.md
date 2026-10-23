@@ -1,4 +1,4 @@
-# 256+256 trafficでのreadiness ACK gap長時間測定 — 2026-10-23
+# 256+256通信でのreadiness ACK間隔の長時間測定 — 2026-10-23
 
 ## 目的
 
@@ -19,7 +19,7 @@
 
 run IDは`1075518060`である。初回handshakeを含む各connectionの最初のACKはgap集計から除外した。
 
-## Traffic結果
+## 通信結果
 
 runは783,317 msでcompleteした。
 
@@ -35,7 +35,7 @@ runは783,317 msでcompleteした。
 
 start skewは266 ms、active overlapは776,418 ms、completion skewは3,261 ms、delivery ratio gapは0‰だった。
 
-## Transaction、queue、memory
+## トランザクション、キュー、メモリーの測定
 
 | Phase / role | success / failure | average / max transaction | queue bytes / chunks | max queue bytes / chunks | free heap | minimum |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -48,7 +48,7 @@ start skewは266 ms、active overlapは776,418 ms、completion skewは3,261 ms�
 traffic中のminimum watermarkは68,848 bytesまで下がったが、30秒settling後は両queueとoutstandingが0になった。
 この値はController側VMとadapterの観測であり、Drive / Sensors側VM全体のmemoryを表さない。
 
-## Readiness ACK gap
+## Readiness ACKの間隔
 
 | Role | 観測終了時ACK count | 最大gap | health restart / timeout |
 | --- | ---: | ---: | ---: |
@@ -61,7 +61,7 @@ faultがない単一runでもこの差まで縮んだため、25秒を一般的�
 
 ACK countはboard boot内の累積であり、traffic message数ではない。DriveとSensorsの差は初期接続とpolling順の差を含む。
 
-## AtomVM v0.7 snapshotの確認
+## AtomVM v0.7 snapshotでの確認
 
 2026-10-23時点のAtomVM `upstream/release-0.7` HEAD `18b35870`でも、複数connectionのtick callbackは
 send expressionの戻り値をそのまま`maps:fold/3`の次のaccumulatorへ渡していた。このため2個目のalive connectionで

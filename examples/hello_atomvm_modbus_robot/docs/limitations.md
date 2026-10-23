@@ -21,7 +21,7 @@
   文書化し、local compatibility patch `a1069573`で検証します。同snapshotとpatchからbuildしたruntimeは3台の実機で
   2 connection、remote messaging、mission後90秒の維持まで確認しましたが、公式imageのまま動作するproduction構成ではありません。
 
-## Buffer と backpressure
+## バッファとバックプレッシャー
 
 - FC-100 carrier の outgoing queue は stream ごとに default 8,192 payload bytes / 256 chunks です。Controller の2 stream は独立した
   上限を持ちます。
@@ -38,7 +38,7 @@
   boundedですが、collector crashやretry上限超過後のdurable resumeは実装していません。collectorの全体timeoutは通信断や
   handshake中も進み、停止または延長されません。baseline送信、operatorの切断保持、再接続、残り送信を含む値に設定する必要があります。
 
-## Command delivery と state
+## コマンド配送と状態
 
 - Drive は直近32件の `{request_id, command, result}` を RAM に保持します。同じ ID / command の近接 retry は cached result を返し、
   movement を再実行しません。
@@ -52,7 +52,7 @@
 - Sensors sample request と Controller relay は idempotent な transaction ID を持ちません。timeout 後の自動 mission resume、partial
   progress の照合、再取得した sample の重複排除は未実装です。
 
-## Failure detection と recovery
+## 障害検出と復旧
 
 - 現在の AtomVM-to-AtomVM / alternative carrier 構成では remote PID に対する `Process.monitor/1` が `badarg` となるため、
   application readiness lease を使用します。

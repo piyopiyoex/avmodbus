@@ -1,4 +1,4 @@
-# 115,200 baud での 512-byte soak と 4 KiB traffic — 2026-10-16
+# 115,200 baudでの512-byte連続試験と4 KiB通信 — 2026-10-16
 
 ## 目的
 
@@ -28,7 +28,7 @@ baud / poll matrix では 115,200 baud の zero-byte ping/pong まで確認し�
 両 node は同じ payload、ping count、timeout で clean、pack、flash した。console を接続した後、`tio` の
 DTR / RTS script で両 node を reset し、boot から結果までを観察した。
 
-## 512-byte soak
+## 512-byte連続試験
 
 追加設定:
 
@@ -58,7 +58,7 @@ modbus_disterl: complete 30 remote ping/pong messages rtt_min_ms=3245 rtt_avg_ms
 average RTT は約 39% 短かった。ただし既存 soak は ping 間に 2 秒の delay があり、今回の
 `DISTERL_PING_DELAY_MS=0` とは条件が異なるため、run 全体の elapsed time は直接比較しない。
 
-## 4 KiB round trip — 115,200 baud
+## 4 KiB往復 — 115,200 baud
 
 追加設定:
 
@@ -86,7 +86,7 @@ modbus_disterl: complete 1 remote ping/pong messages rtt_min_ms=22617 rtt_avg_ms
 - Client 起動から完了まで: 22,799 ms
 - 完了後 30 秒の idle 観察中に `net_tick_timeout`、connection shutdown、追加 error は発生しなかった
 
-## 4 KiB round trip — 9,600 baud
+## 4 KiB往復 — 9,600 baud
 
 baud rate だけを default の 9,600 へ戻し、同じ 96-byte chunk、payload、ping count、timeout で再実行した。
 stream size と chunk 分割は 115,200-baud run と同じである。
@@ -105,7 +105,7 @@ modbus_disterl: complete 1 remote ping/pong messages rtt_min_ms=36051 rtt_avg_ms
 - Client 起動から完了まで: 36,233 ms
 - 完了後 30 秒の idle 観察中に `net_tick_timeout`、connection shutdown、追加 error は発生しなかった
 
-## 4 KiB consecutive traffic — 9,600 baud
+## 4 KiB連続通信 — 9,600 baud
 
 単発試験の後、default の 9,600 baud / 20 ms poll / 96-byte chunk で 4 KiB payload を 3 回連続送信した。
 ping 間 delay は設けず、各 pong の受信直後に次の ping を送った。

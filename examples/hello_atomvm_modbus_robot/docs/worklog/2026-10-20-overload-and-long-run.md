@@ -1,11 +1,11 @@
-# Concurrent traffic overload と longer run — 2026-10-20
+# 同時通信の過負荷と長時間試験 — 2026-10-20
 
 ## 目的
 
 baseline / moderate より高い同時負荷で、application delivery、Unit別 transaction fairness、queue high-water、Controller heapを測定する。
 続いて64 messages / role の longer runを実施し、短時間 profileを越えた安定性と failure recovery の境界を確認する。
 
-## Metrics の追加
+## 計測項目の追加
 
 `DisterlProbe.ModbusUART` に観測専用の metrics snapshot/resetを追加した。snapshotは次をUnit IDごとに返す。
 
@@ -28,7 +28,7 @@ Host testはDisterl 62件、Robot 52件で成功し、ControllerのAtomVM compat
 - AtomVM v0.7.0-beta.0 と既存 multi-connection local patch
 - Drive Unit 1、Sensors Unit 2
 
-## Exploratory overload
+## 探索的な過負荷
 
 設定は両 role 250 ms、各20 messages、64-byte payload、180秒timeoutである。Controllerはtransaction / queue traceを有効にした。
 
@@ -61,7 +61,7 @@ Driveの1 transactionが2秒timeoutになったが、FC-100 retransmissionとdup
 開始前のfree heapは約89 KB、minimum watermarkは85,868 bytesだった。完了直後はfree heapがDrive snapshotで86,360 bytes、
 Sensors snapshotで85,436 bytes、minimum watermarkは80,292 bytesだった。このrunはsettled snapshot追加前のため、回復後の値は取得していない。
 
-## 64 messages / role longer run
+## ロールごと64メッセージの長時間試験
 
 設定は両 role 500 ms、各64 messages、64-byte payload、300秒timeout、trace無効、30秒settled snapshot有効である。
 producerが全messageを生成する理論時間は31.5秒だが、shared half-duplex bus上のdeliveryはそれより長くなる。

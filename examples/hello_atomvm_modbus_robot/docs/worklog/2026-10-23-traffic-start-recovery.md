@@ -1,4 +1,4 @@
-# Blackout中のtraffic start recovery — 2026-10-23
+# 応答遮断中の通信開始と復旧 — 2026-10-23
 
 ## 目的
 
@@ -55,7 +55,7 @@ session `2779663707`でopenした。Controllerはpeer session changeを検出し
 Sensors producerの開始はDriveより51,778 ms遅れた。active overlapは0 ms、completion skewは55,012 msだった。これは両producerが
 同時に開始したbaselineではなく、未配送startが回復後に遅れて開始したことを示す。sampleのmissing、duplicate、order errorはない。
 
-## Queueとmemory
+## キューとメモリーの測定
 
 | Phase / role | success / failure | queue bytes / chunks | max queue bytes / chunks | free heap | minimum |
 | --- | ---: | ---: | ---: | ---: | ---: |

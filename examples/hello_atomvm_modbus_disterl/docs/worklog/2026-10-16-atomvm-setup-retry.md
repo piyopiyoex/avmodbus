@@ -1,4 +1,4 @@
-# AtomVM setup PID cleanupとhandshake retry実機A/B — 2026-10-16
+# AtomVM setup PID cleanupとhandshake retryの実機A/B試験 — 2026-10-16
 
 ## 目的
 
@@ -61,7 +61,7 @@ Generic UNIXのfull `test_estdlib`実行はsandboxのsocket `eperm`と、local b
 両boardの元の512 KiB boot partitionを保存してから、修正版`elixir_esp32boot.avm`だけを`0x1d0000`へ書き込んだ。
 main applicationとruntime binaryは別partitionのままである。
 
-## positive run
+## 正常系の実行
 
 2-byte readiness markerはfault対象外とし、Clientが`net_kernel`を開始した後の最初の32-byte distribution preamble responseを
 40回Modbus exceptionへ置換した。初回setupは7秒timerで終了し、stale handshake dataによる追加failureも発生した。

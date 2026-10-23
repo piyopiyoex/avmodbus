@@ -1,4 +1,4 @@
-# Byte-stream stress test — 2026-10-16
+# 64 KiB byte stream負荷試験 — 2026-10-16
 
 ## 目的
 

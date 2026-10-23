@@ -1,11 +1,11 @@
-# Server response blackout と非対称 half-open connection — 2026-10-20
+# Server応答遮断と非対称half-open connection — 2026-10-20
 
 ## 目的
 
 application ACKでin-flight windowを1にしたconcurrent traffic probeの進行中に通信障害を発生させ、ACK timeout後の
 same-run / same-sequence retry、distribution reconnect、producer resumeを3台の実機で確認する。
 
-## Fault injection
+## 障害注入
 
 既存carrierの`DisterlProbe.ResponseFault`をrobot exampleからcompile-time configurationできるようにした。
 

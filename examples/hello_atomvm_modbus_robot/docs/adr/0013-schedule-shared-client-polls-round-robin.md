@@ -1,4 +1,4 @@
-# 0013: shared Client の poll を round-robin で直列化する
+# 0013: 共有Clientのpollをラウンドロビンで直列化する
 
 ## 状態
 

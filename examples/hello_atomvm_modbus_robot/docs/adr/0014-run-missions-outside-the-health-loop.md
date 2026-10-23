@@ -1,4 +1,4 @@
-# 0014: mission は Controller の health loop 外で実行する
+# 0014: ミッションはControllerのヘルスチェックループ外で実行する
 
 ## 状態
 

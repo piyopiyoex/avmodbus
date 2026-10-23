@@ -1,4 +1,4 @@
-# Readiness ACK gapとtimeout marginのbaseline — 2026-10-23
+# Readiness ACK間隔とtimeout余裕の基準値 — 2026-10-23
 
 ## 目的
 
@@ -36,7 +36,7 @@ root projectは228 tests + 6 propertiesで、すべてfailure 0だった。3 rol
 remote ACK timeoutは測定を中断しない120秒とした。観測したgapから短いtimeoutを評価するのであり、120秒を推奨値として
 検証する試験ではない。
 
-## Readiness ACK gap
+## Readiness ACKの間隔
 
 通常の3-step sensor missionからconcurrent trafficとsettling完了後まで同じconnectionを監視した。
 
@@ -52,7 +52,7 @@ remote ACK timeoutは測定を中断しない120秒とした。観測したgap�
 remote reply待ちから独立した効果と整合する。ただし初回handshake、recovery probe、異なるtraffic負荷、長時間運転は同じ分布を
 保証しない。
 
-## Concurrent traffic結果
+## 同時通信の結果
 
 run `2467400923`は103,203 msでcompleteした。
 
@@ -68,7 +68,7 @@ run `2467400923`は103,203 msでcompleteした。
 
 start skewは763 ms、active overlapは95,096 ms、completion skewは3,784 ms、delivery ratio gapは0‰だった。
 
-## Queueとmemory
+## キューとメモリーの測定
 
 | Phase / role | success / failure | queue bytes / chunks | max queue bytes / chunks | free heap | minimum |
 | --- | ---: | ---: | ---: | ---: | ---: |

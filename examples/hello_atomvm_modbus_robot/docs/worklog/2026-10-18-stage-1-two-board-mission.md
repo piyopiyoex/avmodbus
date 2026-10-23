@@ -1,4 +1,4 @@
-# Stage 1 two-board distributed mission — 2026-10-18
+# Stage 1 2台の分散ミッション — 2026-10-18
 
 ## 目的
 

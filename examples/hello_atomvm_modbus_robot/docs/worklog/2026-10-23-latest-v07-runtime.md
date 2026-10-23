@@ -1,4 +1,4 @@
-# 最新 AtomVM v0.7 snapshot の3台実機検証 — 2026-10-23
+# 最新AtomVM v0.7 snapshotの3台実機検証 — 2026-10-23
 
 ## 目的
 
@@ -8,7 +8,7 @@ multi-connection tickのlocal compatibility patchを最新snapshotへ載せ直�
 
 AtomVM upstreamへのIssueまたはPRは作成せず、必要な差分と結果はAVModbusの実験記録として管理する。
 
-## Sourceとbuild条件
+## ソースとビルド条件
 
 | 項目 | 値 |
 | --- | --- |
@@ -60,7 +60,7 @@ Sensorsでnative runtimeだけ、続いてboot libraryを更新して段階的�
 AtomVMのESP32-C5向けcomposite imageを使う場合、書込みoffsetは`0x0`ではなく`0x2000`である。今回の最終手順は曖昧さを
 避けるためabsolute partition offsetを使った。
 
-## Native USB monitorの注意
+## Native USBモニターの注意
 
 XIAO ESP32-C5のnative USB consoleを`/dev/ttyACM*`へ直接`tio`で開くと、reset時のUSB再列挙でmonitorが終了した。
 この切断をruntimeのboot failureと誤認しないこと。検証には再列挙を待つExAtomVMのmonitor taskを使った。
@@ -72,7 +72,7 @@ mix atomvm.esp32.monitor --port /dev/serial/by-id/... --timeout 60
 保存済みruntime領域を書き戻した後のreadbackは元のSHA-256と完全一致していた。専用monitorで確認すると正常に起動したため、
 途中で観測したROM reset logだけを根拠にsnapshot buildの不具合とは判断しない。
 
-## Hardware構成
+## ハードウェア構成
 
 | Role | USB serial | Modbus role |
 | --- | --- | --- |

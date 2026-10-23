@@ -1,4 +1,4 @@
-# Concurrent traffic中のSensors branch切断・復旧 — 2026-10-23
+# 同時通信中のSensors分岐切断・復旧 — 2026-10-23
 
 ## 目的
 
@@ -63,7 +63,7 @@ distribution再起動を確認した後にSensors branchを同じ極性で戻し
 ControllerはSensors reconnect、Sensors probe、切断中も維持されたDrive probe、`recovery complete`の順に記録した。
 Sensors producerは同じrun IDとsequence 7から再開した。
 
-## Traffic結果
+## 通信結果
 
 runは451,811 msで`outcome=:complete`となった。
 
@@ -82,7 +82,7 @@ start skewは246 ms、active overlapは423,877 ms、completion skewは24,216 ms�
 Driveのduplicate 3件はACK遅延によるsame-sequence retryをcollectorが観測したもので、128個のunique sequenceはすべて1回ずつ
 集計された。重複したapplication commandの副作用を一般にexactly-onceにする保証ではない。
 
-## Transaction、queue、memory
+## トランザクション、キュー、メモリーの測定
 
 | Phase / role | success / failure | queue bytes / chunks | max queue bytes / chunks | free heap | minimum |
 | --- | ---: | ---: | ---: | ---: | ---: |
@@ -97,7 +97,7 @@ Sensorsの135 bytes / 2 chunksは30秒後に0となり、両roleともoutstandin
 readiness traceのboot内high-waterはDrive 21,089 ms、Sensors 11,802 msだった。Sensorsの障害検出gap 38,388 msは旧connectionを
 終了させたtimeout eventであり、replacement connectionの初回ACKを除外する通常gap high-waterには加算しない。
 
-## Clean bootからの反復run
+## クリーンブートからの反復試験
 
 3台を通常firmwareへ戻した後、同じ診断設定を再flashしてclean bootから反復した。run `2847232948`ではSensors producerの
 sequence 62まで進んだ時点でbranchを外した。SensorsはACK欠落36,943 msで旧connection `3973391217`を停止し、

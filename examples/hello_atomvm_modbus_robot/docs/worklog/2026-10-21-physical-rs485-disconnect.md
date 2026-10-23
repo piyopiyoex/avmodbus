@@ -33,7 +33,7 @@
 distributionを再起動した。shared busのhandshakeとmission trafficでは25秒を超えるACK遅延が起こり得るため、この値はfalse positiveを
 避けられない。試験用timeoutを45,000 msへ変更し、50秒以上のidle heartbeatが正常にACKされることを確認してから物理切断を行った。
 
-## Paired-wireでのSensors切断時の観測
+## 対線配線でのSensors切断時の観測
 
 中央のSensors transceiverからA/Bを外し、USB電源とsignal groundは維持した。Sensorsが最後にreadiness ACKを受けたのは
 08:21:49で、その後はheartbeatを10秒ごとにqueueへ追加したがdelivery ACKを受信しなかった。
@@ -49,7 +49,7 @@ Sensorsだけを外す意図だったが、Driveも継続通信できなかっ�
 trunkを独立に維持する構成ではなかったか、抜き差し時の電気的擾乱がbus全体へ波及した可能性がある。この結果から
 「Unit 2だけの物理障害中もUnit 1が継続する」とは判断できない。
 
-## Paired-wireでのSensors再接続時の観測
+## 対線配線でのSensors再接続時の観測
 
 A/Bを同じ極性で戻すとModbus RTU pollingは再開した。
 
@@ -67,7 +67,7 @@ restart上限1回を08:22:38に使用済みで、08:25:04には上限到達を�
 connection logはconsole監視の切り替え中で取得できなかったが、08:30:15–08:33:07にSensorsは10秒周期、Driveは30秒周期で複数回の
 双方向deliveryを継続した。readiness messageとACKはdistribution上のapplication messageであるため、両linkの再確立を確認できる。
 
-## Paired-wire Sensors試験の結果
+## 対線配線のSensors試験結果
 
 | 確認項目 | 結果 |
 | --- | --- |
@@ -119,7 +119,7 @@ restart上限到達を記録した後、10:39:14からACKが継続した。一�
 3-step sensor-driven missionが完了した。Sensorsは再flashしていないためsample sequence 4–6から継続しており、final stateはfresh bootの
 reference valueではなく、そのsampleに対応する`{x_mm: -100, y_mm: 0, heading_deg: 180}`だった。
 
-## Breadboard parallel branchでの再試験
+## ブレッドボード上の並列分岐での再試験
 
 paired-wire配線を外し、breadboard railをcontinuous A/B trunkとして3台のtransceiverを短いbranchでparallel接続した。共通GNDも
 breadboard railへ接続した。短いbench配線で外付け100 Ω / 120 Ω terminationは追加していない。HW-519上のtermination / bias抵抗は
@@ -178,7 +178,7 @@ hostではtransport 67 tests、robot 61 testsが成功した。診断用Sensors 
 restart上限1回 / boot、Controller firmwareはUnit別transaction trace有効としてflashした。書き込んだimage dataはSensors 257,816 bytes、
 Controller 260,548 bytesだった。
 
-## Round-robin schedulerでの再検証
+## ラウンドロビンスケジューラーによる再検証
 
 branch切断前にControllerはDrive / Sensors両方へ接続し、両probeとsensor-driven missionを完了した。Unit 1 / 2のtransaction failureは0だった。
 

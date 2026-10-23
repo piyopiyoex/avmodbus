@@ -1,4 +1,4 @@
-# Scalable multinode host model
+# スケーラブルなマルチノードホストモデル
 
 ## 目的
 
@@ -45,7 +45,7 @@ mise exec -- mix test test/poll_scheduler_test.exs
 
 host modelはfocused test 11 tests、PollSchedulerはfocused test 4 tests、いずれも0 failuresだった。
 
-## Fairness
+## 公平性
 
 各peerのservice timeを1 ms、arrivalを0、4 roundsとして実行した。
 
@@ -63,7 +63,7 @@ host modelはfocused test 11 tests、PollSchedulerはfocused test 4 tests、い�
 3 peersのうち1 peerだけを50 ms、他を1 msとした3-round profileは156 msで完了し、全peerが3 pollsを受けた。poll countの
 fairnessは維持するが、slow peerのservice timeは各cycleへ加算される。
 
-## Failure、overload、recovery
+## 障害、過負荷、復旧
 
 8 peersの4番目を全4 roundsでfailure、service time 2,000 ms、queue limit 3とした。failed peerは4 failures、queue 3、
 rejected 1となった。他の7 peersはそれぞれ4 successesを維持したが、全体時間は8,028 msだった。正常peerはstarveしなくても、
@@ -75,7 +75,7 @@ rejectedは2だった。queueは上限を超えないが、rejection後のapplic
 2 peersの一方をround 1–2でfailureとし、round 3でsession replacementした。旧queue 2件を`stale_discarded`として破棄し、
 session 2で2件をdeliveryした。carrier sessionの回復は旧application messageのdeliveryを保証しないという実機baselineと一致する。
 
-## Resource budget
+## リソース上限
 
 defaultのstream別上限8,192 payload bytes / 256 chunksをremote peer数へ単純に掛けたconfigured limitと、実機で観測した
 worst per-peer queue high-water 279 bytesを同じpeer数へ掛けたprojectionを分けて計算した。
@@ -110,7 +110,7 @@ incremental heapを分離測定していないため、線形なfree-heap推定�
 以上でStage 5のhost modelは完了とする。追加hardwareは、global resource policyや3本目のhandshakeなど、host modelでは答えられない
 具体的な仮説が生じた場合だけspot checkに使う。
 
-## Regression
+## 回帰確認
 
 - repository root: 228 tests、6 properties、0 failures
 - `hello_atomvm_modbus_disterl`: 68 tests、0 failures

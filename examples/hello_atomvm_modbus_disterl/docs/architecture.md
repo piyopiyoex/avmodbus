@@ -4,7 +4,7 @@
 AtomVM の既存 `serial_dist` へ virtual UART として提供します。採用理由は
 [設計判断記録](adr/README.md) に記録します。
 
-## Phase 1: logical transport
+## Phase 1: 論理トランスポート
 
 ```text
 Node A: Modbus Client                    Node B: Modbus Server (Unit 1)
@@ -51,7 +51,7 @@ Node B sends queued data only in a response to a poll.
 - 新しい peer session を受信した側は、その最初の sequence を新しい receive baseline として受け入れる
 - 既知の peer が session を変更した場合は、その peer 向けに queue した古い byte-stream data を破棄する
 
-## Phase 2: distributed Erlang
+## Phase 2: 分散Erlang統合
 
 `DisterlProbe.ModbusUART` を `serial_dist` の `uart_module` として指定します。この adapter が
 `open/read/write/close` の byte-stream API と FC-100 chunk を相互変換します。

@@ -1,4 +1,4 @@
-# Stage 0 host-only rover simulation — 2026-10-18
+# Stage 0 ホスト専用ローバーシミュレーション — 2026-10-18
 
 ## 目的
 

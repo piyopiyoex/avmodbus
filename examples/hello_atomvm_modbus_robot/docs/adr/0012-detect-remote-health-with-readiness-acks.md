@@ -1,4 +1,4 @@
-# 0012: readiness ACK で remote distribution health を判定する
+# 0012: readiness ACKでリモート分散接続の健全性を判定する
 
 ## 状態
 

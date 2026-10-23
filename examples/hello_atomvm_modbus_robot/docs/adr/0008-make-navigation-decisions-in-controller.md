@@ -1,4 +1,4 @@
-# 0008: sensor に基づく navigation 判断は Controller で行う
+# 0008: センサーに基づくナビゲーション判断はControllerで行う
 
 - Status: accepted
 - Date: 2026-10-19

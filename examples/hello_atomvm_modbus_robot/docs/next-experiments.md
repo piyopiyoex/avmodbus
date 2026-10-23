@@ -1,4 +1,4 @@
-# Scalable multinode host model
+# スケーラブルなマルチノードホストモデル
 
 3台（Controller 1台、2 remote peers）のphysical integration baselineを維持し、それ以上のremote peer数はhost上の
 deterministic modelで検証します。
@@ -8,7 +8,7 @@ deviceを1台ずつ追加することはroadmapの完了条件にしません。
 
 過去のconcurrent traffic、障害復旧、長時間測定の数値は[作業記録](worklog/README.md)へ集約しています。
 
-## Baseline
+## 実機基準
 
 現在の3台構成では次を確認済みです。
 
@@ -22,7 +22,7 @@ deviceを1台ずつ追加することはroadmapの完了条件にしません。
 
 このbaselineは4台以上のphysical distributionを保証しません。
 
-## 完了したtest matrix
+## 完了したテスト項目
 
 remote peer数`1, 2, 3, 8, 32`を対象にしました。randomnessは使用していません。
 
@@ -57,7 +57,7 @@ wire上のModbus transactionは、remote peer数にかかわらず1個のClient�
 - 32 peersのconfigured payload limit 262,144 bytesは3台実測のminimum free heap 68,848 bytesを超える。
 - host modelはAtomVM runtime、physical bus、3本目以上のdistribution handshakeを保証しない。
 
-## Hardwareの扱い
+## ハードウェアの扱い
 
 3台はRS485 wiring、half-duplex transaction、実UART、AtomVM heapを含むintegration baselineとして使います。追加deviceは、次のような
 具体的な仮説がある場合だけspot checkに使います。
@@ -69,7 +69,7 @@ wire上のModbus transactionは、remote peer数にかかわらず1個のClient�
 
 単にNを1増やすだけの試験は行いません。
 
-## Source of truth
+## 正本
 
 - 現在の実行方法: [サンプルREADME](../README.md)
 - Stageと完了条件: [ロードマップ](roadmap.md)

@@ -1,4 +1,4 @@
-# Stage 4 remote health と independent recovery — 2026-10-19
+# Stage 4 リモート健全性と独立復旧 — 2026-10-19
 
 ## 目的
 
@@ -24,7 +24,7 @@ x[1]: badarg
 記載している。したがって monitor 全般が非対応とは結論せず、AtomVM v0.7.0-beta.0 の2つの AtomVM node、external PID、
 `serial_dist` alternative carrier を組み合わせた場合の blocker として記録する。
 
-## Readiness lease fallback
+## Readiness leaseによるfallback
 
 native monitor を削除し、既存 readiness heartbeat を role ごとの lease として扱うようにした。
 
@@ -44,7 +44,7 @@ mix atomvm.check
 45 tests, 0 failures
 ```
 
-## Lease tuning
+## Leaseの調整
 
 最初の test profile は heartbeat 2秒、health check 1秒、lease 5秒とした。adaptive mission 終了後、heartbeat が Modbus / distribution
 queue を通過する前に両 role の lease が expired となった。その直後に heartbeat を受けて両方とも recovery したが、5秒 lease は

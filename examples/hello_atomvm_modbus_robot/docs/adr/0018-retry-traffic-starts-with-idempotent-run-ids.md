@@ -1,4 +1,4 @@
-# 0018: traffic startをACK付きで再送しrun IDで重複排除する
+# 0018: 通信開始をACK付きで再送しrun IDで重複排除する
 
 ## 状態
 

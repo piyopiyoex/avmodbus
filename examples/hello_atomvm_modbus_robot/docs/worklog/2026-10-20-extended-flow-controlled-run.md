@@ -1,4 +1,4 @@
-# 256+256 flow-controlled long run — 2026-10-20
+# 256+256 フロー制御付き長時間試験 — 2026-10-20
 
 ## 目的
 
@@ -24,7 +24,7 @@ in-flight window 1、ACK timeoutとrun timeoutは維持する。host testでは2
 
 firmware sizeはDrive 254,696 bytes、Sensors 254,668 bytes、Controller 257,632 bytesだった。run IDは`1754972612`である。
 
-## Application result
+## アプリケーションの結果
 
 | Metric | Drive | Sensors |
 | --- | ---: | ---: |
@@ -39,7 +39,7 @@ firmware sizeはDrive 254,696 bytes、Sensors 254,668 bytes、Controller 257,632
 run全体は627,792 ms、active overlapは623,957 ms、start skewは1,057 ms、completion skewは1,029 ms、delivery ratio gapは0‰だった。
 queue-full、application ACK timeout、carrier session change、distribution reconnectは発生しなかった。
 
-## Transaction、queue、memory
+## トランザクション、キュー、メモリーの測定
 
 | Phase | Role | Success / failure | Queue | High-water | Free heap | Minimum free heap |
 | --- | --- | ---: | ---: | ---: | ---: | ---: |

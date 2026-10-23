@@ -1,4 +1,4 @@
-# Sequence wraparound — 2026-10-16
+# sequence wraparound検証 — 2026-10-16
 
 ## 目的
 
@@ -15,7 +15,7 @@ ACK は 65,535 個の ring 上で基準 sequence から後方の距離を求め�
 判定する。stop-and-wait の通常動作では current ACK または直前の重複 ACK だけが現れるが、数値の大小を
 直接比較しないことで `65,535 -> 1` の境界でも同じ規則を適用できる。
 
-## Host test
+## ホストテスト
 
 次の case を追加した。
 

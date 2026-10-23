@@ -1,4 +1,4 @@
-# 0009: remote health は readiness lease で判定する
+# 0009: リモート健全性はreadiness leaseで判定する
 
 - Status: accepted
 - Date: 2026-10-19

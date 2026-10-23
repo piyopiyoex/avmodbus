@@ -1,4 +1,4 @@
-# Drive command outcomeのreconciliation — 2026-10-21
+# Drive command結果の照合 — 2026-10-21
 
 ## 目的
 
@@ -38,7 +38,7 @@ DriveとControllerを更新後、ControllerはDrive / Sensors両方へ接続し�
 request `2695655373`から3件のguarded movementとfinal statusを実行した。すべてattempt 1で成功した。Sensors sequence 4–6と
 継続中のstateを使ったため、final stateは`{x_mm: -100, y_mm: 0, heading_deg: 180}`だった。
 
-## Reply loss後のDrive reboot
+## Reply loss後のDrive再起動
 
 Driveだけ`ROBOT_DRIVE_DROP_FIRST_REPLY_PER_REQUEST=true`でrebuild / flashし、Controllerをresetして新しいmissionを開始した。
 

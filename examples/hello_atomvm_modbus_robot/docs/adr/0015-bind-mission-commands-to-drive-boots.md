@@ -1,4 +1,4 @@
-# 0015: mission commandをDrive bootへ束縛する
+# 0015: ミッションコマンドをDrive起動へ束縛する
 
 ## 状態
 

@@ -1,4 +1,4 @@
-# Indeterminate mission後のrecovery snapshot — 2026-10-23
+# 結果不明ミッション後の復旧記録 — 2026-10-23
 
 ## 目的
 
@@ -35,7 +35,7 @@ Drive、Sensors、Controllerの3 roleすべてで`mix atomvm.check`と`mix atomv
 - Driveはreply-loss診断firmware、image data 262,004 bytes
 - Sensorsは既存の通常firmware
 
-## Reply loss後のDrive reboot
+## 応答消失後のDrive再起動
 
 Driveを`ROBOT_DRIVE_DROP_FIRST_REPLY_PER_REQUEST=true`でbuildし、Controllerからmissionを開始した。
 
@@ -70,7 +70,7 @@ Drive / Sensors両方のcarrier trafficを処理した。
 Driveをreply-loss無効の通常firmwareへ戻し、Controllerをresetした。Drive / Sensorsの接続、両probe、3-step sensor mission、
 final statusがすべて成功した。最終stateは`{x_mm: 0, y_mm: 200, heading_deg: 90}`だった。3台に診断用reply-loss設定は残していない。
 
-## Operatorによる新しいmission開始
+## 操作者による新しいミッション開始
 
 Recovery snapshotと通常firmwareへの復元を確認した後、operator操作としてControllerだけを再度resetした。Controllerは新しい
 request ID rangeを生成し、現在のDrive boot IDを取得して別の3-step missionを開始した。取得途中からのconsole logではstep 3の

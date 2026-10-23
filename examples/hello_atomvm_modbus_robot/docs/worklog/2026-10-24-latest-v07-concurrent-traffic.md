@@ -1,4 +1,4 @@
-# 最新 AtomVM v0.7 snapshotでの32+32 concurrent traffic — 2026-10-24
+# 最新AtomVM v0.7 snapshotでの32+32同時通信 — 2026-10-24
 
 ## 目的
 
@@ -6,7 +6,7 @@
 flow-controlled concurrent trafficでも確認する。Drive / Sensorsの独立producer、2本のdistribution connection、shared Modbus Client、
 readiness heartbeatを同時に動かし、delivery、fairness、queue、heap、ACK gapを記録する。
 
-## Runtimeとhardware
+## ランタイムとハードウェア
 
 - AtomVM baseline: `release-0.7` `18b35870`
 - local multi-connection tick patch: `a1069573`
@@ -27,7 +27,7 @@ native runtimeとboot libraryのbuild条件、hash、partition offsetは
 
 3 roleともAtomVM compatibility checkとPackBEAM buildに成功した。
 
-## Profile
+## 試験条件
 
 - 32 messages / role
 - 64-byte deterministic payload
@@ -40,7 +40,7 @@ native runtimeとboot libraryのbuild条件、hash、partition offsetは
 - remote health trace有効
 - response faultと物理操作なし
 
-## Traffic結果
+## 通信結果
 
 run ID `669184555`は101,248 msでcompleteした。
 
@@ -56,7 +56,7 @@ run ID `669184555`は101,248 msでcompleteした。
 
 start skewは245 ms、active overlapは96,890 ms、completion skewは761 ms、delivery ratio gapは0‰だった。
 
-## Transaction、queue、memory
+## トランザクション、キュー、メモリーの測定
 
 | Phase / role | success / failure | average / max transaction | queue bytes / chunks | max queue bytes / chunks | free heap | minimum |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -69,7 +69,7 @@ traffic開始前のfree heapはDrive snapshotで87,596 bytes、Sensors snapshot�
 traffic中のminimum watermarkは76,712 bytesまで下がった。30秒settling後は両adapterのqueueとoutstandingが0になり、
 transaction failureは両Unitとも0だった。
 
-## Readiness ACK gap
+## Readiness ACKの間隔
 
 traffic完了後に各remote consoleをresetせず観測した。
 
@@ -81,7 +81,7 @@ traffic完了後に各remote consoleをresetせず観測した。
 10秒announceに対する最大の追加遅延はDrive 5,681 ms、Sensors 5,298 msだった。前回32+32 runの11,532 msより大きいが、
 別runの256+256で観測した23,995 msより小さい。単一runの値をtimeout保証には使わない。
 
-## 通常firmwareへの復元
+## 通常ファームウェアへの復元
 
 traffic、remote health、trace、faultを無効にした通常firmwareを3 roleへ再buildし、`main.avm`だけを書き戻した。
 
