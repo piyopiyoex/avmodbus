@@ -32,3 +32,5 @@
 - [0016: indeterminate mission後もhealth loopを継続する](0016-continue-health-after-indeterminate-missions.md)
 - [0017: response faultはboard bootごとにone-shotとする](0017-make-response-faults-one-shot-per-boot.md)
 - [0018: traffic startをACK付きで再送しrun IDで重複排除する](0018-retry-traffic-starts-with-idempotent-run-ids.md)
+- [0019: 4台化の前にController transport setupをpeer list駆動にする](0019-drive-controller-transport-from-peer-descriptors.md)
+- [0020: deviceを1台ずつ増やさずhost modelでscaleを検証する](0020-model-scale-on-host-instead-of-adding-devices.md)

@@ -20,6 +20,13 @@ defmodule RobotSim.MultinodeDistributedTest do
     assert MultinodeDistributed.targets(11, 22) == [{:drive, 11}, {:sensors, 22}]
   end
 
+  test "controller peer descriptors keep role, unit, and node identity together" do
+    assert MultinodeDistributed.controller_peers(11, 22) == [
+             %{role: :drive, unit_id: 11, node: :"drive@modbus.local"},
+             %{role: :sensors, unit_id: 22, node: :"sensors@modbus.local"}
+           ]
+  end
+
   test "soak probes alternate which role goes first" do
     assert MultinodeDistributed.soak_targets(1) == [:drive, :sensors]
     assert MultinodeDistributed.soak_targets(2) == [:sensors, :drive]

@@ -1,182 +1,74 @@
-# 次の実験: concurrent traffic と障害復旧
+# 次の実験: scalable multinode model
 
-2026-10-20 の 3-node snapshot を baseline とする follow-up 計画と進捗記録です。
-Stage 0–4 の完了結果は[ロードマップ](roadmap.md)と[作業記録](worklog/README.md)を正とします。
+3台（Controller 1台、2 remote peers）のphysical integration baselineを維持し、それ以上のremote peer数はhost上の
+deterministic modelで検証します。
+deviceを1台ずつ追加することはroadmapの完了条件にしません。判断の背景は
+[ADR 0020](adr/0020-model-scale-on-host-instead-of-adding-devices.md)を参照してください。
 
-## 実装した基盤
+過去のconcurrent traffic、障害復旧、長時間測定の数値は[作業記録](worklog/README.md)へ集約しています。
 
-- `ROBOT_MULTINODE_TRAFFIC_SAMPLES=0` のとき従来動作を変更しない opt-in probe
-- Drive / Sensors に独立 producer process を起動する message
-- Controller に独立 collector process を起動し、既存の readiness loop を塞がない
-- run ID、role、sequence、payload を照合する bounded host-side stats
-- Controller clock だけで計算する role 別 duration、throughput、completion skew、delivery ratio gap
-- Unit別 transaction count / failure / latency、queue high-water、実行前後と30秒後の heap snapshot
-- 256 sample / role、128-byte payload の明示的上限と run timeout
-- host test で独立 producer、重複、順序違反、missing、無応答 timeout を確認する構成
-- started / sample / finishedごとのapplication ACKとrole別in-flight window 1
-- ACK timeout時のsame-run / same-sequence bounded retry
-- connection ID付きreadiness ACKによるapplication traffic非依存のremote health
-- board boot単位のrestart上限と、`net_kernel.stop/0`後のbounded shutdown待ち
-- sensor-driven missionをlocal workerへ分離し、Controller health loopをremote reply待ちから独立
-- Drive boot ID付きguarded commandにより、rebootをまたぐ未確定movementの自動再実行を停止
-- indeterminate mission後もhealth loopを継続し、新Drive bootのguarded read-only snapshotを取得
-- distribution再起動後のreplacement adapterではresponse drop countを0にするone-shot fault mode
+## Baseline
 
-送信は各 remote process が個別に開始しますが、wire 上の Modbus RTU request は
-**Controller が単一 client として順番に送る**既存仕様から変更しません。
+現在の3台構成では次を確認済みです。
 
-## 実機試験 profile
+- shared Modbus Client上の2本のgenuine distributed Erlang connection
+- 32+32、64+64、256+256 flow-controlled traffic
+- round-robin pollingと単一peer branch障害中の正常peer継続
+- readiness lease、remote-side restart、stale connectionの境界
+- mission commandのboot guardとindeterminate outcome
+- 最新AtomVM v0.7 snapshot + local tick patchでのmissionとconcurrent traffic
+- peer descriptor list駆動のController transport setup
 
-最初は 3 台の XIAO ESP32-C5 と AtomVM local patch を使い、次の順に試します。
-各 role の `MIX_ENV=prod` firmware を新しい source から build し直します。
+このbaselineは4台以上のphysical distributionを保証しません。
 
-| Profile | Drive interval | Sensors interval | Count / role | Payload |
-| --- | ---: | ---: | ---: | ---: |
-| baseline | 2000 ms | 1000 ms | 5 | 16 bytes |
-| moderate | 1000 ms | 500 ms | 10 | 32 bytes |
-| exploratory overload | 250 ms | 250 ms | 20 | 64 bytes |
-| longer run、flow controlなし | 500 ms | 500 ms | 64 | 64 bytes |
-| longer run、ACK window 1 | 500 ms | 500 ms | 64 | 64 bytes |
-| extended run、ACK window 1 | 500 ms | 500 ms | 256 | 64 bytes |
+## 次のtest matrix
 
-6 profile は 2026-10-20 に実施済みです。flow controlなしのlonger runはsession resetでtimeoutし、ACK window 1の64+64と
-256+256 profileは完全配送しました。
+最初はremote peer数`1, 2, 3, 8, 32`を対象にします。random testを追加する場合も、失敗を再現できるseedを
+必ず記録します。
 
-記録する項目:
+| 観点 | 入力 | 確認内容 |
+| --- | --- | --- |
+| descriptor | role、Unit ID、node identity | 欠落、範囲外、重複を拒否し、入力順を保持する |
+| scheduling | N peer、複数round | 各peerが1 roundに1回だけtokenを受け、順序と公平性が崩れない |
+| slow peer | 1 peerだけ完了を遅延 | 同時transactionを発生させず、遅延の影響を測定する |
+| failed peer | timeout / disconnect | 正常peerのdeadlineと進行を維持できるpolicyを比較する |
+| overload | producer rate > drain rate | queue上限、backpressure、drop / retry境界を確認する |
+| recovery | session change / reboot | 古いstateを破棄し、application retryの必要範囲を確認する |
+| resources | remote peer数とqueue設定 | adapter、queue、mailbox、推定heapの増加を記録する |
 
-- 役割別の `received / expected`、missing、duplicate、invalid、out-of-order
-- Collector の run duration、role 別 throughput / max interarrival gap、role 間の delivery ratio gap / completion skew
-- `MODBUS_TRACE_TRANSACTIONS` / `MODBUS_TRACE_QUEUE` を有効にした別 run の物理 transaction、queue 観察
-- readiness lease、再接続、tick timeout、heap / memory、重い workload 時の timeout
+wire上のModbus transactionは、remote peer数にかかわらず1個のClientが直列化する前提です。host modelでparallel transactionを
+許可してはいけません。
 
-Controller と remote の monotonic clock は同期していません。producer の送信時刻との差から
-one-way latency を算出してはいけません。RTT 計測は既存の echo probe を別途利用します。
+## 成功条件
 
-## 成功条件と停止条件
+- 同じ条件とseedで結果を再現できる。
+- remote peer数を増やしても各peerのdelivery / scheduling結果をrole別に説明できる。
+- failureを注入したpeerと正常peerの影響を分離して記録できる。
+- queue、timeout、retry、resource budgetに明示的な上限がある。
+- 3台実測とhost modelの値を混同せず、simulation、推定、実測を区別する。
 
-- baseline: Drive / Sensors ともに `received == expected`、`missing == 0`、`invalid == 0`、かつ
-  `active_overlap_ms > 0` で両 producer の受信 window が重なること。
-- moderate: 接続が継続し、role 間で極端な starvation がないことを実測で評価する。
-- overload: delivery の遅延や失敗を記録する。完全配送を前提としない。
-- `net_tick_timeout`、queue-full、OOM、継続的な timeout が発生したら負荷を上げずに原因を記録する。
+## 停止条件
 
-`finished == false` / `outcome == :timeout` は collector が期限内に送信終了通知を
-観測できなかったことを示します。送信済み message の durable delivery を保証しません。
+- OOM、unbounded queue、再現不能なraceを観測した場合はremote peer数を増やさず原因を固定する。
+- modelのためだけにAVModbus coreへdistribution固有APIを追加しない。
+- AtomVM runtimeの挙動を仮定で埋めない。host modelで答えられない点は制約として残す。
 
-## 2026-10-20 の結果
+## Hardwareの扱い
 
-3 台の XIAO ESP32-C5、shared two-wire RS485、115,200 baud、96-byte FC-100 chunk で各 profile を1 run実施しました。
+3台はRS485 wiring、half-duplex transaction、実UART、AtomVM heapを含むintegration baselineとして使います。追加deviceは、次のような
+具体的な仮説がある場合だけspot checkに使います。
 
-| Profile | Drive | Sensors | Elapsed | Active overlap | Completion skew | Delivery ratio gap |
-| --- | --- | --- | ---: | ---: | ---: | ---: |
-| baseline | 5 / 5、581 milli-msg/s | 5 / 5、1078 milli-msg/s | 10,588 ms | 4,448 ms | 4,145 ms | 0‰ |
-| moderate | 10 / 10、1042 milli-msg/s | 10 / 10、1131 milli-msg/s | 11,593 ms | 8,655 ms | 937 ms | 0‰ |
-| overload | 20 / 20、803 milli-msg/s | 20 / 20、750 milli-msg/s | 29,769 ms | 23,579 ms | 1,310 ms | 0‰ |
-| longer、flow controlなし | 23 / 64 | 24 / 64 | 300,001 ms timeout | unavailable | unavailable | 16‰ |
-| longer、ACK window 1 | 64 / 64、401 milli-msg/s | 64 / 64、404 milli-msg/s | 163,039 ms | 156,298 ms | 3,114 ms | 0‰ |
-| extended、ACK window 1 | 256 / 256、409 milli-msg/s | 256 / 256、409 milli-msg/s | 627,792 ms | 623,957 ms | 1,029 ms | 0‰ |
+- transceiver loadingやterminationがremote peer数で変わる
+- 3本以上のdistribution handshakeが固定setup timerに収まるか
+- host推定と実AtomVM heapの差が大きい
+- 実UART turnaroundがmodelの前提を崩す
 
-baseline の Drive max interarrival は 2,136 ms、Sensors は795 msでした。moderate ではそれぞれ1,195 ms、824 msでした。
-これは Controller 受信時刻による短時間の観測値で、producer の one-way latency や長期的な公平性保証ではありません。
-詳細、firmware size、起動時に見つかった managed client handle の互換性修正は
-[実機 worklog](worklog/2026-10-20-concurrent-traffic.md)に記録しています。
+単にNを1増やすだけの試験は行いません。
 
-overload では Drive 69 success / 1 timeout、Sensors 70 success / 0 failureでした。Controller側queue high-water はDrive 261 bytes /
-4 chunks、Sensors 149 bytes / 2 chunksでした。longer runでは両 carrier session が再生成され、distributionは再接続しましたが
-producerは復元されずtimeoutしました。30秒後のController側queueは両方0、free heapは約86 KBでした。
+## Source of truth
 
-3台同時consoleの診断runではSensors側で`queue rejected ... reason=:queue_full`、直後に
-`{serial_write_error, queue_full}`、Controller側でpeer session changeと`{serial_read_error, closed}`の順に発生しました。
-500 ms producerの生成速度がshared busの排出速度を上回り、remote outgoing queueを飽和させたことが直接原因です。
-[overload / longer run worklog](worklog/2026-10-20-overload-and-long-run.md)も参照してください。
-
-application ACKでroleごとのin-flight windowを1にした再試験では、missing / duplicate / out-of-order / invalid 0で両role 64 / 64を
-完了しました。queue-full、session change、ACK timeoutは発生せず、30秒後のController側queueは両方0でした。詳細は
-[ACK flow-control worklog](worklog/2026-10-20-ack-flow-control.md)を参照してください。
-
-同じflow-controlled probeでSensorsのFC-100 responseを180回連続して破棄したところ、未確認のsequence 7に対する
-same-sequence retryは10秒ごとに動作しました。しかしControllerだけが`net_tick_timeout`で接続を閉じ、requestを受信していたSensors側は
-古いdistribution connectionを保持しました。response破棄終了後はphysical pollingとcarrier byte deliveryが復帰したものの、session changeや
-distribution reconnectは発生せず、producerは12回のretryを使い切って停止しました。詳細は
-[response blackout worklog](worklog/2026-10-20-response-blackout.md)を参照してください。
-
-follow-upではSensors producerの最初のACK timeoutをlocal ownerへ通知し、Sensors側の`net_kernel`だけをstop / restartした。
-ControllerのDrive connectionを維持したままSensorsが再接続し、同じrun ID / sequence 2からproducerを再開した。16+16 messagesは
-missing / duplicate / out-of-order / invalid 0、63,171 msで完了した。詳細は
-[response blackout recovery worklog](worklog/2026-10-20-response-blackout-recovery.md)を参照してください。
-
-さらにreadiness heartbeatへconnection ID付きACKを返し、remote側でACK期限を判定するopt-in health detectorを追加した。
-application trafficを無効にした状態でも、Sensorsはresponse blackout開始後にACK欠落28,524 msを検出してdistributionを再起動した。
-ControllerはDrive connectionを維持し、Sensorsのreconnect後に両roleのprobeを完了した。faultが再armされた2回目のblackoutでは
-boot単位の上限によりrestartせず、restart stormを抑止した。最初の試行で`net_kernel.stop/0`返却後も旧processが残るraceを再現したため、
-登録解除をbounded pollしてからstartする。詳細は
-[idle connection recovery worklog](worklog/2026-10-20-remote-readiness-health.md)を参照してください。
-
-256+256 extended runは10分27.792秒でcompleteし、missing / duplicate / out-of-order / invalidは両roleとも0だった。Unit別transaction
-failureは各2回、queue high-waterはDrive 279 bytes / 4 chunks、Sensors 162 bytes / 2 chunksで、30秒後は両queueとも0になった。
-Controllerのfree heapは開始時約89 KB、settled時約85 KB、minimum watermark 70,736 bytesだった。詳細は
-[extended long-run worklog](worklog/2026-10-20-extended-flow-controlled-run.md)を参照してください。
-
-2026-10-21のpaired-wire配線ではSensorsまたは右端DriveのA/Bを外すと残るpeerも停止し、link復帰だけでは2 linkが完全復旧しなかった。
-breadboard上のcontinuous trunkとnode別branchへ変更した初回試験ではDriveを維持できたが、反復試験でshared Clientの
-head-of-line deadline starvationを発見した。各adapterが独立してpollすると、到達不能なUnit 2のqueue待ち中にUnit 1のdeadlineも
-消費され、正常なDriveまで`net_tick_timeout`になった。
-
-pollをround-robin schedulerで直列に開始する変更後は、2回のSensors branch切断中にUnit 2が約2秒timeoutを繰り返しても、Unit 1は
-約180–225 ms、failure 0で継続した。未使用restart budgetでのrunはACK欠落48,470 msでSensorsを自動再起動し、branch復帰後に
-Controller / Sensorsの手動resetなしでSensors reconnectと両peerへのprobeを完了した。handshakeは複数回retryしており、収束時間の上限は
-まだ測定していない。
-
-indeterminate command後のrecovery snapshotを確認したうえでControllerだけをresetするoperator手順も試した。新しいrequest ID rangeと
-現在のDrive boot IDを使う3-step missionは完了した。Driveをresetしていないためrover stateは保持され、これは旧missionのresumeや
-state reconciliationではなく、現在stateから始める別missionである。
-
-one-shot response faultの最終runでは、Sensorsだけのdistribution restart後に同じproducerがsequence 6から再開し、16+16 messagesを
-missing / duplicate / out-of-order / invalid 0で完了した。30秒後は両adapterのqueueが0となり、replacement起動から約101秒後まで
-2回目のfaultは発生しなかった。一方、fault中に一度だけ送ったtraffic start messageは未配送のまま復元されないことも別runで確認した。
-
-follow-upではtraffic startにrole別ACK、bounded retry、remote側run ID guardを追加した。blackout中に開始したrunはSensors再接続後に
-producerを開始し、両role 16 / 16、application error 0で完了した。Sensorsの開始はDriveより51,778 ms遅れ、30秒後は両queueが0に
-drainした。詳細は[traffic start recovery worklog](worklog/2026-10-23-traffic-start-recovery.md)を参照してください。
-
-remote healthのtimeout marginを測るため、各connectionの初回を除くreadiness ACK gapとboot内high-waterをopt-inで記録した。
-10秒announce、通常mission、32+32 flow-controlled traffic、30秒settlingを含むrunでは、Drive / Sensorsとも24 ACKを受信し、
-high-waterは11,532 msだった。trafficは両role 32 / 32、application error 0で完了した。このprofileだけなら25秒に対して
-13,468 msの観測上の余裕があるが、単一runでありtimeoutの下限や障害検出保証ではない。詳細は
-[readiness ACK gap baseline](worklog/2026-10-23-remote-health-gap-baseline.md)を参照してください。
-
-同じ10秒announceを256+256 flow-controlled trafficへ延長した無障害runは783,317 msで完全配送し、30秒後は両queueが0になった。
-一方、ACK gap high-waterはDrive 23,586 ms、Sensors 23,995 msまで伸びた。25秒timeoutへの観測上の余裕は1,414 ms / 1,005 msに
-すぎず、短時間baselineだけではtimeoutを決められない。詳細は
-[長時間ACK gap測定](worklog/2026-10-23-extended-ack-gap-run.md)を参照してください。
-
-同じbranch構成で128+128 flow-controlled traffic中にSensorsのA/Bを切断するclean-boot runを2回実施した。Drive connectionを維持し、
-SensorsがACK欠落36,943–38,388 msでdistributionを再起動した。branch復帰後に同じproducerをsequence 7または62から再開し、両runとも
-両role 128 / 128、missing / out-of-order / invalid 0で完了した。elapsedは451,811–568,227 ms、Drive duplicateは3–11件だった。
-2回目は600秒期限まで31,773 msしか残らず、30秒snapshotでDriveに117 bytes / 2 outstandingがあった。詳細は
-[traffic中の物理branch復旧](worklog/2026-10-23-physical-branch-during-traffic.md)を参照してください。
-
-2026-10-23時点のAtomVM `release-0.7` snapshot `18b35870`へlocal tick patch `a1069573`を適用してruntimeを再buildし、
-3台すべてを更新した。2本のdistribution connection、両remoteのprobe、sensor-driven mission、mission後90秒のconnection維持を
-確認した。build条件、image hash、native USB monitorの注意は
-[最新v0.7 snapshot実機検証](worklog/2026-10-23-latest-v07-runtime.md)に記録している。
-
-同runtimeで32+32 flow-controlled trafficも再実施し、両role 32 / 32、application error 0、transaction failure 0で
-101,248 ms以内に完了した。30秒後は両queueとoutstandingが0となり、ACK gap high-waterはDrive 15,681 ms、Sensors
-15,298 msだった。通常firmwareへの復元を含む詳細は
-[最新v0.7 concurrent traffic worklog](worklog/2026-10-24-latest-v07-concurrent-traffic.md)に記録している。
-
-25,000 msのhealth timeoutは抜線前の通常mission中にfalse positiveとなったため、負荷を考慮せず短く設定できない。breadboard試験も
-外付けterminationなしの短いbench配線における少数runであり、復旧時間の上限や一般的な電気条件を示さない。詳細は
-[物理RS485切断worklog](worklog/2026-10-21-physical-rs485-disconnect.md)を参照してください。
-
-## その次に取り組む候補
-
-1. 2回の差を踏まえ、分布を論じる必要があれば同じprofileを3回以上追加し、operator保持時間とhandshake時間を別々に記録する。
-2. 23,995 msまで伸びた長時間ACK gapを同じprofileで反復し、分布とmemory watermarkの再現性を確認する。
-3. Snapshot確認と新mission開始を1つの対話的なapplication protocolにする必要があるか検討する。自動resumeは前提としない。
-4. 次のAtomVM v0.7 snapshot更新時に、個別disconnect、multi-connection tick、setup retry、remote process monitorの既知問題と
-   local compatibility patchを再評価する。upstreamへのIssue / PR作成はこの計画に含めない。
-5. 3 remote / 4 device への拡張は、3 device fairness と memory の限界を測定した後に検討する。
-
-AVModbus core と wire protocol は変更しません。既存 carrier には観測専用 metrics API と Unit ID 付き trace だけを追加しています。
+- 現在の実行方法: [サンプルREADME](../README.md)
+- Stageと完了条件: [ロードマップ](roadmap.md)
+- 保証しない範囲: [既知の制約](limitations.md)
+- 設計判断: [ADR](adr/README.md)
+- 実測値と時系列: [作業記録](worklog/README.md)

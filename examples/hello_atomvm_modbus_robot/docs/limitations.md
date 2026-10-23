@@ -7,7 +7,10 @@
 ## 構成と通信経路
 
 - 固定された `controller`、`drive`、`sensors` の3 role、Unit ID 1 / 2 の構成だけを対象とします。dynamic discovery、routing、
-  4 node 以上への拡張は実装していません。
+  4-node以上への拡張は実装していません。Controllerのtransport setupはpeer descriptor list駆動へ変更しましたが、これは
+  adapter lifecycleの準備だけであり、第4 roleのapplication protocol、firmware、readiness、metricsは未実装です。
+  3 remote peers以上はまずhost modelで検証し、deviceを1台ずつ追加することは通常のroadmap milestoneにしません。
+  詳細は[ADR 0020](adr/0020-model-scale-on-host-instead-of-adding-devices.md)を参照してください。
 - Modbus Server である Drive と Sensors は bus を自発的に駆動できません。両者の application message は Controller が relay し、
   すべての physical transaction は1個の Modbus Client が直列化します。
 - Controller は Drive / Sensors ごとに独立した distribution stream を持ちますが、physical UART と AVModbus Client を共有します。

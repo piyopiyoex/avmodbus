@@ -1,8 +1,8 @@
 # ロードマップ
 
-この example は、host-only simulation から 2-node distributed application、3-device Modbus multidrop、
-3-node distribution の調査へ段階的に進めます。各 Stage は前段の完了を前提としますが、Stage 3 の成功は
-仮定しません。技術的 blocker を特定して記録することも成果とします。
+このexampleはhost-only simulationから2-node application、3-device Modbus multidrop、3-node distributionへ段階的に進みました。
+現在は3台をphysical baselineとして固定し、N remote peersのscaleをhost modelで検証します。技術的blockerを特定して
+記録することも成果とします。
 
 現在の実行方法は [サンプル README](../README.md)、設計判断は [ADR](adr/README.md)、実測結果は
 [作業記録](worklog/README.md) を正とします。
@@ -14,8 +14,9 @@
 | 0 | 完了 | host-only virtual rover |
 | 1 | 完了 | 2-node mission と in-flight Drive reboot の境界を実機確認 |
 | 2 | 完了 | 3-device standard Modbus multidrop、120-request soak、独立Server reboot |
-| 3 | 基本実証 | 2 remote node の同時接続、Controller relay、複数 tick を実機確認 |
+| 3 | 実証完了 | 2 remote node の同時接続、Controller relay、複数 tick を実機確認 |
 | 4 | 完了 | adaptive mission、readiness lease、reply-loss retry を実機確認 |
+| 5 | 進行中 | N remote peer host model、fairness、failure isolation、resource budget |
 
 ## Stage 0: local virtual rover simulation
 
@@ -107,66 +108,31 @@ Stage 4 はapplication reply lossまでを2026-10-20に3台の実機で確認し
 Drive rebootをまたぐ未確定commandの検出・再実行停止を確認した。durable state、state復元、自動mission resumeは対象外とし、
 [既知の制約](limitations.md) に記録している。
 
-## Follow-up: concurrent traffic と信頼性（実機検証中）
+## Follow-up: concurrent traffic と信頼性（完了）
 
-- [x] Drive / Sensors の独立 producer と Controller の非同期 collector を opt-in で追加する
-- [x] host 側で delivery / duplicate / order / timeout の集計を検証できるようにする
-- [x] 3 台の実機で concurrent producer baseline と moderate profile を測定する
-- [x] overload profile で Unit別 transaction、queue high-water、heap を測定する
-- [x] 64 messages / role の longer run で session reset と application recovery の境界を再現する
-- [x] 3台同時consoleでremote outgoing queueの`:queue_full`をsession resetの直接原因として特定する
-- [x] application ACK / in-flight window 1で64+64 longer runを完全配送する
-- [x] Server response blackout中のACK timeoutとsame-sequence retryを実機で発生させる
-- [x] 非対称half-open connectionによりproducer resumeが失敗する境界を記録する
-- [x] remote側のstale distribution connectionを明示的にteardownし、再接続後に同じproducerを再開する
-- [x] application trafficに依存しないremote healthとdistribution lifecycleを設計する
-- [x] connection ID付きreadiness ACK、boot単位のrestart上限、shutdown完了待ちを実機検証する
-- [x] remote rebootに対するrecovery、10分間のmemory / queue推移を測定する
-- [x] remoteの物理RS485切断・再接続を検証する
-- [x] shared Clientのpollをround-robin化し、単一peer切断中も正常peerを維持する
-- [x] mission実行をhealth loopから分離し、mission中もreadiness ACK / lease評価を継続する
-- [x] reboot時の未確定commandを新bootで再実行せず、indeterminate outcomeとして停止する
-- [x] indeterminate mission後もhealth loopを継続し、新Driveのread-only snapshotを記録する
-- [x] snapshot確認後のController resetで、現在のDrive stateから新しいguarded missionを開始する
-- [x] response faultをboard bootごとのone-shotにし、recovery後のqueue / memory settlingを測定する
-- [x] traffic startにrole別ACKとbounded retryを付け、blackout中の未配送startを再接続後に回復する
-- [x] readiness ACK gapをmissionと32+32 concurrent trafficで測り、timeout marginのbaselineを記録する
-- [x] 128+128 concurrent traffic中のSensors branch切断を2 clean-boot runで反復し、Drive継続と完全配送を確認する
-- [x] 256+256 concurrent trafficと継続heartbeatでACK gap、queue、heapを再測定する
-- [x] AtomVM v0.7 snapshot固有のruntime問題とlocal compatibility patchをAVModbus docsへ記録する
-- [x] 最新v0.7 snapshotとlocal patchで32+32 concurrent trafficと通常firmware復元を実機確認する
-- [ ] 4 台目の追加は上記の測定結果に基づいて判断する
+- [x] independent producer、application ACK window 1、bounded retryを実装する
+- [x] overload、queue-full、half-open connection、reply lossの境界を記録する
+- [x] readiness lease、remote-side distribution restart、mission worker分離を実装する
+- [x] round-robin pollingで単一peer障害中も正常peerを維持する
+- [x] rebootをまたぐ未確定commandを検出し、新bootでの自動再実行を止める
+- [x] 256+256 traffic、ACK gap、queue、Controller heapを測定する
+- [x] physical branch切断・再接続を反復する
+- [x] 最新AtomVM v0.7 snapshotとlocal compatibility patchで再検証する
 
-実行条件、停止条件、測定限界は[次の実験計画](next-experiments.md)に記録します。
-2026-10-21のpaired-wire試験ではSensorsまたは右端Driveの切断がbus全体へ影響しました。その後、breadboard上のcontinuous trunkと
-node別branchへ変更しました。反復試験でshared Clientのdeadline starvationを発見したためpollをround-robin化し、Sensors branch切断中も
-Unit 1 transaction failure 0でDrive connectionを維持することを2 runで確認しました。未使用restart budgetのrunではbranch復帰後に
-Controller / SensorsをresetせずSensorsが再接続し、両peerのprobeを完了しました。これで独立branchによる単一peer faultとschedulerの
-follow-upは完了です。timeout margin、長時間反復、termination / biasを含む電気条件の評価は残します。
-mission実行はlocal workerへ分離し、2秒heartbeat / 10秒ACK timeoutの診断構成で約86秒間health restart 0を確認しました。
-さらにmission commandをDrive boot IDへ束縛しました。実行済みreply-loss command直後のDrive rebootでは、再接続後のretryを
-新bootが拒否し、missionはindeterminate outcomeとして停止しました。state復元と自動resumeは提供しません。
-2026-10-23のfollow-upではmission停止後もController health loopを継続し、新boot IDとguarded `:status`のsnapshotを記録しました。
-snapshot後も両linkのtrafficを処理し、通常firmwareへ戻した3-step missionも完了しました。
-さらにoperatorがControllerだけをresetし、保持中のDrive stateから新しいrequest IDとboot guardを使う別missionが完了しました。
-これはstate reconciliationや自動resumeではありません。
-one-shot response faultではSensors distribution restart後に同じproducerがsequence 6から再開し、16+16 messagesを完全配送しました。
-30秒後は両queueが0となり、replacement adapterで2回目のfaultは発生しませんでした。
-さらにtraffic startをblackout中へ遅延したrunでは、start ACK timeout後も同じrun IDをbounded retryし、Sensors再接続後にproducerを
-開始できました。Drive / Sensorsとも16 / 16、application error 0で完了し、30秒後は両queueが0でした。
-10秒announceのreadiness ACK gapをboot単位で測るtraceも追加しました。32+32 flow-controlled trafficと30秒settlingを含むrunでは
-Drive / Sensorsともhigh-waterは11,532 ms、health timeout 0回でした。各connectionの初回ACKはhandshake時間を含むため集計から除外し、
-この単一profileの値を一般的なtimeout保証とはしません。
-さらにbreadboard上のSensors branchを128+128 flow-controlled traffic中に切断するclean-boot runを2回実施した。Drive connectionを
-維持したままSensorsがACK欠落36,943–38,388 msでdistributionを再起動し、branch復帰後に同じproducerを再開した。両runとも両role
-128 / 128を451,811–568,227 msで完了した。restart上限はboot中に補充されず、run timeoutも障害中に停止しないため、反復時は
-試験ごとのclean bootと十分な全体期限が必要である。
-無障害の256+256 follow-upは783,317 msでapplication error 0のまま完了し、30秒後に両queueが0となった。10秒heartbeatの
-ACK gap high-waterはDrive 23,586 ms、Sensors 23,995 msまで伸びたため、短い32+32 runの11,532 msだけから25秒timeoutを
-安全値とは判断できない。
-最新v0.7 snapshotとlocal patchへ3台を更新したfollow-upでも32+32 messagesを101,248 msで完全配送した。transaction failure 0、
-settling後の両queue 0、ACK gap high-waterは15,681 ms / 15,298 msだった。通常firmwareへ戻す際は固定7秒setup timerを超えない
-coordinated bootが必要だった。
+個別の条件と数値は[作業記録](worklog/README.md)、残る保証外の範囲は[既知の制約](limitations.md)を正とする。
+
+## Stage 5: scalable multinode model（次）
+
+- [x] Controller transport setupをpeer descriptor list駆動にする
+- [x] 3台をphysical integration baselineとして固定し、deviceを1台ずつ増やす試験を必須にしないと決める
+- [ ] 任意件数のpeer descriptorをhostで生成・検証する
+- [ ] N remote peerのround-robin fairnessとstarvationをdeterministic testで検証する
+- [ ] peer failure、overload、queue growth、recoveryをhost modelで再現する
+- [ ] 3台実測を基準にconnection数ごとのresource budgetを推定する
+
+追加deviceは通常の完了条件にしない。host modelでは検証できない具体的なelectricalまたはruntime仮説が生じた場合だけtargeted
+hardware testを行う。この判断は[ADR 0020](adr/0020-model-scale-on-host-instead-of-adding-devices.md)、次のtest matrixは
+[次の実験計画](next-experiments.md)に記録する。
 
 ## 今回は対象としないこと
 

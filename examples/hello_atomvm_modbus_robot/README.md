@@ -354,6 +354,13 @@ Client queue内でdeadlineを失わずに新しいtransactionを開始できま�
 connectionを開始します。readiness messageは起動ごとのboot session IDを持つため、AtomVMがreboot前後で同じPIDを再利用してもremote
 restartを識別できます。
 
+scale検証の準備として、Controllerのadapter生成、scheduler登録、distribution port生成、cleanupはrole、Unit ID、
+node identityを持つpeer descriptor listから構成します。現在のlistはDrive / Sensorsの2件（2 remote peers）だけで、
+application roleは依然として固定です。この変更と3台実機regressionは
+[ADR 0019](docs/adr/0019-drive-controller-transport-from-peer-descriptors.md)と
+[peer-driven setup worklog](docs/worklog/2026-10-24-peer-driven-controller-setup.md)、今後のhost model中心の方針は
+[ADR 0020](docs/adr/0020-model-scale-on-host-instead-of-adding-devices.md)に記録しています。
+
 application relay は transport routing ではありません。Controller は `:modbus_robot_sensors` へ sample を要求し、値を検証してから
 `:modbus_robot_drive` へ転送します。Drive が同じ sample を含む ACK を返した時点で完了とします。physical bus 上では両区間とも
 Controller の Modbus Client が transaction を開始します。この境界の判断は
@@ -599,10 +606,10 @@ buffer、application state、failure detection、recovery guarantee の詳細は
 
 資料の一覧と更新方針は [docs/README.md](docs/README.md) にあります。
 
-## 次の実験: concurrent producer traffic と障害復旧
+## 任意診断: concurrent producer traffic
 
 既存の交互順 soak は Controller が Drive と Sensors に順番に request を送る試験です。
-新しい opt-in probe では、**Drive と Sensors がそれぞれ独立した process から定期的に message を送ります**。
+opt-in probeでは、**Drive と Sensors がそれぞれ独立した process から定期的に message を送ります**。
 Controller は別 process で受信状況を集計するため、通常の readiness lease loop は probe の終了を待ちません。
 通信自体は従来どおり 1 個の Modbus Client が physical bus を占有します。
 
@@ -653,49 +660,12 @@ max_interarrival_ms を示します。`fairness` は role 間の delivery ratio�
 **max_interarrival_ms は Controller が観測した受信間隔であり、one-way latency ではありません**。
 別 device の monotonic clock を比較しないためです。
 
-2026-10-20 に3台、115,200 baud で次を確認しました。
+代表的な実機baselineは次のとおりです。
 
-| Profile | Result | Elapsed | Active overlap | Completion skew |
-| --- | --- | ---: | ---: | ---: |
-| baseline: 5 messages / role、16 bytes | 両 role 5 / 5、error 0 | 10,588 ms | 4,448 ms | 4,145 ms |
-| moderate: 10 messages / role、32 bytes | 両 role 10 / 10、error 0 | 11,593 ms | 8,655 ms | 937 ms |
-| overload: 20 messages / role、64 bytes | 両 role 20 / 20、Drive transaction timeout 1 | 29,769 ms | 23,579 ms | 1,310 ms |
-| longer: 64 messages / role、64 bytes | Drive 23 / 64、Sensors 24 / 64、session reset後timeout | 300,001 ms | unavailable | unavailable |
-| longer + ACK: 64 messages / role、64 bytes | 両 role 64 / 64、error 0 | 163,039 ms | 156,298 ms | 3,114 ms |
-| extended + ACK: 256 messages / role、64 bytes | 両 role 256 / 256、error 0 | 627,792 ms | 623,957 ms | 1,029 ms |
-| extended ACK gap測定: 256 messages / role、64 bytes | 両 role 256 / 256、error 0 | 783,317 ms | 776,418 ms | 3,261 ms |
-| Sensors branch切断 + ACK、2 run: 128 messages / role、64 bytes | 両runで両 role 128 / 128、missing 0 | 451,811–568,227 ms | 423,877–523,934 ms | 24,216–40,575 ms |
-| latest v0.7 snapshot + ACK: 32 messages / role、64 bytes | 両 role 32 / 32、error 0 | 101,248 ms | 96,890 ms | 761 ms |
+- application ACKなしの64+64 runはremote queueを飽和させ、`:queue_full`後にtimeoutした。
+- ACK window 1の64+64および256+256 runは完全配送し、settling後にqueueが0へ戻った。
+- Sensors branch切断中もround-robin pollingでDriveを維持し、復帰後に両role 128 / 128を完了した。
+- 最新AtomVM v0.7 snapshot + local patchの32+32 runは101,248 ms、error 0で完了した。
 
-baseline、moderate、overload の application delivery は missing、duplicate、out-of-order、invalid がすべて0でした。longer run では
-両 carrier session が再生成され、distribution reconnect 後も元の producer は再開されませんでした。短時間に各1 run の結果であり、
-3台同時consoleで再試験したところ、Sensors側outgoing queueの`:queue_full`がsession resetの直接原因だと確認できました。
-Controllerのmetricsはremote側queueを表さないため、長時間安定性やmemory上限を保証しません。詳細は
-[concurrent traffic worklog](docs/worklog/2026-10-20-concurrent-traffic.md)と
-[overload / longer run worklog](docs/worklog/2026-10-20-overload-and-long-run.md)、
-[ACK flow-control worklog](docs/worklog/2026-10-20-ack-flow-control.md)を参照してください。さらに ACK 待ち中の Sensors response を
-意図的に破棄した試験では、same-sequence retry 自体は動作したものの、非対称な half-open distribution connection のため完了しませんでした。
-[response blackout worklog](docs/worklog/2026-10-20-response-blackout.md)に失敗境界を記録しています。follow-upのremote-side
-distribution restartでは、同じproducerがsequence 2から再開して両role 16 / 16を完了しました。
-[response blackout recovery worklog](docs/worklog/2026-10-20-response-blackout-recovery.md)も参照してください。
-
-extended profileは10分27.792秒で256+256 messagesを完全配送しました。Unit別transaction failureは各2回、queue high-waterは
-Drive 279 bytes / 4 chunks、Sensors 162 bytes / 2 chunksで、30秒後は両queueとも0でした。Controller free heapは開始時約89 KB、
-settled時約85 KB、minimum watermark 70,736 bytesでした。詳細は
-[extended long-run worklog](docs/worklog/2026-10-20-extended-flow-controlled-run.md)を参照してください。
-
-別の256+256 runは783,317 msで完全配送し、queue high-waterは両role 200 bytes / 3 chunks、minimum free heapは68,848 bytes、
-30秒後は両queueとも0でした。10秒readiness heartbeatのACK gap high-waterはDrive 23,586 ms、Sensors 23,995 msでした。詳細は
-[長時間ACK gap測定](docs/worklog/2026-10-23-extended-ack-gap-run.md)を参照してください。
-
-`release-0.7` `18b35870`とlocal patch `a1069573`へ3台を更新した後の32+32 follow-upも完全配送した。
-transaction failure 0、settling後の両queue 0、ACK gap high-waterはDrive 15,681 ms、Sensors 15,298 msだった。詳細は
-[最新v0.7 concurrent traffic worklog](docs/worklog/2026-10-24-latest-v07-concurrent-traffic.md)を参照してください。
-
-2026-10-23には同じbreadboard branch構成で、flow-controlled traffic中にSensorsのA/B branchだけを物理切断するclean-boot runを
-2回実施した。Drive connectionを維持し、Sensorsはreadiness ACK欠落36,943–38,388 msでdistributionを再起動した。branch復帰後、
-Sensors producerは同じsequenceから再開し、両runとも両role 128 / 128を完了した。Driveのsame-sequence duplicateは3件と11件、
-missing / out-of-order / invalidは両roleとも0だった。2回目は568,227 msを要し、600秒期限の余裕は31,773 msだった。詳細は
-[traffic中の物理branch復旧](docs/worklog/2026-10-23-physical-branch-during-traffic.md)を参照してください。
-
-[実験計画と制約](docs/next-experiments.md)を参照してください。
+数値、firmware条件、失敗経路は[作業記録](docs/worklog/README.md)を正とします。timeout、recovery、memoryの保証外の範囲は
+[既知の制約](docs/limitations.md)、次に行うscale testは[実験計画](docs/next-experiments.md)を参照してください。

@@ -136,10 +136,24 @@ defmodule RobotSim.MultinodeDistributed do
   def identity(:drive), do: :"drive@modbus.local"
   def identity(:sensors), do: :"sensors@modbus.local"
 
+  @doc "Return the Controller peer descriptors in physical polling order."
+  @spec controller_peers(1..247, 1..247) :: [
+          %{role: :drive | :sensors, unit_id: 1..247, node: node()}
+        ]
+  def controller_peers(drive_unit_id \\ 1, sensors_unit_id \\ 2) do
+    [
+      %{role: :drive, unit_id: drive_unit_id, node: identity(:drive)},
+      %{role: :sensors, unit_id: sensors_unit_id, node: identity(:sensors)}
+    ]
+  end
+
   @doc "Return the Controller's logical stream targets in polling order."
   @spec targets(1..247, 1..247) :: [{:drive | :sensors, 1..247}]
-  def targets(drive_unit_id \\ 1, sensors_unit_id \\ 2),
-    do: [{:drive, drive_unit_id}, {:sensors, sensors_unit_id}]
+  def targets(drive_unit_id \\ 1, sensors_unit_id \\ 2) do
+    Enum.map(controller_peers(drive_unit_id, sensors_unit_id), fn peer ->
+      {peer.role, peer.unit_id}
+    end)
+  end
 
   @doc "Return the alternating application-probe order for one soak cycle."
   @spec soak_targets(pos_integer()) :: [:drive | :sensors]
@@ -282,52 +296,54 @@ defmodule RobotSim.MultinodeDistributed do
   end
 
   defp start_controller_adapters(client, scheduler) do
-    case open_client_adapter(client, @drive_unit_id, scheduler) do
-      {:ok, drive_uart} ->
-        case open_client_adapter(client, @sensors_unit_id, scheduler) do
-          {:ok, sensors_uart} ->
-            :ok = PollScheduler.register(scheduler, drive_uart)
-            :ok = PollScheduler.register(scheduler, sensors_uart)
-            :ok = PollScheduler.start(scheduler)
-            start_controller_distribution(client, scheduler, drive_uart, sensors_uart)
+    peers = controller_peers(@drive_unit_id, @sensors_unit_id)
 
-          {:error, reason} ->
-            ModbusUART.close(drive_uart)
-            Client.stop(client)
-            GenServer.stop(scheduler)
-            halt("Sensors adapter start failed", reason)
-        end
+    case open_client_adapters(client, scheduler, peers, []) do
+      {:ok, adapters} ->
+        Enum.each(adapters, fn adapter ->
+          :ok = PollScheduler.register(scheduler, adapter.uart)
+        end)
 
-      {:error, reason} ->
+        :ok = PollScheduler.start(scheduler)
+        start_controller_distribution(client, scheduler, adapters)
+
+      {:error, role, reason} ->
         Client.stop(client)
         GenServer.stop(scheduler)
-        halt("Drive adapter start failed", reason)
+        halt("#{role} adapter start failed", reason)
     end
   end
 
-  defp start_controller_distribution(client, scheduler, drive_uart, sensors_uart) do
-    IO.puts("modbus_robot_multinode: waiting for Drive and Sensors FC-100 peers")
-    wait_for_peers([{:drive, drive_uart}, {:sensors, sensors_uart}])
+  defp start_controller_distribution(client, scheduler, adapters) do
+    IO.puts("modbus_robot_multinode: waiting for #{length(adapters)} FC-100 peers")
 
-    ports = [
-      uart_options(:client, @drive_unit_id, existing: drive_uart),
-      uart_options(:client, @sensors_unit_id, existing: sensors_uart)
-    ]
+    wait_for_peers(Enum.map(adapters, fn adapter -> {adapter.role, adapter.uart} end))
+
+    ports =
+      Enum.map(adapters, fn adapter ->
+        uart_options(:client, adapter.unit_id, existing: adapter.uart)
+      end)
 
     case :net_kernel.start(identity(:controller), dist_options(ports)) do
       {:ok, _pid} ->
         :ok = :net_kernel.set_cookie(@cookie)
         true = :erlang.register(@controller_name, self())
-        IO.puts("modbus_robot_multinode: Controller distribution ready with 2 streams")
+
+        IO.puts(
+          "modbus_robot_multinode: Controller distribution ready with #{length(adapters)} streams"
+        )
 
         await_remotes(
-          %{drive: nil, sensors: nil},
-          %{drive: drive_uart, sensors: sensors_uart}
+          Enum.reduce(adapters, %{}, fn adapter, remotes ->
+            Map.put(remotes, adapter.role, nil)
+          end),
+          Enum.reduce(adapters, %{}, fn adapter, uart_by_role ->
+            Map.put(uart_by_role, adapter.role, adapter.uart)
+          end)
         )
 
       other ->
-        ModbusUART.close(drive_uart)
-        ModbusUART.close(sensors_uart)
+        close_client_adapters(adapters)
         Client.stop(client)
         GenServer.stop(scheduler)
         halt("Controller net_kernel start failed", other)
@@ -1168,6 +1184,25 @@ defmodule RobotSim.MultinodeDistributed do
       pid when is_pid(pid) -> {:ok, pid}
       {:error, _reason} = error -> error
     end
+  end
+
+  defp open_client_adapters(_client, _scheduler, [], adapters),
+    do: {:ok, Enum.reverse(adapters)}
+
+  defp open_client_adapters(client, scheduler, [peer | rest], adapters) do
+    case open_client_adapter(client, peer.unit_id, scheduler) do
+      {:ok, uart} ->
+        adapter = Map.put(peer, :uart, uart)
+        open_client_adapters(client, scheduler, rest, [adapter | adapters])
+
+      {:error, reason} ->
+        close_client_adapters(adapters)
+        {:error, peer.role, reason}
+    end
+  end
+
+  defp close_client_adapters(adapters) do
+    Enum.each(adapters, fn adapter -> ModbusUART.close(adapter.uart) end)
   end
 
   defp wait_for_peers([]), do: :ok
