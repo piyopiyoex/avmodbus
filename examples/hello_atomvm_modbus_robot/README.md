@@ -14,6 +14,8 @@ Controller から Drive の registered process へ command を送り、最終 st
 `Sensors -> Controller -> Drive` の virtual sensor sample 転送と obstacle 回避判断も確認しています。AVModbus core と既存 example の
 protocol design は変更していません。follow-up では、共有 client を現在の AVModbus managed handle で渡すための互換性修正を
 既存 carrier に加え、複数adapterのpollをround-robinで開始する任意schedulerを追加しています。
+**Stage 5: scalable multinode model**では3台を実機baselineとし、1、2、3、8、32 remote peersのfairness、failure、
+bounded queue、session recovery、resource budgetをhost上で検証しました。
 
 ## 現在できること
 
@@ -44,6 +46,7 @@ protocol design は変更していません。follow-up では、共有 client �
 - traffic startをrole別にACK / bounded retryし、同じrun IDのproducer重複起動をremoteで抑止する
 - opt-in で connection ID 付き readiness ACK を監視し、application traffic がない half-open connection を bounded restart する
 - 到達不能なUnitがあってもround-robin pollにより正常なpeerのrequest deadlineとdistribution connectionを維持する
+- 1、2、3、8、32 remote peersの順序、fairness、failure、overload、session replacementをhost modelで再現する
 
 各 Stage の進捗と完了条件は [ロードマップ](docs/roadmap.md) を参照してください。
 
@@ -591,6 +594,29 @@ Drive rebootをまたぐguarded retryはindeterminate outcomeとして停止し�
 same-ID retry に成功した結果は
 [reply loss fault injection worklog](docs/worklog/2026-10-20-stage-4-reply-loss-fault-injection.md) に記録しています。
 
+## Host-only multinode scale model
+
+3台をphysical integration baselineとし、追加deviceの代わりに1、2、3、8、32 remote peersをdeterministic host modelで
+検証できます。
+
+```sh
+cd examples/hello_atomvm_modbus_robot
+mise exec -- mix test test/multinode_model_test.exs
+mise exec -- mix run scripts/multinode_model.exs
+```
+
+modelはdescriptor validation、round-robin順序、単一active transaction、slow / failed peer、bounded overload、session
+replacementをwall clockやrandomnessなしで再現します。poll回数の公平性は確認できましたが、failed peerの
+timeoutは全体cycleを遅延させます。また32 peersのstream別queue設定上限は262,144 bytesとなり、3台実測の
+Controller minimum free heap 68,848 bytesを超えます。これは事前確保量や実heap推定ではありませんが、defaultを
+N streamsへそのまま複製することをsupportできる根拠にはなりません。
+
+modelは`host/multinode_model.ex`に置き、testとscriptが明示的にloadします。firmware用の`lib/`には含めず、
+PackBEAM artifactを変更しません。
+
+数値とmodelの境界は[host model worklog](docs/worklog/2026-10-24-scalable-multinode-host-model.md)、追加deviceを必須としない判断は
+[ADR 0020](docs/adr/0020-model-scale-on-host-instead-of-adding-devices.md)を参照してください。
+
 ## 境界
 
 buffer、application state、failure detection、recovery guarantee の詳細は
@@ -668,4 +694,4 @@ max_interarrival_ms を示します。`fairness` は role 間の delivery ratio�
 - 最新AtomVM v0.7 snapshot + local patchの32+32 runは101,248 ms、error 0で完了した。
 
 数値、firmware条件、失敗経路は[作業記録](docs/worklog/README.md)を正とします。timeout、recovery、memoryの保証外の範囲は
-[既知の制約](docs/limitations.md)、次に行うscale testは[実験計画](docs/next-experiments.md)を参照してください。
+[既知の制約](docs/limitations.md)、scale modelの条件と結果は[multinode host model](docs/next-experiments.md)を参照してください。

@@ -1,7 +1,7 @@
 # ロードマップ
 
 このexampleはhost-only simulationから2-node application、3-device Modbus multidrop、3-node distributionへ段階的に進みました。
-現在は3台をphysical baselineとして固定し、N remote peersのscaleをhost modelで検証します。技術的blockerを特定して
+現在は3台をphysical baselineとして固定し、N remote peersのscaleをhost modelで検証しました。技術的blockerを特定して
 記録することも成果とします。
 
 現在の実行方法は [サンプル README](../README.md)、設計判断は [ADR](adr/README.md)、実測結果は
@@ -16,7 +16,7 @@
 | 2 | 完了 | 3-device standard Modbus multidrop、120-request soak、独立Server reboot |
 | 3 | 実証完了 | 2 remote node の同時接続、Controller relay、複数 tick を実機確認 |
 | 4 | 完了 | adaptive mission、readiness lease、reply-loss retry を実機確認 |
-| 5 | 進行中 | N remote peer host model、fairness、failure isolation、resource budget |
+| 5 | 完了 | N remote peer host model、fairness、failure isolation、resource budget |
 
 ## Stage 0: local virtual rover simulation
 
@@ -121,18 +121,23 @@ Drive rebootをまたぐ未確定commandの検出・再実行停止を確認し�
 
 個別の条件と数値は[作業記録](worklog/README.md)、残る保証外の範囲は[既知の制約](limitations.md)を正とする。
 
-## Stage 5: scalable multinode model（次）
+## Stage 5: scalable multinode model
 
 - [x] Controller transport setupをpeer descriptor list駆動にする
 - [x] 3台をphysical integration baselineとして固定し、deviceを1台ずつ増やす試験を必須にしないと決める
-- [ ] 任意件数のpeer descriptorをhostで生成・検証する
-- [ ] N remote peerのround-robin fairnessとstarvationをdeterministic testで検証する
-- [ ] peer failure、overload、queue growth、recoveryをhost modelで再現する
-- [ ] 3台実測を基準にconnection数ごとのresource budgetを推定する
+- [x] 任意件数のpeer descriptorをhostで生成・検証する
+- [x] N remote peerのround-robin fairnessとstarvationをdeterministic testで検証する
+- [x] peer failure、overload、queue growth、recoveryをhost modelで再現する
+- [x] 3台実測を基準にconnection数ごとのresource budgetを推定する
 
 追加deviceは通常の完了条件にしない。host modelでは検証できない具体的なelectricalまたはruntime仮説が生じた場合だけtargeted
-hardware testを行う。この判断は[ADR 0020](adr/0020-model-scale-on-host-instead-of-adding-devices.md)、次のtest matrixは
-[次の実験計画](next-experiments.md)に記録する。
+hardware testを行う。この判断は[ADR 0020](adr/0020-model-scale-on-host-instead-of-adding-devices.md)、test matrixと結果は
+[実験計画](next-experiments.md)と[host model worklog](worklog/2026-10-24-scalable-multinode-host-model.md)に記録する。
+
+1、2、3、8、32 remote peersでpoll回数の公平性と単一transactionを確認した。failed peerは正常peerをstarveさせないが、
+timeoutはcycle latencyへ加算される。bounded queueはoverloadをrejectし、session replacementはstale queueを破棄する。
+32 peersのconfigured payload limit 262,144 bytesは3台実測のminimum free heap 68,848 bytesを超えるため、current defaultを
+そのままN streamsへ複製できるとは判断しない。
 
 ## 今回は対象としないこと
 

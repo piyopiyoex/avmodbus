@@ -1,8 +1,9 @@
-# 次の実験: scalable multinode model
+# Scalable multinode host model
 
 3台（Controller 1台、2 remote peers）のphysical integration baselineを維持し、それ以上のremote peer数はhost上の
 deterministic modelで検証します。
-deviceを1台ずつ追加することはroadmapの完了条件にしません。判断の背景は
+deviceを1台ずつ追加することはroadmapの完了条件にしません。2026-10-24に計画したtest matrixを完了しました。
+判断の背景は
 [ADR 0020](adr/0020-model-scale-on-host-instead-of-adding-devices.md)を参照してください。
 
 過去のconcurrent traffic、障害復旧、長時間測定の数値は[作業記録](worklog/README.md)へ集約しています。
@@ -21,37 +22,40 @@ deviceを1台ずつ追加することはroadmapの完了条件にしません。
 
 このbaselineは4台以上のphysical distributionを保証しません。
 
-## 次のtest matrix
+## 完了したtest matrix
 
-最初はremote peer数`1, 2, 3, 8, 32`を対象にします。random testを追加する場合も、失敗を再現できるseedを
-必ず記録します。
+remote peer数`1, 2, 3, 8, 32`を対象にしました。randomnessは使用していません。
 
-| 観点 | 入力 | 確認内容 |
+| 観点 | 入力 | 結果 |
 | --- | --- | --- |
-| descriptor | role、Unit ID、node identity | 欠落、範囲外、重複を拒否し、入力順を保持する |
-| scheduling | N peer、複数round | 各peerが1 roundに1回だけtokenを受け、順序と公平性が崩れない |
-| slow peer | 1 peerだけ完了を遅延 | 同時transactionを発生させず、遅延の影響を測定する |
-| failed peer | timeout / disconnect | 正常peerのdeadlineと進行を維持できるpolicyを比較する |
-| overload | producer rate > drain rate | queue上限、backpressure、drop / retry境界を確認する |
-| recovery | session change / reboot | 古いstateを破棄し、application retryの必要範囲を確認する |
-| resources | remote peer数とqueue設定 | adapter、queue、mailbox、推定heapの増加を記録する |
+| descriptor | role、Unit ID、node identity | 欠落、範囲外、重複を拒否し、入力順を保持した |
+| scheduling | 1、2、3、8、32 peers、4 rounds | 各peerが4 pollsを受け、max active transactionは1だった |
+| slow peer | 3 peersの1 peerを50 ms | poll回数は各3、elapsedは156 msとなり遅延はcycleへ加算された |
+| failed peer | 8 peersの1 peerを4回timeout | 正常7 peersは各4 successes、全体は8,028 msだった |
+| overload | arrival 2、drain 1、queue limit 3 | max queue 3、remaining 2、rejected 2でboundedだった |
+| recovery | round 3でsession change | stale 2件を破棄し、new sessionで2件をdeliveryした |
+| resources | 1、2、3、8、32 peers | configured limitとobserved-scale projectionを分離し、AtomVM heap推定はunknownとした |
 
 wire上のModbus transactionは、remote peer数にかかわらず1個のClientが直列化する前提です。host modelでparallel transactionを
 許可してはいけません。
 
-## 成功条件
+## 完了条件
 
-- 同じ条件とseedで結果を再現できる。
+- randomnessを使わず、同じ条件で結果を再現できる。
 - remote peer数を増やしても各peerのdelivery / scheduling結果をrole別に説明できる。
 - failureを注入したpeerと正常peerの影響を分離して記録できる。
 - queue、timeout、retry、resource budgetに明示的な上限がある。
 - 3台実測とhost modelの値を混同せず、simulation、推定、実測を区別する。
 
-## 停止条件
+上記はhost modelのfocused test 11件、実`PollScheduler`のfocused test 4件、再現scriptで確認した。詳細は
+[host model worklog](worklog/2026-10-24-scalable-multinode-host-model.md)を参照する。
 
-- OOM、unbounded queue、再現不能なraceを観測した場合はremote peer数を増やさず原因を固定する。
-- modelのためだけにAVModbus coreへdistribution固有APIを追加しない。
-- AtomVM runtimeの挙動を仮定で埋めない。host modelで答えられない点は制約として残す。
+## 得られた制約
+
+- poll fairnessはlatency fairnessを意味せず、slow / failed peerのservice timeは全peerのcycleへ影響する。
+- bounded queueはrejection後のdeliveryを保証せず、session changeはstale queueを破棄する。
+- 32 peersのconfigured payload limit 262,144 bytesは3台実測のminimum free heap 68,848 bytesを超える。
+- host modelはAtomVM runtime、physical bus、3本目以上のdistribution handshakeを保証しない。
 
 ## Hardwareの扱い
 

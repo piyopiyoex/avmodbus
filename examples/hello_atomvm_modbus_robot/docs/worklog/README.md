@@ -37,3 +37,4 @@ host test、実機試験、障害調査など、再現可能な時系列の記�
 - [2026-10-23: 最新AtomVM v0.7 snapshotの3台実機検証](2026-10-23-latest-v07-runtime.md)
 - [2026-10-24: 最新AtomVM v0.7 snapshotでの32+32 concurrent traffic](2026-10-24-latest-v07-concurrent-traffic.md)
 - [2026-10-24: Peer-driven Controller transport setup](2026-10-24-peer-driven-controller-setup.md)
+- [2026-10-24: Scalable multinode host model](2026-10-24-scalable-multinode-host-model.md)

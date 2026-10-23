@@ -11,7 +11,7 @@
 ## 設計資料
 
 - [ロードマップ](roadmap.md) — Stage ごとの完了条件と未着手の調査項目
-- [次の実験計画](next-experiments.md) — N remote peer host model、fairness、failure、resource budget の検証案
+- [multinode host model](next-experiments.md) — N remote peer、fairness、failure、resource budget の条件と結果
 - [既知の制約](limitations.md) — application、buffer、recovery、用途の境界
 - [設計判断記録](adr/README.md) — 長期的に維持する application 設計の判断
 

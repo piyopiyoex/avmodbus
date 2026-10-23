@@ -31,6 +31,9 @@
   in-flight の stream data は破棄されるため、回復は application の timeout / retry に依存します。
 - `MODBUS_MAX_QUEUED_BYTES` と `MODBUS_MAX_QUEUED_CHUNKS` は compile-time configuration です。値を増やすことは delivery guarantee
   ではなく、ESP32-C5 の memory 使用量も増やします。
+- host modelでstream別defaultを単純合算すると、32 remote peersのconfigured payload limitは262,144 bytes / 8,192 chunksに
+  なります。これは事前確保量ではありませんが、3台実測のminimum free heap 68,848 bytesを超えるため、
+  current defaultをN streamsへ複製できるとは主張しません。global budget、peer数依存の上限、実heap測定は未実装です。
 - concurrent traffic probeはroleごとに1 messageだけを未確認状態にするapplication ACKを使用します。ACK timeout時のretryは
   boundedですが、collector crashやretry上限超過後のdurable resumeは実装していません。collectorの全体timeoutは通信断や
   handshake中も進み、停止または延長されません。baseline送信、operatorの切断保持、再接続、残り送信を含む値に設定する必要があります。
@@ -125,6 +128,12 @@
 
 ## 性能と用途
 
+- `RobotSim.MultinodeModel`はhost上の論理modelです。poll順序、service time、bounded queue、session replacementは
+  deterministicに再現しますが、RS485のelectrical behavior、RTU framing、UART turnaround、AtomVM scheduler、VM heapを再現しません。
+  model内のqueueは抽象的なlogical item単位であり、FC-100 payload byte、fragment chunk、process mailboxと同じではありません。
+  1、2、3、8、32 remote peersのhost resultは、4台以上のphysical distributionが動作する根拠ではありません。
+- host modelではfailed peerがいても正常peerのpoll回数は維持しましたが、failed peerのservice timeoutは各roundの
+  elapsed timeへ加算されます。poll fairnessはlatency fairnessやdeadline guaranteeを意味しません。
 - shared half-duplex bus、polling、stop-and-wait、distribution framing により、direct UART distribution より latency が大きくなります。
   115,200 baud の短時間 application soak では両 remote の平均 RTT は約3.18秒でした。
 - reply loss fault injection は application reply の破棄だけを再現します。今回実施したRS485 A/B切断、partial RTU frame、node power loss、
