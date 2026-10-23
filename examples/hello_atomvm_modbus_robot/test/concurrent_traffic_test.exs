@@ -48,7 +48,9 @@ defmodule RobotSim.ConcurrentTrafficTest do
       drive_interval_ms: 5,
       sensors_interval_ms: 5,
       payload_bytes: 0,
-      timeout_ms: 100
+      timeout_ms: 100,
+      ack_timeout_ms: 20,
+      ack_retries: 1
     )
 
     assert_receive {:robot_traffic_complete, _run_id, summary}, 1_000
@@ -58,6 +60,56 @@ defmodule RobotSim.ConcurrentTrafficTest do
     assert summary.sensors.missing == 2
     assert summary.sensors.finished == false
     send(sensors, :stop)
+  end
+
+  test "a lost traffic-start request is retried before the run deadline" do
+    parent = self()
+
+    drive =
+      spawn(fn ->
+        receive do
+          {:robot_traffic_start, _starter, _collector, run_id, _count, _interval_ms, _bytes,
+           _ack_timeout_ms, _ack_retries} ->
+            send(parent, {:start_attempt, :drive, run_id, 1})
+        end
+
+        receive do
+          {:robot_traffic_start, starter, collector, run_id, count, interval_ms, bytes,
+           ack_timeout_ms, ack_retries} ->
+            send(parent, {:start_attempt, :drive, run_id, 2})
+            send(starter, {:robot_traffic_start_ack, :drive, run_id})
+
+            ConcurrentTraffic.start_producer(
+              collector,
+              :drive,
+              run_id,
+              count,
+              interval_ms,
+              bytes,
+              ack_timeout_ms,
+              ack_retries
+            )
+        end
+      end)
+
+    sensors = fake_remote(:sensors)
+
+    ConcurrentTraffic.start(self(), [{:drive, drive}, {:sensors, sensors}],
+      samples: 1,
+      drive_interval_ms: 1,
+      sensors_interval_ms: 1,
+      payload_bytes: 0,
+      timeout_ms: 500,
+      ack_timeout_ms: 20,
+      ack_retries: 1
+    )
+
+    assert_receive {:start_attempt, :drive, run_id, 1}, 100
+    assert_receive {:start_attempt, :drive, ^run_id, 2}, 100
+    assert_receive {:robot_traffic_complete, ^run_id, summary}, 1_000
+    assert summary.outcome == :complete
+    assert summary.drive.received == 1
+    assert summary.sensors.received == 1
   end
 
   test "a producer retries the same sample after an ACK timeout" do
@@ -102,8 +154,10 @@ defmodule RobotSim.ConcurrentTrafficTest do
   defp fake_remote(role) do
     spawn(fn ->
       receive do
-        {:robot_traffic_start, collector, run_id, count, interval_ms, bytes, ack_timeout_ms,
-         ack_retries} ->
+        {:robot_traffic_start, starter, collector, run_id, count, interval_ms, bytes,
+         ack_timeout_ms, ack_retries} ->
+          send(starter, {:robot_traffic_start_ack, role, run_id})
+
           ConcurrentTraffic.start_producer(
             collector,
             role,

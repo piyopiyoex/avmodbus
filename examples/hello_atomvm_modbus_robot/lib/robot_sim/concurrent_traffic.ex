@@ -4,8 +4,9 @@ defmodule RobotSim.ConcurrentTraffic do
 
   Drive and Sensors each run an independent producer. A separate Controller
   collector observes arrivals, leaving the Controller's readiness lease loop
-  free to process heartbeats. Each producer keeps one message in flight and
-  advances only after a Controller application ACK. No shared clocks or
+  free to process heartbeats. Role-specific start workers retry the run request
+  until the remote acknowledges it. Each producer keeps one message in flight
+  and advances only after a Controller application ACK. No shared clocks or
   persistent state are assumed.
   """
 
@@ -291,7 +292,7 @@ defmodule RobotSim.ConcurrentTraffic do
 
     stats = %{drive: TrafficStats.new(count), sensors: TrafficStats.new(count)}
 
-    start_producers(targets, run_id, count, payload_bytes, options)
+    start_producers(targets, self(), run_id, count, payload_bytes, options)
 
     IO.puts(
       "modbus_robot_traffic: start run=#{run_id} samples_per_role=#{count} " <>
@@ -317,20 +318,124 @@ defmodule RobotSim.ConcurrentTraffic do
   defp interval_key(:drive), do: :drive_interval_ms
   defp interval_key(:sensors), do: :sensors_interval_ms
 
-  defp start_producers([], _run_id, _count, _payload_bytes, _options), do: :ok
+  defp start_producers([], _collector, _run_id, _count, _payload_bytes, _options), do: :ok
 
-  defp start_producers([{role, target} | rest], run_id, count, payload_bytes, options) do
+  defp start_producers(
+         [{role, target} | rest],
+         collector,
+         run_id,
+         count,
+         payload_bytes,
+         options
+       ) do
     interval_ms = Keyword.fetch!(options, interval_key(role))
     ack_timeout_ms = Keyword.get(options, :ack_timeout_ms, @default_ack_timeout_ms)
     ack_retries = Keyword.get(options, :ack_retries, @default_ack_retries)
 
+    spawn(fn ->
+      send_start_with_ack(
+        target,
+        collector,
+        role,
+        run_id,
+        count,
+        interval_ms,
+        payload_bytes,
+        ack_timeout_ms,
+        ack_retries,
+        ack_retries
+      )
+    end)
+
+    start_producers(rest, collector, run_id, count, payload_bytes, options)
+  end
+
+  defp send_start_with_ack(
+         target,
+         collector,
+         role,
+         run_id,
+         count,
+         interval_ms,
+         payload_bytes,
+         ack_timeout_ms,
+         producer_ack_retries,
+         retries_left
+       ) do
     send(
       target,
-      {:robot_traffic_start, self(), run_id, count, interval_ms, payload_bytes, ack_timeout_ms,
-       ack_retries}
+      {:robot_traffic_start, self(), collector, run_id, count, interval_ms, payload_bytes,
+       ack_timeout_ms, producer_ack_retries}
     )
 
-    start_producers(rest, run_id, count, payload_bytes, options)
+    receive do
+      {:robot_traffic_start_ack, ^role, ^run_id} ->
+        :ok
+    after
+      ack_timeout_ms ->
+        retry_start_after_ack_timeout(
+          target,
+          collector,
+          role,
+          run_id,
+          count,
+          interval_ms,
+          payload_bytes,
+          ack_timeout_ms,
+          producer_ack_retries,
+          retries_left
+        )
+    end
+  end
+
+  defp retry_start_after_ack_timeout(
+         _target,
+         _collector,
+         role,
+         run_id,
+         _count,
+         _interval_ms,
+         _payload_bytes,
+         _ack_timeout_ms,
+         _producer_ack_retries,
+         0
+       ) do
+    IO.puts(
+      "modbus_robot_traffic: start ACK timeout role=#{role} run=#{run_id}; retries exhausted"
+    )
+
+    {:error, :start_ack_timeout}
+  end
+
+  defp retry_start_after_ack_timeout(
+         target,
+         collector,
+         role,
+         run_id,
+         count,
+         interval_ms,
+         payload_bytes,
+         ack_timeout_ms,
+         producer_ack_retries,
+         retries_left
+       ) do
+    IO.puts(
+      "modbus_robot_traffic: start ACK timeout role=#{role} run=#{run_id}; " <>
+        "retrying remaining=#{retries_left}"
+    )
+
+    send_start_with_ack(
+      target,
+      collector,
+      role,
+      run_id,
+      count,
+      interval_ms,
+      payload_bytes,
+      ack_timeout_ms,
+      producer_ack_retries,
+      retries_left - 1
+    )
   end
 
   defp receive_samples(

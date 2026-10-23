@@ -20,6 +20,7 @@ Stage 0–4 の完了結果は[ロードマップ](roadmap.md)と[作業記録](
 - sensor-driven missionをlocal workerへ分離し、Controller health loopをremote reply待ちから独立
 - Drive boot ID付きguarded commandにより、rebootをまたぐ未確定movementの自動再実行を停止
 - indeterminate mission後もhealth loopを継続し、新Drive bootのguarded read-only snapshotを取得
+- distribution再起動後のreplacement adapterではresponse drop countを0にするone-shot fault mode
 
 送信は各 remote process が個別に開始しますが、wire 上の Modbus RTU request は
 **Controller が単一 client として順番に送る**既存仕様から変更しません。
@@ -130,17 +131,42 @@ indeterminate command後のrecovery snapshotを確認したうえでController�
 現在のDrive boot IDを使う3-step missionは完了した。Driveをresetしていないためrover stateは保持され、これは旧missionのresumeや
 state reconciliationではなく、現在stateから始める別missionである。
 
+one-shot response faultの最終runでは、Sensorsだけのdistribution restart後に同じproducerがsequence 6から再開し、16+16 messagesを
+missing / duplicate / out-of-order / invalid 0で完了した。30秒後は両adapterのqueueが0となり、replacement起動から約101秒後まで
+2回目のfaultは発生しなかった。一方、fault中に一度だけ送ったtraffic start messageは未配送のまま復元されないことも別runで確認した。
+
+follow-upではtraffic startにrole別ACK、bounded retry、remote側run ID guardを追加した。blackout中に開始したrunはSensors再接続後に
+producerを開始し、両role 16 / 16、application error 0で完了した。Sensorsの開始はDriveより51,778 ms遅れ、30秒後は両queueが0に
+drainした。詳細は[traffic start recovery worklog](worklog/2026-10-23-traffic-start-recovery.md)を参照してください。
+
+remote healthのtimeout marginを測るため、各connectionの初回を除くreadiness ACK gapとboot内high-waterをopt-inで記録した。
+10秒announce、通常mission、32+32 flow-controlled traffic、30秒settlingを含むrunでは、Drive / Sensorsとも24 ACKを受信し、
+high-waterは11,532 msだった。trafficは両role 32 / 32、application error 0で完了した。このprofileだけなら25秒に対して
+13,468 msの観測上の余裕があるが、単一runでありtimeoutの下限や障害検出保証ではない。詳細は
+[readiness ACK gap baseline](worklog/2026-10-23-remote-health-gap-baseline.md)を参照してください。
+
+同じ10秒announceを256+256 flow-controlled trafficへ延長した無障害runは783,317 msで完全配送し、30秒後は両queueが0になった。
+一方、ACK gap high-waterはDrive 23,586 ms、Sensors 23,995 msまで伸びた。25秒timeoutへの観測上の余裕は1,414 ms / 1,005 msに
+すぎず、短時間baselineだけではtimeoutを決められない。詳細は
+[長時間ACK gap測定](worklog/2026-10-23-extended-ack-gap-run.md)を参照してください。
+
+同じbranch構成で128+128 flow-controlled traffic中にSensorsのA/Bを切断するclean-boot runを2回実施した。Drive connectionを維持し、
+SensorsがACK欠落36,943–38,388 msでdistributionを再起動した。branch復帰後に同じproducerをsequence 7または62から再開し、両runとも
+両role 128 / 128、missing / out-of-order / invalid 0で完了した。elapsedは451,811–568,227 ms、Drive duplicateは3–11件だった。
+2回目は600秒期限まで31,773 msしか残らず、30秒snapshotでDriveに117 bytes / 2 outstandingがあった。詳細は
+[traffic中の物理branch復旧](worklog/2026-10-23-physical-branch-during-traffic.md)を参照してください。
+
 25,000 msのhealth timeoutは抜線前の通常mission中にfalse positiveとなったため、負荷を考慮せず短く設定できない。breadboard試験も
 外付けterminationなしの短いbench配線における少数runであり、復旧時間の上限や一般的な電気条件を示さない。詳細は
 [物理RS485切断worklog](worklog/2026-10-21-physical-rs485-disconnect.md)を参照してください。
 
 ## その次に取り組む候補
 
-1. health detectorのtimeoutを負荷profile別に評価し、25秒で観測したfalse positiveの安全余裕を定量化する。
-2. round-robin schedulerでbreadboard branch切断・復帰をさらに反復し、handshake収束時間、memory / queueのsettlingを測定する。
-3. response faultの再armを避けるone-shot診断方法を用意し、recovery後のsettled queue / memoryを測定する。
-4. Snapshot確認と新mission開始を1つの対話的なapplication protocolにする必要があるか検討する。自動resumeは前提としない。
-5. AtomVM の個別disconnect API、multi-connection tick、setup retry、remote process monitorをupstream follow-upする。
-6. 3 remote / 4 device への拡張は、3 device fairness と memory の限界を測定した後に検討する。
+1. 2回の差を踏まえ、分布を論じる必要があれば同じprofileを3回以上追加し、operator保持時間とhandshake時間を別々に記録する。
+2. 23,995 msまで伸びた長時間ACK gapを同じprofileで反復し、分布とmemory watermarkの再現性を確認する。
+3. Snapshot確認と新mission開始を1つの対話的なapplication protocolにする必要があるか検討する。自動resumeは前提としない。
+4. AtomVM v0.7 snapshot更新時に、個別disconnect、multi-connection tick、setup retry、remote process monitorの既知問題と
+   local compatibility patchを再評価する。upstreamへのIssue / PR作成はこの計画に含めない。
+5. 3 remote / 4 device への拡張は、3 device fairness と memory の限界を測定した後に検討する。
 
 AVModbus core と wire protocol は変更しません。既存 carrier には観測専用 metrics API と Unit ID 付き trace だけを追加しています。

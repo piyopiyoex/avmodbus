@@ -26,6 +26,21 @@ defmodule RobotSim.MultinodeDistributedTest do
     assert MultinodeDistributed.soak_targets(3) == [:drive, :sensors]
   end
 
+  test "response fault is one-shot across distribution restarts by default" do
+    assert MultinodeDistributed.restart_fault_drop_responses(180, false) == 0
+    assert MultinodeDistributed.restart_fault_drop_responses(0, false) == 0
+  end
+
+  test "response fault can explicitly rearm across distribution restarts" do
+    assert MultinodeDistributed.restart_fault_drop_responses(180, true) == 180
+  end
+
+  test "a repeated traffic start is classified as a duplicate" do
+    assert MultinodeDistributed.classify_traffic_start(nil, 123) == :new
+    assert MultinodeDistributed.classify_traffic_start(123, 123) == :duplicate
+    assert MultinodeDistributed.classify_traffic_start(123, 456) == :new
+  end
+
   test "classifies first, duplicate, and replacement readiness announcements" do
     first_pid = self()
     replacement_pid = spawn(fn -> :ok end)

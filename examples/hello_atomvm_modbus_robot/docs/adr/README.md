@@ -30,3 +30,5 @@
 - [0014: mission は Controller の health loop 外で実行する](0014-run-missions-outside-the-health-loop.md)
 - [0015: mission commandをDrive bootへ束縛する](0015-bind-mission-commands-to-drive-boots.md)
 - [0016: indeterminate mission後もhealth loopを継続する](0016-continue-health-after-indeterminate-missions.md)
+- [0017: response faultはboard bootごとにone-shotとする](0017-make-response-faults-one-shot-per-boot.md)
+- [0018: traffic startをACK付きで再送しrun IDで重複排除する](0018-retry-traffic-starts-with-idempotent-run-ids.md)

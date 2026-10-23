@@ -29,3 +29,8 @@ host test、実機試験、障害調査など、再現可能な時系列の記�
 - [2026-10-21: Missionとhealth loopの分離](2026-10-21-mission-health-loop.md)
 - [2026-10-21: Drive command outcomeのreconciliation](2026-10-21-drive-command-reconciliation.md)
 - [2026-10-23: Indeterminate mission後のrecovery snapshot](2026-10-23-indeterminate-recovery-snapshot.md)
+- [2026-10-23: One-shot response faultとsettling](2026-10-23-one-shot-response-fault.md)
+- [2026-10-23: Blackout中のtraffic start recovery](2026-10-23-traffic-start-recovery.md)
+- [2026-10-23: Readiness ACK gapとtimeout marginのbaseline](2026-10-23-remote-health-gap-baseline.md)
+- [2026-10-23: Concurrent traffic中のSensors branch切断・復旧](2026-10-23-physical-branch-during-traffic.md)
+- [2026-10-23: 256+256 trafficでのreadiness ACK gap長時間測定](2026-10-23-extended-ack-gap-run.md)

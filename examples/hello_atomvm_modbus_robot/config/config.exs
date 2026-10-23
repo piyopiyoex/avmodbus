@@ -77,6 +77,7 @@ max_queued_chunks = parse_integer.("MODBUS_MAX_QUEUED_CHUNKS", 256)
 fault_drop_responses = parse_integer.("MODBUS_FAULT_DROP_RESPONSES", 0)
 fault_min_payload_bytes = parse_integer.("MODBUS_FAULT_MIN_PAYLOAD_BYTES", 96)
 fault_after_ms = parse_integer.("MODBUS_FAULT_AFTER_MS", 10_000)
+fault_rearm_on_restart = parse_boolean.("MODBUS_FAULT_REARM_ON_RESTART", false)
 mission_timeout_ms = parse_integer.("ROBOT_COMMAND_TIMEOUT_MS", 60_000)
 mission_retries = parse_integer.("ROBOT_COMMAND_RETRIES", 1)
 mission_start_delay_ms = parse_integer.("ROBOT_MISSION_START_DELAY_MS", 2_000)
@@ -99,6 +100,9 @@ multinode_traffic_payload_bytes = parse_integer.("ROBOT_MULTINODE_TRAFFIC_PAYLOA
 multinode_traffic_timeout_ms = parse_integer.("ROBOT_MULTINODE_TRAFFIC_TIMEOUT_MS", 120_000)
 multinode_traffic_settle_ms = parse_integer.("ROBOT_MULTINODE_TRAFFIC_SETTLE_MS", 30_000)
 
+multinode_traffic_start_delay_ms =
+  parse_integer.("ROBOT_MULTINODE_TRAFFIC_START_DELAY_MS", 0)
+
 multinode_traffic_ack_timeout_ms =
   parse_integer.("ROBOT_MULTINODE_TRAFFIC_ACK_TIMEOUT_MS", 90_000)
 
@@ -109,6 +113,9 @@ multinode_restart_on_traffic_ack_timeout =
 
 multinode_remote_health_enabled =
   parse_boolean.("ROBOT_MULTINODE_REMOTE_HEALTH_ENABLED", false)
+
+multinode_remote_health_trace =
+  parse_boolean.("ROBOT_MULTINODE_REMOTE_HEALTH_TRACE", false)
 
 multinode_remote_ack_timeout_ms =
   parse_integer.("ROBOT_MULTINODE_REMOTE_ACK_TIMEOUT_MS", 90_000)
@@ -236,6 +243,10 @@ if multinode_traffic_settle_ms < 0 do
   raise ArgumentError, "ROBOT_MULTINODE_TRAFFIC_SETTLE_MS must be a non-negative integer"
 end
 
+if multinode_traffic_start_delay_ms < 0 do
+  raise ArgumentError, "ROBOT_MULTINODE_TRAFFIC_START_DELAY_MS must be a non-negative integer"
+end
+
 if multinode_traffic_ack_timeout_ms < 1 do
   raise ArgumentError, "ROBOT_MULTINODE_TRAFFIC_ACK_TIMEOUT_MS must be a positive integer"
 end
@@ -303,6 +314,7 @@ config :robot_sim,
   fault_drop_responses: fault_drop_responses,
   fault_min_payload_bytes: fault_min_payload_bytes,
   fault_after_ms: fault_after_ms,
+  fault_rearm_on_restart: fault_rearm_on_restart,
   poll_ms: parse_integer.("MODBUS_POLL_INTERVAL_MS", 20),
   trace_transactions: System.get_env("MODBUS_TRACE_TRANSACTIONS") in ["1", "true"],
   trace_queue: System.get_env("MODBUS_TRACE_QUEUE") in ["1", "true"],
@@ -325,10 +337,12 @@ config :robot_sim,
   multinode_traffic_payload_bytes: multinode_traffic_payload_bytes,
   multinode_traffic_timeout_ms: multinode_traffic_timeout_ms,
   multinode_traffic_settle_ms: multinode_traffic_settle_ms,
+  multinode_traffic_start_delay_ms: multinode_traffic_start_delay_ms,
   multinode_traffic_ack_timeout_ms: multinode_traffic_ack_timeout_ms,
   multinode_traffic_ack_retries: multinode_traffic_ack_retries,
   multinode_restart_on_traffic_ack_timeout: multinode_restart_on_traffic_ack_timeout,
   multinode_remote_health_enabled: multinode_remote_health_enabled,
+  multinode_remote_health_trace: multinode_remote_health_trace,
   multinode_remote_ack_timeout_ms: multinode_remote_ack_timeout_ms,
   multinode_remote_max_restarts: multinode_remote_max_restarts,
   sensor_mission_steps: sensor_mission_steps,

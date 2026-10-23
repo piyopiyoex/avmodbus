@@ -79,7 +79,7 @@ termination / bias の電気測定と長時間 soak は未実施であり、現�
 - [x] 片方の Server reboot 後に再接続し、もう一方の connection が継続することを確認する
 - [x] Controller reboot 後に両 Server が再接続して application messaging を再開することを確認する
 - [x] 基本疎通に dedicated carrier は不要と判断する
-- [ ] AtomVM の multi-connection tick fix を upstream へ提案する
+- [x] 最新の AtomVM v0.7 snapshotでもmulti-connection tick問題を確認し、local patchとtestを文書化する
 - [x] 継続 application traffic と polling fairness の短時間 baseline を測定する
 - [x] application traffic 中に Drive / Sensors を独立 reboot して recovery を確認する
 - [x] concurrent producer の短時間 fairness baseline と moderate profile を検証する
@@ -88,7 +88,9 @@ termination / bias の電気測定と長時間 soak は未実施であり、現�
 完了条件は、controller と 2 台の remote node の genuine distribution を実証するか、必要な AtomVM / carrier
 変更と blocker を再現可能な形で記録することです。基本疎通、3 role の独立 reboot recovery、60 application round trip の短時間
 fairness baseline、traffic 中の両 remote reboot recovery、Sensors から Drive への Controller relay は 2026-10-19 に達成しました。
-local AtomVM patch が必要なため Stage 3 は follow-up を残しています。Modbus Server 同士が bus を直接駆動する構成は仮定しません。
+local AtomVM patch が必要な点は[既知の制約](limitations.md)として残します。AtomVM upstreamへのIssue / PRはこのexampleの
+roadmapに含めず、対象v0.7 snapshotが更新されたときにlocal patchを再評価します。Modbus Server 同士が bus を直接駆動する構成は
+仮定しません。
 
 ## Stage 4: virtual sensors と fault tolerance
 
@@ -125,7 +127,12 @@ Drive rebootをまたぐ未確定commandの検出・再実行停止を確認し�
 - [x] reboot時の未確定commandを新bootで再実行せず、indeterminate outcomeとして停止する
 - [x] indeterminate mission後もhealth loopを継続し、新Driveのread-only snapshotを記録する
 - [x] snapshot確認後のController resetで、現在のDrive stateから新しいguarded missionを開始する
-- [ ] AtomVM runtime の upstream follow-up を進める
+- [x] response faultをboard bootごとのone-shotにし、recovery後のqueue / memory settlingを測定する
+- [x] traffic startにrole別ACKとbounded retryを付け、blackout中の未配送startを再接続後に回復する
+- [x] readiness ACK gapをmissionと32+32 concurrent trafficで測り、timeout marginのbaselineを記録する
+- [x] 128+128 concurrent traffic中のSensors branch切断を2 clean-boot runで反復し、Drive継続と完全配送を確認する
+- [x] 256+256 concurrent trafficと継続heartbeatでACK gap、queue、heapを再測定する
+- [x] AtomVM v0.7 snapshot固有のruntime問題とlocal compatibility patchをAVModbus docsへ記録する
 - [ ] 4 台目の追加は上記の測定結果に基づいて判断する
 
 実行条件、停止条件、測定限界は[次の実験計画](next-experiments.md)に記録します。
@@ -141,6 +148,20 @@ mission実行はlocal workerへ分離し、2秒heartbeat / 10秒ACK timeoutの�
 snapshot後も両linkのtrafficを処理し、通常firmwareへ戻した3-step missionも完了しました。
 さらにoperatorがControllerだけをresetし、保持中のDrive stateから新しいrequest IDとboot guardを使う別missionが完了しました。
 これはstate reconciliationや自動resumeではありません。
+one-shot response faultではSensors distribution restart後に同じproducerがsequence 6から再開し、16+16 messagesを完全配送しました。
+30秒後は両queueが0となり、replacement adapterで2回目のfaultは発生しませんでした。
+さらにtraffic startをblackout中へ遅延したrunでは、start ACK timeout後も同じrun IDをbounded retryし、Sensors再接続後にproducerを
+開始できました。Drive / Sensorsとも16 / 16、application error 0で完了し、30秒後は両queueが0でした。
+10秒announceのreadiness ACK gapをboot単位で測るtraceも追加しました。32+32 flow-controlled trafficと30秒settlingを含むrunでは
+Drive / Sensorsともhigh-waterは11,532 ms、health timeout 0回でした。各connectionの初回ACKはhandshake時間を含むため集計から除外し、
+この単一profileの値を一般的なtimeout保証とはしません。
+さらにbreadboard上のSensors branchを128+128 flow-controlled traffic中に切断するclean-boot runを2回実施した。Drive connectionを
+維持したままSensorsがACK欠落36,943–38,388 msでdistributionを再起動し、branch復帰後に同じproducerを再開した。両runとも両role
+128 / 128を451,811–568,227 msで完了した。restart上限はboot中に補充されず、run timeoutも障害中に停止しないため、反復時は
+試験ごとのclean bootと十分な全体期限が必要である。
+無障害の256+256 follow-upは783,317 msでapplication error 0のまま完了し、30秒後に両queueが0となった。10秒heartbeatの
+ACK gap high-waterはDrive 23,586 ms、Sensors 23,995 msまで伸びたため、短い32+32 runの11,532 msだけから25秒timeoutを
+安全値とは判断できない。
 
 ## 今回は対象としないこと
 
