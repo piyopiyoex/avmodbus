@@ -15,7 +15,8 @@
   短時間の同時 producer は両 role とも完全配送しましたが、64 messages / role の継続負荷では両 carrier session が再生成されました。
 - 3-node distribution は AtomVM v0.7系に対する local multi-connection tick patch を必要とします。2026-10-23時点の
   `release-0.7` snapshot `18b35870`にも問題が残ることをsourceと独立testで確認しています。これはAVModbus側の既知問題として
-  文書化し、local compatibility patchで検証します。公式 image のまま動作するproduction構成ではありません。
+  文書化し、local compatibility patch `a1069573`で検証します。同snapshotとpatchからbuildしたruntimeは3台の実機で
+  2 connection、remote messaging、mission後90秒の維持まで確認しましたが、公式imageのまま動作するproduction構成ではありません。
 
 ## Buffer と backpressure
 
@@ -62,6 +63,9 @@
   ありません。
 - peer session change で古い reader を閉じると、回復可能な場合でも AtomVM console に
   `{serial_read_error, closed}` の crash report が表示されます。
+- AtomVMのdistribution setup timerは固定7秒です。Drive / Sensorsをconsoleで順番に長く監視してからControllerを起動すると、
+  後続nodeの起動前にsetupがtimeoutします。remote health無効の通常profileではstale connectionも自動teardownしないため、
+  3台のfresh-start確認では両remoteとControllerを短い間隔でcoordinated bootする必要があります。
 - 64 messages / role の concurrent run では23–24 messages受信後に両 carrier session が変わり、distribution 自体は再接続しましたが、
   session change 前の producer process は再開されませんでした。collector は残りを欠損として timeout します。transport reconnect は
   application workload の再開を保証しません。

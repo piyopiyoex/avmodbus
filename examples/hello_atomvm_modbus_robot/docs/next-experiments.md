@@ -156,6 +156,16 @@ SensorsがACK欠落36,943–38,388 msでdistributionを再起動した。branch�
 2回目は600秒期限まで31,773 msしか残らず、30秒snapshotでDriveに117 bytes / 2 outstandingがあった。詳細は
 [traffic中の物理branch復旧](worklog/2026-10-23-physical-branch-during-traffic.md)を参照してください。
 
+2026-10-23時点のAtomVM `release-0.7` snapshot `18b35870`へlocal tick patch `a1069573`を適用してruntimeを再buildし、
+3台すべてを更新した。2本のdistribution connection、両remoteのprobe、sensor-driven mission、mission後90秒のconnection維持を
+確認した。build条件、image hash、native USB monitorの注意は
+[最新v0.7 snapshot実機検証](worklog/2026-10-23-latest-v07-runtime.md)に記録している。
+
+同runtimeで32+32 flow-controlled trafficも再実施し、両role 32 / 32、application error 0、transaction failure 0で
+101,248 ms以内に完了した。30秒後は両queueとoutstandingが0となり、ACK gap high-waterはDrive 15,681 ms、Sensors
+15,298 msだった。通常firmwareへの復元を含む詳細は
+[最新v0.7 concurrent traffic worklog](worklog/2026-10-24-latest-v07-concurrent-traffic.md)に記録している。
+
 25,000 msのhealth timeoutは抜線前の通常mission中にfalse positiveとなったため、負荷を考慮せず短く設定できない。breadboard試験も
 外付けterminationなしの短いbench配線における少数runであり、復旧時間の上限や一般的な電気条件を示さない。詳細は
 [物理RS485切断worklog](worklog/2026-10-21-physical-rs485-disconnect.md)を参照してください。
@@ -165,7 +175,7 @@ SensorsがACK欠落36,943–38,388 msでdistributionを再起動した。branch�
 1. 2回の差を踏まえ、分布を論じる必要があれば同じprofileを3回以上追加し、operator保持時間とhandshake時間を別々に記録する。
 2. 23,995 msまで伸びた長時間ACK gapを同じprofileで反復し、分布とmemory watermarkの再現性を確認する。
 3. Snapshot確認と新mission開始を1つの対話的なapplication protocolにする必要があるか検討する。自動resumeは前提としない。
-4. AtomVM v0.7 snapshot更新時に、個別disconnect、multi-connection tick、setup retry、remote process monitorの既知問題と
+4. 次のAtomVM v0.7 snapshot更新時に、個別disconnect、multi-connection tick、setup retry、remote process monitorの既知問題と
    local compatibility patchを再評価する。upstreamへのIssue / PR作成はこの計画に含めない。
 5. 3 remote / 4 device への拡張は、3 device fairness と memory の限界を測定した後に検討する。
 

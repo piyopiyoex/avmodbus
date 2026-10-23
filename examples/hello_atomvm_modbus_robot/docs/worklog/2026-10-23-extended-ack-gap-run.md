@@ -75,6 +75,9 @@ local compatibility patchとして管理し、AtomVM upstreamへのIssueまた�
 local検証commitは`a1069573`、従来の実機patchは`74840ccc6f27ee060209de7c05ffc96204249d48`である。最小修正と最初の実機再現は
 [Stage 3 worklog](2026-10-19-stage-3-three-node-distribution.md)も参照する。
 
+この記録後、`18b35870`と`a1069573`からruntimeをbuildして3台へ導入し、2 connectionとmissionを実機確認した。結果は
+[最新v0.7 snapshot実機検証](2026-10-23-latest-v07-runtime.md)を参照する。
+
 ## 通常構成への復元
 
 3 roleをtraffic、remote health、trace、fault無効の通常構成でcheck、pack、flashした。imageはDrive 264,348 bytes、

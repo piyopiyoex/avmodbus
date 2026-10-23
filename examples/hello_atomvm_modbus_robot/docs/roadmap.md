@@ -79,7 +79,7 @@ termination / bias の電気測定と長時間 soak は未実施であり、現�
 - [x] 片方の Server reboot 後に再接続し、もう一方の connection が継続することを確認する
 - [x] Controller reboot 後に両 Server が再接続して application messaging を再開することを確認する
 - [x] 基本疎通に dedicated carrier は不要と判断する
-- [x] 最新の AtomVM v0.7 snapshotでもmulti-connection tick問題を確認し、local patchとtestを文書化する
+- [x] 最新の AtomVM v0.7 snapshotでもmulti-connection tick問題を確認し、local patch、test、3台実機結果を文書化する
 - [x] 継続 application traffic と polling fairness の短時間 baseline を測定する
 - [x] application traffic 中に Drive / Sensors を独立 reboot して recovery を確認する
 - [x] concurrent producer の短時間 fairness baseline と moderate profile を検証する
@@ -90,7 +90,8 @@ termination / bias の電気測定と長時間 soak は未実施であり、現�
 fairness baseline、traffic 中の両 remote reboot recovery、Sensors から Drive への Controller relay は 2026-10-19 に達成しました。
 local AtomVM patch が必要な点は[既知の制約](limitations.md)として残します。AtomVM upstreamへのIssue / PRはこのexampleの
 roadmapに含めず、対象v0.7 snapshotが更新されたときにlocal patchを再評価します。Modbus Server 同士が bus を直接駆動する構成は
-仮定しません。
+仮定しません。2026-10-23には`18b35870`へpatch `a1069573`を適用したruntimeを3台へ導入し、2 connection、両remoteのprobe、
+sensor-driven mission、mission後90秒の接続維持を確認しました。
 
 ## Stage 4: virtual sensors と fault tolerance
 
@@ -133,6 +134,7 @@ Drive rebootをまたぐ未確定commandの検出・再実行停止を確認し�
 - [x] 128+128 concurrent traffic中のSensors branch切断を2 clean-boot runで反復し、Drive継続と完全配送を確認する
 - [x] 256+256 concurrent trafficと継続heartbeatでACK gap、queue、heapを再測定する
 - [x] AtomVM v0.7 snapshot固有のruntime問題とlocal compatibility patchをAVModbus docsへ記録する
+- [x] 最新v0.7 snapshotとlocal patchで32+32 concurrent trafficと通常firmware復元を実機確認する
 - [ ] 4 台目の追加は上記の測定結果に基づいて判断する
 
 実行条件、停止条件、測定限界は[次の実験計画](next-experiments.md)に記録します。
@@ -162,6 +164,9 @@ Drive / Sensorsともhigh-waterは11,532 ms、health timeout 0回でした。各
 無障害の256+256 follow-upは783,317 msでapplication error 0のまま完了し、30秒後に両queueが0となった。10秒heartbeatの
 ACK gap high-waterはDrive 23,586 ms、Sensors 23,995 msまで伸びたため、短い32+32 runの11,532 msだけから25秒timeoutを
 安全値とは判断できない。
+最新v0.7 snapshotとlocal patchへ3台を更新したfollow-upでも32+32 messagesを101,248 msで完全配送した。transaction failure 0、
+settling後の両queue 0、ACK gap high-waterは15,681 ms / 15,298 msだった。通常firmwareへ戻す際は固定7秒setup timerを超えない
+coordinated bootが必要だった。
 
 ## 今回は対象としないこと
 

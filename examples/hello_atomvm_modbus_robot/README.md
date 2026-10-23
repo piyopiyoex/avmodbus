@@ -364,8 +364,10 @@ setup timer に収まりませんでした。また、複数 connection の最�
 local patch で修正して 90 秒間 connection を維持しました。公式 AtomVM image のまま長時間利用できるという意味ではありません。
 2026-10-23時点の`release-0.7` snapshot `18b35870`でもsourceと独立testで問題を再確認しています。AtomVM upstreamへのIssue / PRは
 このexampleの範囲に含めず、AVModbus docsで既知問題とlocal compatibility patchを管理します。
-必要な patch と build 条件は
-[Stage 3 実機検証](docs/worklog/2026-10-19-stage-3-three-node-distribution.md) に記録しています。
+同snapshotへlocal patch `a1069573`を適用してnative runtimeとboot libraryをbuildし、3台すべてを更新したfollow-upでは、
+2 connection、両remoteのprobe、sensor-driven mission、mission後90秒のconnection維持を確認しました。必要なpatchとbuild条件は
+[Stage 3 実機検証](docs/worklog/2026-10-19-stage-3-three-node-distribution.md)と
+[最新v0.7 snapshot実機検証](docs/worklog/2026-10-23-latest-v07-runtime.md)に記録しています。
 
 各 role を build する基本形は次のとおりです。port は Stage 2 と同じ対応です。
 
@@ -663,6 +665,7 @@ max_interarrival_ms を示します。`fairness` は role 間の delivery ratio�
 | extended + ACK: 256 messages / role、64 bytes | 両 role 256 / 256、error 0 | 627,792 ms | 623,957 ms | 1,029 ms |
 | extended ACK gap測定: 256 messages / role、64 bytes | 両 role 256 / 256、error 0 | 783,317 ms | 776,418 ms | 3,261 ms |
 | Sensors branch切断 + ACK、2 run: 128 messages / role、64 bytes | 両runで両 role 128 / 128、missing 0 | 451,811–568,227 ms | 423,877–523,934 ms | 24,216–40,575 ms |
+| latest v0.7 snapshot + ACK: 32 messages / role、64 bytes | 両 role 32 / 32、error 0 | 101,248 ms | 96,890 ms | 761 ms |
 
 baseline、moderate、overload の application delivery は missing、duplicate、out-of-order、invalid がすべて0でした。longer run では
 両 carrier session が再生成され、distribution reconnect 後も元の producer は再開されませんでした。短時間に各1 run の結果であり、
@@ -684,6 +687,10 @@ settled時約85 KB、minimum watermark 70,736 bytesでした。詳細は
 別の256+256 runは783,317 msで完全配送し、queue high-waterは両role 200 bytes / 3 chunks、minimum free heapは68,848 bytes、
 30秒後は両queueとも0でした。10秒readiness heartbeatのACK gap high-waterはDrive 23,586 ms、Sensors 23,995 msでした。詳細は
 [長時間ACK gap測定](docs/worklog/2026-10-23-extended-ack-gap-run.md)を参照してください。
+
+`release-0.7` `18b35870`とlocal patch `a1069573`へ3台を更新した後の32+32 follow-upも完全配送した。
+transaction failure 0、settling後の両queue 0、ACK gap high-waterはDrive 15,681 ms、Sensors 15,298 msだった。詳細は
+[最新v0.7 concurrent traffic worklog](docs/worklog/2026-10-24-latest-v07-concurrent-traffic.md)を参照してください。
 
 2026-10-23には同じbreadboard branch構成で、flow-controlled traffic中にSensorsのA/B branchだけを物理切断するclean-boot runを
 2回実施した。Drive connectionを維持し、Sensorsはreadiness ACK欠落36,943–38,388 msでdistributionを再起動した。branch復帰後、
