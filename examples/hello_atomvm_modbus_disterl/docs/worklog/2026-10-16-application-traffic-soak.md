@@ -1,4 +1,4 @@
-# Application-traffic soak test — 2026-10-16
+# アプリケーション通信の連続試験 — 2026-10-16
 
 ## 目的
 

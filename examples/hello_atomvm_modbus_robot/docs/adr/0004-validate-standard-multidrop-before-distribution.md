@@ -1,4 +1,4 @@
-# 0004: 3-node distribution より先に standard multidrop を検証する
+# 0004: 3ノード分散接続より先に標準マルチドロップを検証する
 
 - Status: accepted
 - Date: 2026-10-19

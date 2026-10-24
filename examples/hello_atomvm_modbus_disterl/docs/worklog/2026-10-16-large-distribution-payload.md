@@ -1,4 +1,4 @@
-# Large distribution payload — 2026-10-16
+# 大容量のgenuine distribution payload — 2026-10-16
 
 ## 目的
 
@@ -15,7 +15,7 @@ payload pattern の exact size、determinism、破損検出を host test に追�
 成功し、PackBEAM は当時既知だった `erlang:phash2/2` warning だけで完了した。この warning は後の
 [調査と callback の明示実装](2026-10-16-packbeam-phash2.md) で除去した。
 
-## 4 KiB、9,600 baud
+## 4 KiB、9,600 baudでの試験
 
 両 node を `DISTERL_PAYLOAD_BYTES=4096`、Client を `DISTERL_PING_COUNT=1`、
 `DISTERL_PONG_TIMEOUT_MS=60000` で build した。distribution handshake 後、Client は external term を含む
@@ -42,7 +42,7 @@ dist_util: shutting down connection ..., reason=net_tick_timeout
 - handshake 後だけ長い timeout に切り替える試作も行ったが、今回の hardware state では安定した baseline を
   再現できず、根拠の弱い変更になるため採用しなかった。
 
-## 512-byte payload
+## 512-byte payloadの試験
 
 9,600 baud、500 ms Modbus response timeout に戻し、512-byte payload を試した。Server は transport chunk
 `232 + 232 + 160` bytes を再構成し、genuine distribution message の payload を検証できた。

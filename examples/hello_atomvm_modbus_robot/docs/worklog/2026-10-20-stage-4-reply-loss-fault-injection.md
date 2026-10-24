@@ -1,4 +1,4 @@
-# Stage 4 reply loss fault injection — 2026-10-20
+# Stage 4 応答消失の障害注入 — 2026-10-20
 
 ## 目的
 
@@ -30,7 +30,7 @@ mix atomvm.check
 test では100 mm前進 command の初回 reply を破棄し、Controller の retry が成功した後も Drive state が `x_mm=100` のままであることを
 確認した。
 
-## Production build
+## 本番構成のビルド
 
 3 role すべてで AtomVM compatibility check と PackBEAM build に成功した。Controller の試験 profile は command timeout 20秒、
 retry 1回である。

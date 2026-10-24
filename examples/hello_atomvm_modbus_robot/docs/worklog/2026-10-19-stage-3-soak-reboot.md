@@ -1,4 +1,4 @@
-# Stage 3 remote reboot during traffic — 2026-10-19
+# Stage 3 通信中のリモート再起動 — 2026-10-19
 
 ## 目的
 
@@ -36,7 +36,7 @@ readiness transition は pure function として host test し、対象 role の
 PackBEAM は Controller 228,936 bytes、Drive 223,040 bytes、Sensors 222,816 bytes だった。3 台とも flash 後の hash verification に
 成功した。
 
-## Drive reboot
+## Driveの再起動
 
 cycle 3 の Drive request 送信直後に Drive を reset した。すでに転送済みの cycle 3 reply は成功し、FC-100 session change は
 cycle 4 の Drive probe 中に検出された。古い `serial_dist_controller` reader は `{serial_read_error, closed}` で終了し、新しい
@@ -50,7 +50,7 @@ modbus_robot_multinode: soak cycle=4 role=drive rtt_ms=11847 payload_bytes=128
 
 再送後は通常の約 3.1–3.3 秒 RTT に戻り、Sensors traffic も timeout しなかった。
 
-## Sensors reboot
+## Sensorsの再起動
 
 cycle 14 の Sensors request 送信直後に Sensors を reset した。session change は cycle 16 の Sensors probe 中に検出され、新しい
 boot session への 1 回再送で成功した。

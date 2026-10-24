@@ -1,4 +1,4 @@
-# 0001: +X から clockwise に増える heading を使う
+# 0001: +Xから時計回りに増える方位角を使う
 
 - Status: accepted
 - Date: 2026-10-18

@@ -1,4 +1,4 @@
-# 外部 review follow-up — bounded queue と RTU frame size — 2026-10-16
+# 外部レビュー追試 — 上限付きキューとRTU frame size — 2026-10-16
 
 ## 目的
 
@@ -55,7 +55,7 @@ RTU ADU              113 bytes
 multi-chunk worklog にあった 114 / 146 bytes を 113 / 145 bytes へ訂正し、encode chain を通した test で
 transport 109 bytes、PDU 110 bytes、RTU ADU 113 bytes を固定した。
 
-## Host validation
+## ホスト検証
 
 追加した focused test は次を確認する。
 

@@ -1,4 +1,4 @@
-# Bidirectional multi-chunk round trip — 2026-10-16
+# 双方向multi-chunk往復 — 2026-10-16
 
 ## 目的
 

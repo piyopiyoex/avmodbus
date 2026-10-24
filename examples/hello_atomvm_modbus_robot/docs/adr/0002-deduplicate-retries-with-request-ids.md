@@ -1,4 +1,4 @@
-# 0002: request ID で command retry を重複排除する
+# 0002: request IDでコマンド再試行を重複排除する
 
 - Status: accepted
 - Date: 2026-10-18

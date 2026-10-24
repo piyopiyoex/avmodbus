@@ -3,7 +3,16 @@ defmodule DisterlProbe.ModbusUARTTest do
 
   import ExUnit.CaptureIO
 
-  alias DisterlProbe.{Channel, ModbusUART, Protocol, ResponseFault, ResponseTimeout}
+  alias AVModbus.Client
+
+  alias DisterlProbe.{
+    Channel,
+    ModbusUART,
+    Protocol,
+    ResponseFault,
+    ResponseTimeout,
+    TransactionStats
+  }
 
   test "chunks and reassembles a 64 KiB stream despite repeated lost responses" do
     pattern = for byte <- 0..255, into: <<>>, do: <<byte>>
@@ -39,6 +48,29 @@ defmodule DisterlProbe.ModbusUARTTest do
   end
 
   test "a client adapter can use an externally owned managed client" do
+    client = {Client, self()}
+
+    options = [
+      role: :client,
+      client: client,
+      serial: [],
+      unit_id: 1,
+      timeout_ms: 500,
+      bulk_timeout_ms: 2_000,
+      chunk_payload_bytes: 96,
+      max_queued_bytes: 8_192,
+      max_queued_chunks: 256,
+      poll_ms: 20
+    ]
+
+    assert {:ok, state} = ModbusUART.init(options)
+    assert state.resource == client
+    refute state.owns_resource
+    assert :ok = ModbusUART.terminate(:normal, state)
+    assert_receive :poll
+  end
+
+  test "a client adapter preserves support for a raw client pid" do
     options = [
       role: :client,
       client: self(),
@@ -59,6 +91,53 @@ defmodule DisterlProbe.ModbusUARTTest do
     assert_receive :poll
   end
 
+  test "a scheduled client waits for an external poll token" do
+    options = [
+      role: :client,
+      client: self(),
+      serial: [],
+      unit_id: 1,
+      timeout_ms: 500,
+      bulk_timeout_ms: 2_000,
+      chunk_payload_bytes: 96,
+      max_queued_bytes: 8_192,
+      max_queued_chunks: 256,
+      poll_ms: 20,
+      poll_scheduler: self()
+    ]
+
+    assert {:ok, state} = ModbusUART.init(options)
+    assert state.poll_scheduler == self()
+    refute_receive :poll
+    assert :ok = ModbusUART.terminate(:normal, state)
+  end
+
+  test "a scheduled client returns the poll token after a timeout" do
+    reference = make_ref()
+
+    state =
+      Channel.new()
+      |> adapter_state()
+      |> Map.merge(%{
+        poll_scheduler: self(),
+        poll_ms: 20,
+        request_ref: reference,
+        role: :client,
+        stats: TransactionStats.start(TransactionStats.new(), 13, 0)
+      })
+
+    capture_io(fn ->
+      assert {:noreply, next} =
+               ModbusUART.handle_info({Client, reference, {:error, :timeout}}, state)
+
+      assert next.request_ref == nil
+    end)
+
+    assert_receive {DisterlProbe.PollScheduler, :complete, adapter}
+    assert adapter == self()
+    refute_receive :poll
+  end
+
   test "a client adapter rejects an invalid externally owned client" do
     options = [
       role: :client,
@@ -74,6 +153,10 @@ defmodule DisterlProbe.ModbusUARTTest do
     ]
 
     assert ModbusUART.init(options) == {:stop, {:error, :invalid_client}}
+
+    assert ModbusUART.init(Keyword.put(options, :client, {Client, self(), :tcp})) ==
+             {:stop, {:error, :invalid_client}}
+
     refute_receive :poll
   end
 
@@ -83,6 +166,38 @@ defmodule DisterlProbe.ModbusUARTTest do
 
     ready = put_in(state.channel.peer_session, 200)
     assert {:reply, true, ^ready} = ModbusUART.handle_call(:peer_ready, :unused_from, ready)
+  end
+
+  test "snapshots and resets bounded adapter metrics" do
+    {:ok, channel} = Channel.queue(Channel.new(100), "abc")
+    stats = TransactionStats.start(TransactionStats.new(), 13, 100)
+    {stats, _event} = TransactionStats.succeed(stats, 20, 150)
+
+    state = %{
+      adapter_state(channel)
+      | stats: stats,
+        max_queued_bytes_observed: 7,
+        max_outstanding_observed: 3
+    }
+
+    assert {:reply, snapshot, ^state} =
+             ModbusUART.handle_call(:metrics_snapshot, :unused_from, state)
+
+    assert snapshot.unit_id == 1
+    assert snapshot.queued_bytes == 3
+    assert snapshot.outstanding == 1
+    assert snapshot.max_queued_bytes == 7
+    assert snapshot.max_outstanding == 3
+    assert snapshot.transactions.successes == 1
+    assert snapshot.transactions.average_elapsed_ms == 50
+    assert snapshot.memory == nil
+
+    assert {:reply, :ok, reset} =
+             ModbusUART.handle_call(:reset_metrics, :unused_from, state)
+
+    assert reset.max_queued_bytes_observed == 3
+    assert reset.max_outstanding_observed == 1
+    assert TransactionStats.summary(reset.stats).successes == 0
   end
 
   test "repeated idle sync markers share one unacknowledged outgoing chunk" do
@@ -266,8 +381,12 @@ defmodule DisterlProbe.ModbusUARTTest do
       reader: nil,
       response_timeout: ResponseTimeout.new(500, 2_000),
       rx_buffer: <<>>,
+      stats: TransactionStats.new(),
       trace_queue: false,
-      trace_queue_active: false
+      trace_queue_active: false,
+      unit_id: 1,
+      max_queued_bytes_observed: 0,
+      max_outstanding_observed: 0
     }
   end
 

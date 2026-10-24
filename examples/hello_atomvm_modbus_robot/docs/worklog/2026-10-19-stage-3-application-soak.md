@@ -1,4 +1,4 @@
-# Stage 3 application traffic soak — 2026-10-19
+# Stage 3 アプリケーション通信の連続試験 — 2026-10-19
 
 ## 目的
 
@@ -30,7 +30,7 @@ Controller に opt-in の soak mode を追加した。1 cycle で Drive と Sens
 分割された。更新後の PackBEAM は Controller 227,628 bytes、Drive 222,848 bytes、Sensors 222,624 bytes だった。3 台とも flash
 後の hash verification に成功した。
 
-## 10-cycle baseline
+## 10 cycleの基準値
 
 最初に 10 cycle / 20 round trip を実行した。
 
@@ -44,7 +44,7 @@ Controller に opt-in の soak mode を追加した。1 cycle で Drive と Sens
 - failure count delta: 0
 - average RTT delta: 9 ms
 
-## 30-cycle baseline
+## 30 cycleの基準値
 
 Controller だけを 30 cycle configuration で再 build / flash し、動作中の Drive と Sensors へ再接続して 60 round trip を実行した。
 

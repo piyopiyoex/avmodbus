@@ -1,4 +1,4 @@
-# Simultaneous-startup recovery — 2026-10-16
+# 同時起動からの復旧 — 2026-10-16
 
 ## 目的
 

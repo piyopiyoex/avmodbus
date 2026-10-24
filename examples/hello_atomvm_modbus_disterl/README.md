@@ -90,7 +90,7 @@ mix test
 host test は packet validation、FIFO ordering、ACK、lost-response retry、duplicate
 suppression、CRC error と連続 timeout 後の復旧、custom PDU / RTU frame の end-to-end encode/decode を確認します。
 
-## Phase 1: logical transport probe
+## Phase 1: 論理トランスポート疎通
 
 以下では `/dev/ttyACM0` を Server、`/dev/ttyACM1` を Client とします。同じ
 project を異なる compile-time role で build するため、role を変える前に必ず
@@ -139,7 +139,7 @@ MODBUS_ROLE=server MODBUS_START_DELAY_MS=60000 MIX_ENV=prod \
 Server が UART を開く前は Client が `exchange failed :timeout; retrying` を出し、
 Server 起動後は同じ sequence を再送して上の complete 状態へ進みます。
 
-## Phase 2: genuine distributed Erlang
+## Phase 2: genuine distributed Erlang検証
 
 Server (`b@modbus.local`):
 
@@ -197,7 +197,7 @@ DISTERL_PAYLOAD_BYTES=512 DISTERL_PING_COUNT=30 \
 transport は UART / RTU receive buffer に残った以前の boot session の packet を識別して破棄します。両 node の
 ほぼ同時の reset からも自動的に再同期することを実機確認しています。
 
-## Build-time configuration
+## ビルド時の設定
 
 | environment variable | default | 意味 |
 | --- | --- | --- |
@@ -263,7 +263,7 @@ retryでdistribution handshakeとping/pongを再確立しました。この回�
 確認できます。再現条件と観測値は
 [Queue memory と ACK-loss](docs/worklog/2026-10-16-queue-memory-and-ack-loss.md) に記録しています。
 
-## References
+## 参考資料
 
 - [AtomVM](https://github.com/atomvm/AtomVM)
 - [AtomVM distributed Erlang documentation](https://doc.atomvm.org/release-0.7/distributed-erlang.html)

@@ -1,4 +1,4 @@
-# Stage 4 sensor-driven adaptive mission — 2026-10-19
+# Stage 4 センサー駆動の適応ミッション — 2026-10-19
 
 ## 目的
 

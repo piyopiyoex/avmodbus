@@ -1,4 +1,4 @@
-# 0003: 既存 example の experimental carrier を再利用する
+# 0003: 既存exampleの実験用キャリアを再利用する
 
 - Status: accepted
 - Date: 2026-10-18

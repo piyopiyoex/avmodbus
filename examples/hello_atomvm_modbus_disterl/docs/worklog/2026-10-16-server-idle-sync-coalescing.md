@@ -1,4 +1,4 @@
-# Server先行時のidle sync coalescing実機検証 — 2026-10-16
+# Server先行時のidle sync集約の実機検証 — 2026-10-16
 
 ## 目的
 

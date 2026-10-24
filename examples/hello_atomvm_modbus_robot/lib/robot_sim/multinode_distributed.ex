@@ -11,8 +11,17 @@ defmodule RobotSim.MultinodeDistributed do
   @compile {:no_warn_undefined, :net_kernel}
 
   alias AVModbus.Client
-  alias DisterlProbe.{ModbusUART, Payload, Session}
-  alias RobotSim.{Drive, MultinodeStats, SensorMission, Sensors}
+  alias DisterlProbe.{ModbusUART, Payload, PollScheduler, Session}
+
+  alias RobotSim.{
+    ConcurrentTraffic,
+    Drive,
+    MissionWorker,
+    MultinodeStats,
+    RecoveryWorker,
+    RemoteHealth,
+    Sensors
+  }
 
   @mode Application.compile_env(:robot_sim, :mode, :distributed)
   @role Application.compile_env(:robot_sim, :role, :controller)
@@ -25,6 +34,14 @@ defmodule RobotSim.MultinodeDistributed do
   @chunk_payload_bytes Application.compile_env(:robot_sim, :chunk_payload_bytes, 96)
   @max_queued_bytes Application.compile_env(:robot_sim, :max_queued_bytes, 8_192)
   @max_queued_chunks Application.compile_env(:robot_sim, :max_queued_chunks, 256)
+  @fault_drop_responses Application.compile_env(:robot_sim, :fault_drop_responses, 0)
+  @fault_min_payload_bytes Application.compile_env(:robot_sim, :fault_min_payload_bytes, 96)
+  @fault_after_ms Application.compile_env(:robot_sim, :fault_after_ms, 10_000)
+  @fault_rearm_on_restart Application.compile_env(
+                            :robot_sim,
+                            :fault_rearm_on_restart,
+                            false
+                          )
   @poll_ms Application.compile_env(:robot_sim, :poll_ms, 20)
   @gap_ms Application.compile_env(:robot_sim, :multidrop_gap_ms, 20)
   @trace_transactions Application.compile_env(:robot_sim, :trace_transactions, false)
@@ -38,6 +55,58 @@ defmodule RobotSim.MultinodeDistributed do
   @soak_payload_bytes Application.compile_env(:robot_sim, :multinode_soak_payload_bytes, 128)
   @soak_interval_ms Application.compile_env(:robot_sim, :multinode_soak_interval_ms, 250)
   @soak_retries Application.compile_env(:robot_sim, :multinode_soak_retries, 1)
+  @traffic_samples Application.compile_env(:robot_sim, :multinode_traffic_samples, 0)
+  @traffic_drive_interval_ms Application.compile_env(
+                               :robot_sim,
+                               :multinode_traffic_drive_interval_ms,
+                               2_000
+                             )
+  @traffic_sensors_interval_ms Application.compile_env(
+                                 :robot_sim,
+                                 :multinode_traffic_sensors_interval_ms,
+                                 1_000
+                               )
+  @traffic_payload_bytes Application.compile_env(:robot_sim, :multinode_traffic_payload_bytes, 16)
+  @traffic_timeout_ms Application.compile_env(:robot_sim, :multinode_traffic_timeout_ms, 120_000)
+  @traffic_settle_ms Application.compile_env(:robot_sim, :multinode_traffic_settle_ms, 30_000)
+  @traffic_start_delay_ms Application.compile_env(
+                            :robot_sim,
+                            :multinode_traffic_start_delay_ms,
+                            0
+                          )
+  @traffic_ack_timeout_ms Application.compile_env(
+                            :robot_sim,
+                            :multinode_traffic_ack_timeout_ms,
+                            90_000
+                          )
+  @traffic_ack_retries Application.compile_env(:robot_sim, :multinode_traffic_ack_retries, 1)
+  @restart_on_traffic_ack_timeout Application.compile_env(
+                                    :robot_sim,
+                                    :multinode_restart_on_traffic_ack_timeout,
+                                    false
+                                  )
+  @remote_health_enabled Application.compile_env(
+                           :robot_sim,
+                           :multinode_remote_health_enabled,
+                           false
+                         )
+  @remote_health_trace Application.compile_env(
+                         :robot_sim,
+                         :multinode_remote_health_trace,
+                         false
+                       )
+  @remote_ack_timeout_ms Application.compile_env(
+                           :robot_sim,
+                           :multinode_remote_ack_timeout_ms,
+                           90_000
+                         )
+  @remote_max_restarts Application.compile_env(
+                         :robot_sim,
+                         :multinode_remote_max_restarts,
+                         1
+                       )
+  @net_kernel_stop_poll_ms 50
+  @net_kernel_stop_poll_attempts 40
   @sensor_mission_steps Application.compile_env(:robot_sim, :sensor_mission_steps, 3)
   @mission_retries Application.compile_env(:robot_sim, :mission_retries, 1)
   @drive_drop_first_reply_per_request Application.compile_env(
@@ -67,10 +136,24 @@ defmodule RobotSim.MultinodeDistributed do
   def identity(:drive), do: :"drive@modbus.local"
   def identity(:sensors), do: :"sensors@modbus.local"
 
+  @doc "Return the Controller peer descriptors in physical polling order."
+  @spec controller_peers(1..247, 1..247) :: [
+          %{role: :drive | :sensors, unit_id: 1..247, node: node()}
+        ]
+  def controller_peers(drive_unit_id \\ 1, sensors_unit_id \\ 2) do
+    [
+      %{role: :drive, unit_id: drive_unit_id, node: identity(:drive)},
+      %{role: :sensors, unit_id: sensors_unit_id, node: identity(:sensors)}
+    ]
+  end
+
   @doc "Return the Controller's logical stream targets in polling order."
   @spec targets(1..247, 1..247) :: [{:drive | :sensors, 1..247}]
-  def targets(drive_unit_id \\ 1, sensors_unit_id \\ 2),
-    do: [{:drive, drive_unit_id}, {:sensors, sensors_unit_id}]
+  def targets(drive_unit_id \\ 1, sensors_unit_id \\ 2) do
+    Enum.map(controller_peers(drive_unit_id, sensors_unit_id), fn peer ->
+      {peer.role, peer.unit_id}
+    end)
+  end
 
   @doc "Return the alternating application-probe order for one soak cycle."
   @spec soak_targets(pos_integer()) :: [:drive | :sensors]
@@ -78,14 +161,42 @@ defmodule RobotSim.MultinodeDistributed do
     if rem(cycle, 2) == 1, do: [:drive, :sensors], else: [:sensors, :drive]
   end
 
+  @doc "Return the response-fault budget for a replacement distribution adapter."
+  @spec restart_fault_drop_responses(non_neg_integer(), boolean()) :: non_neg_integer()
+  def restart_fault_drop_responses(drop_responses, true)
+      when is_integer(drop_responses) and drop_responses >= 0,
+      do: drop_responses
+
+  def restart_fault_drop_responses(drop_responses, false)
+      when is_integer(drop_responses) and drop_responses >= 0,
+      do: 0
+
+  @doc "Classify a traffic start request against the most recently accepted run."
+  @spec classify_traffic_start(pos_integer() | nil, pos_integer()) :: :new | :duplicate
+  def classify_traffic_start(run_id, run_id) when is_integer(run_id) and run_id > 0,
+    do: :duplicate
+
+  def classify_traffic_start(previous_run_id, run_id)
+      when (is_integer(previous_run_id) or previous_run_id == nil) and is_integer(run_id) and
+             run_id > 0,
+      do: :new
+
   @doc "Classify a remote readiness announcement against the Controller state."
-  @spec classify_readiness(map(), :drive | :sensors, node(), pid(), pos_integer()) ::
+  @spec classify_readiness(
+          map(),
+          :drive | :sensors,
+          node(),
+          pid(),
+          pos_integer(),
+          pos_integer()
+        ) ::
           :new | :duplicate | :unexpected
-  def classify_readiness(remotes, role, remote_node, pid, boot_id)
-      when role in [:drive, :sensors] and is_pid(pid) and is_integer(boot_id) and boot_id > 0 do
+  def classify_readiness(remotes, role, remote_node, pid, boot_id, connection_id)
+      when role in [:drive, :sensors] and is_pid(pid) and is_integer(boot_id) and boot_id > 0 and
+             is_integer(connection_id) and connection_id > 0 do
     cond do
       remote_node != identity(role) -> :unexpected
-      true -> classify_known_remote(Map.get(remotes, role), pid, boot_id)
+      true -> classify_known_remote(Map.get(remotes, role), pid, boot_id, connection_id)
     end
   end
 
@@ -106,16 +217,32 @@ defmodule RobotSim.MultinodeDistributed do
           :drive | :sensors,
           node(),
           pid(),
+          pos_integer(),
           pos_integer()
         ) ::
           {:retry | :continue | :duplicate | :unexpected, map()}
-  def soak_readiness_transition(remotes, awaited_role, role, remote_node, pid, boot_id)
+  def soak_readiness_transition(
+        remotes,
+        awaited_role,
+        role,
+        remote_node,
+        pid,
+        boot_id,
+        connection_id
+      )
       when awaited_role in [:drive, :sensors] and role in [:drive, :sensors] and is_pid(pid) and
-             is_integer(boot_id) and boot_id > 0 do
-    case classify_readiness(remotes, role, remote_node, pid, boot_id) do
+             is_integer(boot_id) and boot_id > 0 and is_integer(connection_id) and
+             connection_id > 0 do
+    case classify_readiness(remotes, role, remote_node, pid, boot_id, connection_id) do
       :new ->
         action = if role == awaited_role, do: :retry, else: :continue
-        {action, Map.put(remotes, role, %{pid: pid, boot_id: boot_id})}
+
+        {action,
+         Map.put(remotes, role, %{
+           pid: pid,
+           boot_id: boot_id,
+           connection_id: connection_id
+         })}
 
       :duplicate ->
         {:duplicate, remotes}
@@ -125,8 +252,15 @@ defmodule RobotSim.MultinodeDistributed do
     end
   end
 
-  defp classify_known_remote(%{pid: pid, boot_id: boot_id}, pid, boot_id), do: :duplicate
-  defp classify_known_remote(_remote, _pid, _boot_id), do: :new
+  defp classify_known_remote(
+         %{pid: pid, boot_id: boot_id, connection_id: connection_id},
+         pid,
+         boot_id,
+         connection_id
+       ),
+       do: :duplicate
+
+  defp classify_known_remote(_remote, _pid, _boot_id, _connection_id), do: :new
 
   defp expire_remote(remotes, role, now_ms, lease_ms) do
     case Map.get(remotes, role) do
@@ -139,73 +273,116 @@ defmodule RobotSim.MultinodeDistributed do
   end
 
   defp start_controller do
+    case PollScheduler.start_link(delay_ms: @poll_ms) do
+      {:ok, scheduler} -> start_controller_client(scheduler)
+      {:error, reason} -> halt("poll scheduler start failed", reason)
+    end
+  end
+
+  defp start_controller_client(scheduler) do
     case Client.start_link(
            transport: :rtu,
            serial: @serial,
            gap: @gap_ms,
            timeout: @timeout_ms
          ) do
-      {:ok, client} -> start_controller_adapters(client)
-      {:error, reason} -> halt("shared Modbus client start failed", reason)
-    end
-  end
-
-  defp start_controller_adapters(client) do
-    case open_client_adapter(client, @drive_unit_id) do
-      {:ok, drive_uart} ->
-        case open_client_adapter(client, @sensors_unit_id) do
-          {:ok, sensors_uart} ->
-            start_controller_distribution(client, drive_uart, sensors_uart)
-
-          {:error, reason} ->
-            ModbusUART.close(drive_uart)
-            Client.stop(client)
-            halt("Sensors adapter start failed", reason)
-        end
+      {:ok, client} ->
+        start_controller_adapters(client, scheduler)
 
       {:error, reason} ->
-        Client.stop(client)
-        halt("Drive adapter start failed", reason)
+        GenServer.stop(scheduler)
+        halt("shared Modbus client start failed", reason)
     end
   end
 
-  defp start_controller_distribution(client, drive_uart, sensors_uart) do
-    IO.puts("modbus_robot_multinode: waiting for Drive and Sensors FC-100 peers")
-    wait_for_peers([{:drive, drive_uart}, {:sensors, sensors_uart}])
+  defp start_controller_adapters(client, scheduler) do
+    peers = controller_peers(@drive_unit_id, @sensors_unit_id)
 
-    ports = [
-      uart_options(:client, @drive_unit_id, existing: drive_uart),
-      uart_options(:client, @sensors_unit_id, existing: sensors_uart)
-    ]
+    case open_client_adapters(client, scheduler, peers, []) do
+      {:ok, adapters} ->
+        Enum.each(adapters, fn adapter ->
+          :ok = PollScheduler.register(scheduler, adapter.uart)
+        end)
+
+        :ok = PollScheduler.start(scheduler)
+        start_controller_distribution(client, scheduler, adapters)
+
+      {:error, role, reason} ->
+        Client.stop(client)
+        GenServer.stop(scheduler)
+        halt("#{role} adapter start failed", reason)
+    end
+  end
+
+  defp start_controller_distribution(client, scheduler, adapters) do
+    IO.puts("modbus_robot_multinode: waiting for #{length(adapters)} FC-100 peers")
+
+    wait_for_peers(Enum.map(adapters, fn adapter -> {adapter.role, adapter.uart} end))
+
+    ports =
+      Enum.map(adapters, fn adapter ->
+        uart_options(:client, adapter.unit_id, existing: adapter.uart)
+      end)
 
     case :net_kernel.start(identity(:controller), dist_options(ports)) do
       {:ok, _pid} ->
         :ok = :net_kernel.set_cookie(@cookie)
         true = :erlang.register(@controller_name, self())
-        IO.puts("modbus_robot_multinode: Controller distribution ready with 2 streams")
-        await_remotes(%{drive: nil, sensors: nil})
+
+        IO.puts(
+          "modbus_robot_multinode: Controller distribution ready with #{length(adapters)} streams"
+        )
+
+        await_remotes(
+          Enum.reduce(adapters, %{}, fn adapter, remotes ->
+            Map.put(remotes, adapter.role, nil)
+          end),
+          Enum.reduce(adapters, %{}, fn adapter, uart_by_role ->
+            Map.put(uart_by_role, adapter.role, adapter.uart)
+          end)
+        )
 
       other ->
-        ModbusUART.close(drive_uart)
-        ModbusUART.close(sensors_uart)
+        close_client_adapters(adapters)
         Client.stop(client)
+        GenServer.stop(scheduler)
         halt("Controller net_kernel start failed", other)
     end
   end
 
   defp start_remote(role) do
-    ports = [uart_options(:server, @unit_id)]
+    case start_remote_kernel(role) do
+      :ok ->
+        start_role_process(role)
+        true = :erlang.register(@remote_name, self())
+        IO.puts("modbus_robot_multinode: #{role} distribution ready unit=#{@unit_id}")
+        boot_id = Session.new_id()
+        connection_id = Session.new_id()
+
+        health =
+          RemoteHealth.new(connection_id, monotonic_ms(),
+            enabled: @remote_health_enabled,
+            ack_timeout_ms: @remote_ack_timeout_ms,
+            max_restarts: @remote_max_restarts
+          )
+
+        begin_remote_connection(role, boot_id, connection_id, health, nil)
+
+      {:error, reason} ->
+        halt("#{role} net_kernel start failed", reason)
+    end
+  end
+
+  defp start_remote_kernel(role, fault_drop_responses \\ @fault_drop_responses) do
+    ports = [uart_options(:server, @unit_id, fault_drop_responses: fault_drop_responses)]
 
     case :net_kernel.start(identity(role), dist_options(ports)) do
       {:ok, _pid} ->
         :ok = :net_kernel.set_cookie(@cookie)
-        start_role_process(role)
-        true = :erlang.register(@remote_name, self())
-        IO.puts("modbus_robot_multinode: #{role} distribution ready unit=#{@unit_id}")
-        remote_loop(role, Session.new_id())
+        :ok
 
       other ->
-        halt("#{role} net_kernel start failed", other)
+        {:error, other}
     end
   end
 
@@ -224,119 +401,438 @@ defmodule RobotSim.MultinodeDistributed do
     IO.puts("modbus_robot_multinode: Sensors process registered as #{inspect(@sensors_name)}")
   end
 
-  defp remote_loop(role, boot_id) do
-    announce(role, boot_id)
+  defp begin_remote_connection(role, boot_id, connection_id, health, traffic_run_id) do
+    announce(role, boot_id, connection_id)
+    schedule_remote_announce(connection_id, 2_000)
+    remote_loop(role, boot_id, connection_id, health, traffic_run_id)
+  end
 
+  defp remote_loop(role, boot_id, connection_id, health, traffic_run_id) do
     receive do
-      {:multinode_ack, ^role} ->
+      {:multinode_ack, ^role, ^connection_id} ->
         IO.puts("modbus_robot_multinode: #{role} acknowledged by Controller")
-        connected_remote_loop(role, boot_id)
+        next_health = acknowledge_remote_health(role, health, connection_id)
+        connected_remote_loop(role, boot_id, connection_id, next_health, traffic_run_id)
+
+      {:multinode_ack, ^role, _stale_connection_id} ->
+        remote_loop(role, boot_id, connection_id, health, traffic_run_id)
+
+      {:remote_announce, ^connection_id} ->
+        announce(role, boot_id, connection_id)
+        schedule_remote_announce(connection_id, 2_000)
+        remote_loop(role, boot_id, connection_id, health, traffic_run_id)
+
+      {:remote_announce, _stale_connection_id} ->
+        remote_loop(role, boot_id, connection_id, health, traffic_run_id)
 
       {:multinode_probe, from, reference} when is_pid(from) ->
         send(from, {:multinode_probe_reply, reference, role, node()})
-        remote_loop(role, boot_id)
+        remote_loop(role, boot_id, connection_id, health, traffic_run_id)
 
       {:multinode_soak, from, reference, id, payload}
       when is_pid(from) and is_binary(payload) ->
         reply_to_soak(from, reference, id, role, payload)
-        remote_loop(role, boot_id)
-    after
-      2_000 -> remote_loop(role, boot_id)
+        remote_loop(role, boot_id, connection_id, health, traffic_run_id)
+
+      {:robot_traffic_start, starter, collector, run_id, samples, interval_ms, payload_bytes,
+       ack_timeout_ms, ack_retries}
+      when is_pid(starter) and is_pid(collector) ->
+        next_run_id =
+          accept_traffic_start(
+            starter,
+            collector,
+            role,
+            run_id,
+            samples,
+            interval_ms,
+            payload_bytes,
+            ack_timeout_ms,
+            ack_retries,
+            traffic_run_id
+          )
+
+        remote_loop(role, boot_id, connection_id, health, next_run_id)
+
+      {:robot_traffic_ack_timeout, _producer, ^role, run_id, context} ->
+        handle_remote_ack_timeout(
+          role,
+          boot_id,
+          connection_id,
+          health,
+          traffic_run_id,
+          run_id,
+          context
+        )
     end
   end
 
-  defp connected_remote_loop(role, boot_id) do
+  defp connected_remote_loop(role, boot_id, connection_id, health, traffic_run_id) do
     receive do
-      {:multinode_ack, ^role} ->
-        connected_remote_loop(role, boot_id)
+      {:multinode_ack, ^role, ^connection_id} ->
+        next_health = acknowledge_remote_health(role, health, connection_id)
+        connected_remote_loop(role, boot_id, connection_id, next_health, traffic_run_id)
+
+      {:multinode_ack, ^role, _stale_connection_id} ->
+        connected_remote_loop(role, boot_id, connection_id, health, traffic_run_id)
+
+      {:remote_announce, ^connection_id} ->
+        handle_remote_health_tick(role, boot_id, connection_id, health, traffic_run_id)
+
+      {:remote_announce, _stale_connection_id} ->
+        connected_remote_loop(role, boot_id, connection_id, health, traffic_run_id)
 
       {:multinode_probe, from, reference} when is_pid(from) ->
         send(from, {:multinode_probe_reply, reference, role, node()})
-        connected_remote_loop(role, boot_id)
+        connected_remote_loop(role, boot_id, connection_id, health, traffic_run_id)
 
       {:multinode_soak, from, reference, id, payload}
       when is_pid(from) and is_binary(payload) ->
         reply_to_soak(from, reference, id, role, payload)
-        connected_remote_loop(role, boot_id)
-    after
-      @announce_ms ->
-        announce(role, boot_id)
-        connected_remote_loop(role, boot_id)
+        connected_remote_loop(role, boot_id, connection_id, health, traffic_run_id)
+
+      {:robot_traffic_start, starter, collector, run_id, samples, interval_ms, payload_bytes,
+       ack_timeout_ms, ack_retries}
+      when is_pid(starter) and is_pid(collector) ->
+        next_run_id =
+          accept_traffic_start(
+            starter,
+            collector,
+            role,
+            run_id,
+            samples,
+            interval_ms,
+            payload_bytes,
+            ack_timeout_ms,
+            ack_retries,
+            traffic_run_id
+          )
+
+        connected_remote_loop(role, boot_id, connection_id, health, next_run_id)
+
+      {:robot_traffic_ack_timeout, _producer, ^role, run_id, context} ->
+        handle_remote_ack_timeout(
+          role,
+          boot_id,
+          connection_id,
+          health,
+          traffic_run_id,
+          run_id,
+          context
+        )
     end
   end
 
-  defp announce(role, boot_id) do
+  defp accept_traffic_start(
+         starter,
+         collector,
+         role,
+         run_id,
+         samples,
+         interval_ms,
+         payload_bytes,
+         ack_timeout_ms,
+         ack_retries,
+         previous_run_id
+       ) do
+    case classify_traffic_start(previous_run_id, run_id) do
+      :new ->
+        ConcurrentTraffic.start_producer(
+          collector,
+          role,
+          run_id,
+          samples,
+          interval_ms,
+          payload_bytes,
+          ack_timeout_ms,
+          ack_retries,
+          self()
+        )
+
+        send(starter, {:robot_traffic_start_ack, role, run_id})
+        run_id
+
+      :duplicate ->
+        send(starter, {:robot_traffic_start_ack, role, run_id})
+        previous_run_id
+    end
+  end
+
+  defp acknowledge_remote_health(role, health, connection_id) do
+    now_ms = monotonic_ms()
+    next_health = RemoteHealth.acknowledge(health, connection_id, now_ms)
+
+    if @remote_health_trace and health.connection_ack_count > 0 do
+      IO.puts(
+        "modbus_robot_health: ACK role=#{role} connection=#{connection_id} " <>
+          "gap_ms=#{max(now_ms - health.last_ack_ms, 0)} " <>
+          "max_gap_ms=#{next_health.max_ack_gap_ms} count=#{next_health.ack_count}"
+      )
+    end
+
+    next_health
+  end
+
+  defp handle_remote_health_tick(role, boot_id, connection_id, health, traffic_run_id) do
+    announce(role, boot_id, connection_id)
+    now_ms = monotonic_ms()
+
+    case RemoteHealth.evaluate(health, now_ms) do
+      {:restart, next_health} ->
+        elapsed_ms = now_ms - health.last_ack_ms
+
+        restart_remote_distribution(
+          role,
+          boot_id,
+          connection_id,
+          next_health,
+          traffic_run_id,
+          {:readiness_ack_timeout, elapsed_ms}
+        )
+
+      {:exhausted, next_health} ->
+        IO.puts(
+          "modbus_robot_multinode: remote health restart budget exhausted " <>
+            "role=#{role} connection=#{connection_id} restarts=#{next_health.restarts}"
+        )
+
+        continue_remote_health(role, boot_id, connection_id, next_health, traffic_run_id)
+
+      {_status, next_health} ->
+        continue_remote_health(role, boot_id, connection_id, next_health, traffic_run_id)
+    end
+  end
+
+  defp continue_remote_health(role, boot_id, connection_id, health, traffic_run_id) do
+    schedule_remote_announce(connection_id, @announce_ms)
+    connected_remote_loop(role, boot_id, connection_id, health, traffic_run_id)
+  end
+
+  defp handle_remote_ack_timeout(
+         role,
+         boot_id,
+         connection_id,
+         health,
+         traffic_run_id,
+         run_id,
+         context
+       ) do
+    if @restart_on_traffic_ack_timeout do
+      restart_remote_distribution(
+        role,
+        boot_id,
+        connection_id,
+        health,
+        traffic_run_id,
+        {:traffic_ack_timeout, run_id, context}
+      )
+    else
+      connected_remote_loop(role, boot_id, connection_id, health, traffic_run_id)
+    end
+  end
+
+  defp restart_remote_distribution(
+         role,
+         boot_id,
+         previous_connection_id,
+         health,
+         traffic_run_id,
+         reason
+       ) do
+    IO.puts(
+      "modbus_robot_multinode: restarting distribution role=#{role} " <>
+        "connection=#{previous_connection_id} reason=#{inspect(reason)}"
+    )
+
+    case restart_remote_kernel(role) do
+      :ok ->
+        next_connection_id = Session.new_id()
+        next_health = RemoteHealth.reconnected(health, next_connection_id, monotonic_ms())
+
+        IO.puts(
+          "modbus_robot_multinode: distribution restarted role=#{role} " <>
+            "connection=#{next_connection_id}"
+        )
+
+        begin_remote_connection(role, boot_id, next_connection_id, next_health, traffic_run_id)
+
+      {:error, restart_reason} ->
+        halt("#{role} distribution restart failed", restart_reason)
+    end
+  end
+
+  defp restart_remote_kernel(role) do
+    fault_drop_responses =
+      restart_fault_drop_responses(@fault_drop_responses, @fault_rearm_on_restart)
+
+    case :net_kernel.stop() do
+      :ok ->
+        await_remote_kernel_stop(role, @net_kernel_stop_poll_attempts, fault_drop_responses)
+
+      other ->
+        {:error, {:net_kernel_stop_failed, other}}
+    end
+  end
+
+  defp await_remote_kernel_stop(role, attempts_left, fault_drop_responses)
+       when attempts_left > 0 do
+    case Process.whereis(:net_kernel) do
+      nil ->
+        start_remote_kernel(role, fault_drop_responses)
+
+      _pid ->
+        receive do
+        after
+          @net_kernel_stop_poll_ms ->
+            await_remote_kernel_stop(role, attempts_left - 1, fault_drop_responses)
+        end
+    end
+  end
+
+  defp await_remote_kernel_stop(_role, 0, _fault_drop_responses) do
+    {:error, {:net_kernel_stop_timeout, Process.whereis(:net_kernel)}}
+  end
+
+  defp announce(role, boot_id, connection_id) do
     send(
       {@controller_name, identity(:controller)},
-      {:multinode_ready, role, node(), self(), boot_id}
+      {:multinode_ready, role, node(), self(), boot_id, connection_id}
     )
   end
 
-  defp await_remotes(%{
-         drive: %{pid: drive_pid} = drive,
-         sensors: %{pid: sensors_pid} = sensors
-       })
+  defp schedule_remote_announce(connection_id, delay_ms) do
+    Process.send_after(self(), {:remote_announce, connection_id}, delay_ms)
+    :ok
+  end
+
+  defp await_remotes(
+         %{
+           drive: %{pid: drive_pid} = drive,
+           sensors: %{pid: sensors_pid} = sensors
+         },
+         adapters
+       )
        when is_pid(drive_pid) and is_pid(sensors_pid) do
     IO.puts("modbus_robot_multinode: both remote nodes connected")
 
     with :ok <- probe_remote(:drive, identity(:drive)),
-         :ok <- probe_remote(:sensors, identity(:sensors)),
-         :ok <- run_sensor_mission() do
-      IO.puts("modbus_robot_multinode: complete Drive and Sensors remote messaging")
-      remotes = run_soak_if_enabled(%{drive: drive, sensors: sensors})
-      controller_loop(remotes)
+         :ok <- probe_remote(:sensors, identity(:sensors)) do
+      remotes = %{drive: drive, sensors: sensors}
+      mission = start_sensor_mission()
+      controller_loop(remotes, adapters, mission, nil)
     else
       {:error, reason} -> halt("remote initialization failed", reason)
     end
   end
 
-  defp await_remotes(remotes) do
+  defp await_remotes(remotes, adapters) do
     receive do
-      {:multinode_ready, role, remote_node, pid, boot_id}
-      when role in [:drive, :sensors] and is_pid(pid) and is_integer(boot_id) and boot_id > 0 ->
-        case classify_readiness(remotes, role, remote_node, pid, boot_id) do
+      {:multinode_ready, role, remote_node, pid, boot_id, connection_id}
+      when role in [:drive, :sensors] and is_pid(pid) and is_integer(boot_id) and boot_id > 0 and
+             is_integer(connection_id) and connection_id > 0 ->
+        case classify_readiness(remotes, role, remote_node, pid, boot_id, connection_id) do
           :new ->
-            send(pid, {:multinode_ack, role})
+            send(pid, {:multinode_ack, role, connection_id})
             IO.puts("modbus_robot_multinode: connected role=#{role} node=#{inspect(remote_node)}")
-            await_remotes(track_remote(remotes, role, pid, boot_id))
+
+            await_remotes(
+              track_remote(remotes, role, pid, boot_id, connection_id),
+              adapters
+            )
 
           :duplicate ->
-            send(pid, {:multinode_ack, role})
-            await_remotes(track_remote(remotes, role, pid, boot_id))
+            send(pid, {:multinode_ack, role, connection_id})
+
+            await_remotes(
+              track_remote(remotes, role, pid, boot_id, connection_id),
+              adapters
+            )
 
           :unexpected ->
             log_unexpected_node(role, remote_node)
-            await_remotes(remotes)
+            await_remotes(remotes, adapters)
         end
     after
       @probe_timeout_ms -> halt("timed out waiting for remote nodes", remotes)
     end
   end
 
-  defp controller_loop(remotes) do
+  defp controller_loop(remotes, adapters, mission, recovery) do
     receive do
-      {:multinode_ready, role, remote_node, pid, boot_id}
-      when role in [:drive, :sensors] and is_pid(pid) and is_integer(boot_id) and boot_id > 0 ->
-        case classify_readiness(remotes, role, remote_node, pid, boot_id) do
+      {MissionWorker, ^mission, {:ok, result}} when is_pid(mission) ->
+        IO.puts("modbus_robot_multinode: sensor mission complete state=#{inspect(result.rover)}")
+        IO.puts("modbus_robot_multinode: complete Drive and Sensors remote messaging")
+        remotes = run_soak_if_enabled(remotes)
+        schedule_traffic_if_enabled()
+        controller_loop(remotes, adapters, nil, recovery)
+
+      {MissionWorker, ^mission, {:error, reason}} when is_pid(mission) ->
+        IO.puts("modbus_robot_multinode: sensor mission stopped reason=#{inspect(reason)}")
+
+        recovery = start_recovery_if_indeterminate(reason)
+        controller_loop(remotes, adapters, nil, recovery)
+
+      {RecoveryWorker, ^recovery, {:ok, snapshot}} when is_pid(recovery) ->
+        IO.puts(
+          "modbus_robot_multinode: recovery snapshot " <>
+            "boot_id=#{snapshot.boot_id} state=#{inspect(snapshot.rover)} " <>
+            "mission_error=#{inspect(snapshot.mission_error)}"
+        )
+
+        controller_loop(remotes, adapters, mission, nil)
+
+      {RecoveryWorker, ^recovery, {:error, reason}} when is_pid(recovery) ->
+        IO.puts("modbus_robot_multinode: recovery snapshot failed reason=#{inspect(reason)}")
+        controller_loop(remotes, adapters, mission, nil)
+
+      {:robot_traffic_complete, run_id, summary} ->
+        log_adapter_metrics("after", adapters)
+        schedule_settled_metrics(run_id)
+
+        IO.puts(
+          "modbus_robot_multinode: concurrent traffic report run=#{run_id} " <>
+            "outcome=#{summary.outcome}"
+        )
+
+        controller_loop(remotes, adapters, mission, recovery)
+
+      :start_multinode_traffic ->
+        start_traffic_if_enabled(adapters)
+        controller_loop(remotes, adapters, mission, recovery)
+
+      {:robot_traffic_metrics_settled, run_id} ->
+        log_adapter_metrics("settled", adapters)
+        IO.puts("modbus_robot_metrics: settled run=#{run_id}")
+        controller_loop(remotes, adapters, mission, recovery)
+
+      {:multinode_ready, role, remote_node, pid, boot_id, connection_id}
+      when role in [:drive, :sensors] and is_pid(pid) and is_integer(boot_id) and boot_id > 0 and
+             is_integer(connection_id) and connection_id > 0 ->
+        case classify_readiness(remotes, role, remote_node, pid, boot_id, connection_id) do
           :duplicate ->
-            send(pid, {:multinode_ack, role})
-            controller_loop(track_remote(remotes, role, pid, boot_id))
+            send(pid, {:multinode_ack, role, connection_id})
+
+            controller_loop(
+              track_remote(remotes, role, pid, boot_id, connection_id),
+              adapters,
+              mission,
+              recovery
+            )
 
           :new ->
-            send(pid, {:multinode_ack, role})
+            send(pid, {:multinode_ack, role, connection_id})
 
-            next_remotes = track_remote(remotes, role, pid, boot_id)
+            next_remotes = track_remote(remotes, role, pid, boot_id, connection_id)
 
             IO.puts(
               "modbus_robot_multinode: reconnected role=#{role} node=#{inspect(remote_node)}"
             )
 
             verify_recovery(role)
-            controller_loop(next_remotes)
+            controller_loop(next_remotes, adapters, mission, recovery)
 
           :unexpected ->
             log_unexpected_node(role, remote_node)
-            controller_loop(remotes)
+            controller_loop(remotes, adapters, mission, recovery)
         end
     after
       @health_check_ms ->
@@ -344,7 +840,7 @@ defmodule RobotSim.MultinodeDistributed do
           expire_stale_remotes(remotes, monotonic_ms(), @lease_ms)
 
         log_expired_roles(expired_roles)
-        controller_loop(next_remotes)
+        controller_loop(next_remotes, adapters, mission, recovery)
     end
   end
 
@@ -368,10 +864,11 @@ defmodule RobotSim.MultinodeDistributed do
     )
   end
 
-  defp track_remote(remotes, role, pid, boot_id) do
+  defp track_remote(remotes, role, pid, boot_id, connection_id) do
     Map.put(remotes, role, %{
       pid: pid,
       boot_id: boot_id,
+      connection_id: connection_id,
       last_seen_ms: monotonic_ms()
     })
   end
@@ -398,24 +895,101 @@ defmodule RobotSim.MultinodeDistributed do
     end
   end
 
-  defp run_sensor_mission do
-    case SensorMission.run(
-           {@sensors_name, identity(:sensors)},
-           {@drive_name, identity(:drive)},
-           steps: @sensor_mission_steps,
-           first_request_id: Session.new_id(),
-           timeout_ms: @probe_timeout_ms,
-           max_retries: @mission_retries,
-           trace: true
-         ) do
-      {:ok, result} ->
-        IO.puts("modbus_robot_multinode: sensor mission complete state=#{inspect(result.rover)}")
+  defp start_sensor_mission do
+    MissionWorker.start(
+      self(),
+      {@sensors_name, identity(:sensors)},
+      {@drive_name, identity(:drive)},
+      steps: @sensor_mission_steps,
+      first_request_id: Session.new_id(),
+      timeout_ms: @probe_timeout_ms,
+      max_retries: @mission_retries,
+      trace: true
+    )
+  end
 
-        :ok
-
-      {:error, reason} ->
-        {:error, reason}
+  defp start_recovery_if_indeterminate(reason) do
+    if indeterminate_command?(reason) do
+      RecoveryWorker.start(
+        self(),
+        {@drive_name, identity(:drive)},
+        reason,
+        request_id: Session.new_id(),
+        timeout_ms: @probe_timeout_ms,
+        max_retries: @mission_retries,
+        trace: true
+      )
+    else
+      nil
     end
+  end
+
+  defp indeterminate_command?({:indeterminate_command, _request_id, _old_boot, _new_boot}),
+    do: true
+
+  defp indeterminate_command?({:sensor_mission_failed, _step, reason}),
+    do: indeterminate_command?(reason)
+
+  defp indeterminate_command?(_reason), do: false
+
+  defp start_traffic_if_enabled(adapters) do
+    if @traffic_samples > 0 do
+      reset_adapter_metrics(adapters)
+      log_adapter_metrics("before", adapters)
+
+      targets = [
+        {:drive, {@remote_name, identity(:drive)}},
+        {:sensors, {@remote_name, identity(:sensors)}}
+      ]
+
+      ConcurrentTraffic.start(self(), targets,
+        samples: @traffic_samples,
+        drive_interval_ms: @traffic_drive_interval_ms,
+        sensors_interval_ms: @traffic_sensors_interval_ms,
+        payload_bytes: @traffic_payload_bytes,
+        timeout_ms: @traffic_timeout_ms,
+        ack_timeout_ms: @traffic_ack_timeout_ms,
+        ack_retries: @traffic_ack_retries
+      )
+    end
+  end
+
+  defp schedule_traffic_if_enabled do
+    if @traffic_samples > 0 do
+      Process.send_after(self(), :start_multinode_traffic, @traffic_start_delay_ms)
+
+      if @traffic_start_delay_ms > 0 do
+        IO.puts(
+          "modbus_robot_multinode: concurrent traffic scheduled " <>
+            "delay_ms=#{@traffic_start_delay_ms}"
+        )
+      end
+    end
+
+    :ok
+  end
+
+  defp reset_adapter_metrics(adapters) do
+    :ok = ModbusUART.reset_metrics(adapters.drive)
+    :ok = ModbusUART.reset_metrics(adapters.sensors)
+  end
+
+  defp log_adapter_metrics(phase, adapters) do
+    log_adapter_metric(phase, :drive, adapters.drive)
+    log_adapter_metric(phase, :sensors, adapters.sensors)
+  end
+
+  defp log_adapter_metric(phase, role, adapter) do
+    snapshot = ModbusUART.metrics_snapshot(adapter)
+
+    IO.puts("modbus_robot_metrics: phase=#{phase} role=#{role} snapshot=#{inspect(snapshot)}")
+  end
+
+  defp schedule_settled_metrics(_run_id) when @traffic_settle_ms == 0, do: :ok
+
+  defp schedule_settled_metrics(run_id) do
+    Process.send_after(self(), {:robot_traffic_metrics_settled, run_id}, @traffic_settle_ms)
+    :ok
   end
 
   defp run_soak_if_enabled(remotes) do
@@ -541,29 +1115,31 @@ defmodule RobotSim.MultinodeDistributed do
       {:multinode_soak_error, ^reference, ^role, ^remote_node, ^id, reason} ->
         {:error, reason, remotes}
 
-      {:multinode_ready, ready_role, ready_node, pid, boot_id}
+      {:multinode_ready, ready_role, ready_node, pid, boot_id, connection_id}
       when ready_role in [:drive, :sensors] and is_pid(pid) and is_integer(boot_id) and
-             boot_id > 0 ->
+             boot_id > 0 and is_integer(connection_id) and connection_id > 0 ->
         case soak_readiness_transition(
                remotes,
                role,
                ready_role,
                ready_node,
                pid,
-               boot_id
+               boot_id,
+               connection_id
              ) do
           {:duplicate, next_remotes} ->
-            send(pid, {:multinode_ack, ready_role})
+            send(pid, {:multinode_ack, ready_role, connection_id})
 
             next_remotes =
-              track_remote(next_remotes, ready_role, pid, boot_id)
+              track_remote(next_remotes, ready_role, pid, boot_id, connection_id)
 
             await_soak_reply(role, remote_node, id, payload, reference, next_remotes, deadline)
 
           {action, next_remotes} when action in [:retry, :continue] ->
-            send(pid, {:multinode_ack, ready_role})
+            send(pid, {:multinode_ack, ready_role, connection_id})
 
-            next_remotes = track_remote(next_remotes, ready_role, pid, boot_id)
+            next_remotes =
+              track_remote(next_remotes, ready_role, pid, boot_id, connection_id)
 
             IO.puts(
               "modbus_robot_multinode: reconnected during soak role=#{ready_role} " <>
@@ -601,11 +1177,32 @@ defmodule RobotSim.MultinodeDistributed do
     end
   end
 
-  defp open_client_adapter(client, unit_id) do
-    case ModbusUART.open(uart_options(:client, unit_id, client: client)) do
+  defp open_client_adapter(client, unit_id, scheduler) do
+    case ModbusUART.open(
+           uart_options(:client, unit_id, client: client, poll_scheduler: scheduler)
+         ) do
       pid when is_pid(pid) -> {:ok, pid}
       {:error, _reason} = error -> error
     end
+  end
+
+  defp open_client_adapters(_client, _scheduler, [], adapters),
+    do: {:ok, Enum.reverse(adapters)}
+
+  defp open_client_adapters(client, scheduler, [peer | rest], adapters) do
+    case open_client_adapter(client, peer.unit_id, scheduler) do
+      {:ok, uart} ->
+        adapter = Map.put(peer, :uart, uart)
+        open_client_adapters(client, scheduler, rest, [adapter | adapters])
+
+      {:error, reason} ->
+        close_client_adapters(adapters)
+        {:error, peer.role, reason}
+    end
+  end
+
+  defp close_client_adapters(adapters) do
+    Enum.each(adapters, fn adapter -> ModbusUART.close(adapter.uart) end)
   end
 
   defp wait_for_peers([]), do: :ok
@@ -631,7 +1228,7 @@ defmodule RobotSim.MultinodeDistributed do
     }
   end
 
-  defp uart_options(role, unit_id, extra \\ []) do
+  defp uart_options(role, unit_id, extra) do
     extra ++
       [
         role: role,
@@ -642,9 +1239,9 @@ defmodule RobotSim.MultinodeDistributed do
         chunk_payload_bytes: @chunk_payload_bytes,
         max_queued_bytes: @max_queued_bytes,
         max_queued_chunks: @max_queued_chunks,
-        fault_drop_responses: 0,
-        fault_min_payload_bytes: 96,
-        fault_after_ms: 10_000,
+        fault_drop_responses: @fault_drop_responses,
+        fault_min_payload_bytes: @fault_min_payload_bytes,
+        fault_after_ms: @fault_after_ms,
         poll_ms: @poll_ms,
         trace_transactions: @trace_transactions,
         trace_queue: @trace_queue

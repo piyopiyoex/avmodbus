@@ -1,4 +1,4 @@
-# Initial-handshake liveness と起動順序mitigation — 2026-10-16
+# 初回handshakeの進行性と起動順序対策 — 2026-10-16
 
 ## 目的
 
@@ -63,7 +63,7 @@ recoveryを保証しない。
 根本対応にはAtomVM側で、setup processがpeerへ関連付く前に終了した場合のpending entry cleanupと、両endpointの
 link managerを含むretry lifecycleを検証する必要がある。exampleはその修正をvendorせず、`:serial_dist`を直接再利用する。
 
-## Upstream follow-up
+## Upstreamへの追試
 
 2026-10-16にAtomVM upstreamを再確認した。`release-0.7`の
 [`18b35870`](https://github.com/atomvm/AtomVM/commit/18b35870a0be75c42892db9a0762e8c7a7d61323)と`main`の

@@ -43,6 +43,34 @@ defmodule DisterlProbe.TransactionStatsTest do
     refute TransactionStats.enabled?(stats)
   end
 
+  test "summarizes and resets a measurement window without losing an active request" do
+    stats = TransactionStats.start(TransactionStats.new(true), 13, 100)
+    {stats, _event} = TransactionStats.succeed(stats, 20, 160)
+    stats = TransactionStats.start(stats, 13, 200)
+
+    assert TransactionStats.summary(stats) == %{
+             polls: 2,
+             successes: 1,
+             failures: 0,
+             average_elapsed_ms: 60,
+             max_elapsed_ms: 60,
+             active: true
+           }
+
+    reset = TransactionStats.reset(stats)
+    assert reset.enabled
+    assert reset.active == {13, 200}
+
+    assert TransactionStats.summary(reset) == %{
+             polls: 1,
+             successes: 0,
+             failures: 0,
+             average_elapsed_ms: nil,
+             max_elapsed_ms: 0,
+             active: true
+           }
+  end
+
   test "traces failures and non-empty traffic but suppresses successful idle polls" do
     idle = %{outcome: :ok, request_bytes: 13, response_bytes: 13}
     request_data = %{idle | request_bytes: 14}

@@ -1,22 +1,21 @@
-# Hardware verification — 2026-10-15
+# XIAO ESP32-C5 2台での実機検証 — 2026-10-15
 
-## Environment
+## 環境
 
-- Host: Linux (Debian / LMDE), timezone Asia/Tokyo
-- Board A / Client: XIAO ESP32-C5, `/dev/ttyACM1`, USB serial `38:44:BE:A5:05:14`
-- Board B / Server: XIAO ESP32-C5, `/dev/ttyACM0`, USB serial `38:44:BE:A5:04:DC`
+- ホスト: Linux（Debian / LMDE）、timezone Asia/Tokyo
+- Board A / Client: XIAO ESP32-C5、`/dev/ttyACM1`、USB serial `38:44:BE:A5:05:14`
+- Board B / Server: XIAO ESP32-C5、`/dev/ttyACM0`、USB serial `38:44:BE:A5:04:DC`
 - AtomVM: `v0.7.0-beta.0+git.8d3e051` (`v0.7.0-beta.0-dirty` build info)
 - ESP-IDF: `v5.5.5`
-- 2 × HW-519, 2-wire RS485, 9,600 baud, 8N1
-- UART1: TX GPIO23, RX GPIO24
-- Modbus Unit ID 1, custom Function Code 100
+- HW-519 × 2、2線式RS485、9,600 baud、8N1
+- UART1: TX GPIO23、RX GPIO24
+- Modbus Unit ID 1、custom Function Code 100
 
-`mix atomvm.esp32.info` identified both devices as ESP32-C5 and reported AtomVM installed.
+`mix atomvm.esp32.info`で両deviceがESP32-C5として認識され、AtomVMがinstall済みであることを確認した。
 
-## Phase 1 result
+## Phase 1の結果
 
-The Server queued three messages before receiving a request. The Client independently queued
-three messages and initiated every physical transaction.
+Serverはrequestを受信する前に3 messageをqueueした。Clientも独立して3 messageをqueueし、すべての物理transactionを開始した。
 
 Server:
 
@@ -39,15 +38,13 @@ disterl_probe: client received "server message 3"
 disterl_probe: complete (3 ordered messages each way; all acknowledged)
 ```
 
-Ordering and duplicate suppression were also covered by host tests. A lost response is modeled
-by asking the unchanged sender state for its next packet; the encoded sequence and payload are
-identical, and the receiver delivers that sequence only once.
+順序保証と重複抑止はホストテストでも確認した。応答消失は、変更していないsender stateへ次のpacketを要求することで再現した。
+再生成されたsequenceとpayloadは同一で、receiverはそのsequenceを1回だけ配送した。
 
-## Timeout and recovery
+## Timeoutと復旧
 
-The Server was built with `MODBUS_START_DELAY_MS=60000`. The Client was reset while the Server
-had not opened UART1. It timed out four times, retained its in-flight sequence, and completed
-without manual intervention after the Server became available.
+Serverを`MODBUS_START_DELAY_MS=60000`でbuildし、ServerがUART1をopenする前にClientをresetした。
+Clientは4回timeoutした間も送信中のsequenceを保持し、Serverが利用可能になると手動操作なしで完了した。
 
 ```text
 disterl_probe: client started; 3 messages queued
@@ -61,13 +58,13 @@ disterl_probe: client received "server message 3"
 disterl_probe: complete (3 ordered messages each way; all acknowledged)
 ```
 
-The Server then logged all three Client messages in order.
+その後、ServerはClientからの3 messageを順番どおりに記録した。
 
-## Phase 2 result
+## Phase 2の結果
 
-`DisterlProbe.ModbusUART` was supplied to AtomVM `serial_dist` as `uart_module`. No AtomVM or
-AVModbus core source was modified. The test used a 20 ms Client poll interval and a 500 ms
-Modbus response timeout. Both boards were reset together before the measurement.
+`DisterlProbe.ModbusUART`をAtomVM `serial_dist`の`uart_module`として指定した。AtomVMと
+AVModbus coreのsourceは変更していない。Clientのpoll intervalは20 ms、Modbus response timeoutは500 msとした。
+測定前に両boardを同時にresetした。
 
 Client (`a@modbus.local`):
 
@@ -108,31 +105,27 @@ modbus_disterl: received ping 3 from :a@modbus.local
 modbus_uart: queued bytes=101
 ```
 
-The first ping was deliberately delayed 10 seconds after boot so both monitors could attach.
-Therefore `connection_ms=12840` includes that 10-second delay. The first RTT includes the
-distribution handshake; the later 802 ms values represent the observed steady-state remote
-message round trip in this configuration.
+両monitorを接続できるよう、最初のpingはboot後に意図的に10秒遅延させた。このため`connection_ms=12840`には
+10秒のdelayが含まれる。最初のRTTにはdistribution handshakeが含まれ、以降の802 msはこの構成で観測した
+steady-stateのremote message round tripを示す。
 
-After the messages, both sides continued to exchange 10-byte `serial_dist` tick frames for the
-remainder of the 45-second observation without a crash or UART error.
+message完了後も、残り45秒の観測中に両側は10-byteの`serial_dist` tick frameを交換し続け、crashやUART errorは発生しなかった。
 
-## Integration findings
+## 統合で得られた知見
 
-- The virtual UART approach is suitable: `serial_dist` already allows a custom `uart_module`.
-- The adapter must implement both `read(handle)` and `read(handle, :infinity)`; the latter is
-  used during `dist_util` handshake receive.
-- A timed-out handshake can leave a blocked virtual read owned by a controller that exits. The
-  adapter replaces that stale reader when the link manager starts its next read.
-- A dedicated `modbus_dist` carrier is not required for this proof of concept.
-- Independent board reboot is not yet robust because the FC-100 header has no boot/session ID.
-  An observed symptom is `:invalid_acknowledgment` until both endpoints are reset. A future
-  carrier should add session negotiation and explicit resynchronization.
-- AtomVM's fixed 7-second distribution setup timer and Modbus's request/response latency are the
-  main timing constraint. The verified 20 ms poll interval completed the handshake in time.
-- PackBEAM reported `erlang:phash2/2` in generated Elixir `GenServer` error-reporting code. The
-  verified normal paths did not enter that unsupported code. A follow-up replaced the generated
-  fallback callbacks and removed the warning; see
-  [PackBEAM `phash2/2` warning の除去](2026-10-16-packbeam-phash2.md).
+- virtual UART方式は適している。`serial_dist`はcustom `uart_module`を指定できる。
+- adapterは`read(handle)`と`read(handle, :infinity)`の両方を実装する必要がある。後者は`dist_util`のhandshake受信で使われる。
+- timeoutしたhandshakeにより、終了するcontrollerが所有するvirtual readがblockされたまま残る場合がある。
+  adapterはlink managerが次のreadを開始するときに、この古いreaderを置き換える。
+- このproof of conceptに専用`modbus_dist` carrierは不要である。
+- FC-100 headerにboot/session IDがないため、この時点では片側boardの再起動は堅牢ではなかった。
+  両endpointをresetするまで`:invalid_acknowledgment`が続く症状を観測した。今後のcarrierにはsession negotiationと
+  明示的な再同期が必要である。
+- AtomVM固定の7秒distribution setup timerとModbusのrequest/response latencyが主な時間制約となる。
+  検証した20 ms poll intervalでは時間内にhandshakeが完了した。
+- PackBEAMは生成されたElixir `GenServer`のerror-reporting code内に`erlang:phash2/2`を検出した。
+  検証した正常系はこのunsupported codeへ入らない。追試では生成されたfallback callbackを置き換えてwarningを除去した。次を参照する。
+  [PackBEAM `phash2/2` warningの除去](2026-10-16-packbeam-phash2.md)を参照する。
 
-The session and independent-reboot limitation recorded here was addressed in a follow-up experiment.
-See [Session-aware reboot recovery — 2026-10-16](2026-10-16-session-recovery.md).
+ここで記録したsessionと片側再起動の制約は追試で解消した。
+[sessionを考慮した再起動復旧 — 2026-10-16](2026-10-16-session-recovery.md)を参照する。

@@ -1,4 +1,4 @@
-# Session-aware reboot recovery — 2026-10-16
+# sessionを考慮した再起動復旧 — 2026-10-16
 
 ## 目的
 
@@ -29,7 +29,7 @@ negative boxed integer として返す場合があるため、同じ bit pattern
 4. 接続済み controller の infinite read を `{:error, :closed}` で終了する
 5. `serial_dist` link manager に新しい handshake を受け入れさせる
 
-## Host test
+## ホストテスト
 
 次の case を追加し、合計 14 tests が成功した。
 

@@ -41,9 +41,11 @@ defmodule RobotSim.SensorMission do
        do: {:error, :invalid_first_request_id}
 
   defp validate_and_run(sensors, drive, steps, first_request_id, options) do
-    with {:ok, completed, status_request_id} <-
-           run_steps(sensors, drive, steps, 1, first_request_id, options, []),
-         {:ok, rover} <- Controller.command(drive, status_request_id, :status, options) do
+    with {:ok, boot_id} <- Controller.drive_identity(drive, options),
+         guarded_options = Keyword.put(options, :expected_boot_id, boot_id),
+         {:ok, completed, status_request_id} <-
+           run_steps(sensors, drive, steps, 1, first_request_id, guarded_options, []),
+         {:ok, rover} <- Controller.command(drive, status_request_id, :status, guarded_options) do
       {:ok, %{steps: :lists.reverse(completed), rover: rover}}
     end
   end

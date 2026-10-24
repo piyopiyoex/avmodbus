@@ -1,4 +1,4 @@
-# Stage 3 three-node distributed Erlang — 2026-10-19
+# Stage 3 3ノード分散Erlang — 2026-10-19
 
 ## 目的
 
@@ -45,7 +45,7 @@ modbus_robot_multinode: complete Drive and Sensors remote messaging
 `ConnPid ! {self(), tick}` は送信 message 自体を返す。connection が 1 個なら fold が終了するため問題にならないが、2 個目で
 accumulator が `ok` ではなくなり function clause に一致しない。
 
-## AtomVM local patch
+## AtomVMのlocal patch
 
 既存の setup PID cleanup branch `fix/net-kernel-setup-pid` に、send 後 `ok` を明示する最小修正と 2 connection の regression test を
 追加した。

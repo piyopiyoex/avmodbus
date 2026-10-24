@@ -1,4 +1,4 @@
-# Queue memory と ACK-loss — 2026-10-16
+# キューメモリーとACK消失 — 2026-10-16
 
 ## 目的
 
@@ -26,7 +26,7 @@ application stream へ再配達せず ACK だけを返す。
 - `/dev/ttyACM0`: Server、USB serial `38:44:BE:A5:04:DC`
 - `/dev/ttyACM1`: Client、USB serial `38:44:BE:A5:05:14`
 
-## 16 KiB probe
+## 16 KiB probeの結果
 
 default 16 KiB queue に対して 16,384-byte application payload を送った。distribution frame は 16,496 bytesに
 なったが、`ModbusUART.write/2` の queue check より前に `serial_dist_controller` が refc binary を確保できなかった。
@@ -39,7 +39,7 @@ serial_dist_controller: out_of_memory
 この run の Client は boot 後 minimum free heap 52,168 bytesまで低下した。queue limit は adapter より上流の frame
 allocation を制限できないため、16 KiB default を安全な heap guardrail とみなせない。
 
-## 8 KiB queue-full probe
+## 8 KiB queue-full probeの結果
 
 Client の queue limit と最初の application payload を 8,192 bytes にした。8,304-byte distribution write の
 allocation は成功し、adapter が partial chunk を残さず拒否した。
@@ -55,7 +55,7 @@ fail-fast は意図どおりだったが、15秒後の zero-byte ping retry で�
 ping/pong へ復旧しなかった。queue-full 後の controller recovery は未達であり、initial startup で確認した AtomVM
 `net_kernel` / `serial_dist` の half-open connection cleanup と同じ領域の blocker と判断する。
 
-### Session rollover follow-up
+### Session rolloverの追試
 
 失敗時のlogとAtomVM `serial_dist` sourceを照合すると、local controller終了後もpeer controllerが古いdata phaseに残り、
 次のhandshake bytesを以前のstreamとして読むことが`crc_error`の直接条件だった。queue-full時にClient Channelを新しい
@@ -85,7 +85,7 @@ rtt_avg_ms=3696 rtt_max_ms=3696 timeouts=1 elapsed_ms=22922
 このfollow-upにより、確立済みconnectionのqueue-full後に残るpeer half-open stateはexampleのsession boundaryで解放できた。
 initial handshake中の`net_kernel` pending entry問題とは発生段階が異なり、後者は引き続き未解決である。
 
-## 4 KiB ACK-loss
+## 4 KiB ACK-lossの試験
 
 default queue に 4,096-byte payload を送信し、Server は起動7秒後から payload 96 bytes以上の受理済み response を
 3回失敗させた。Client の distribution write は 4,208 bytes / 44 chunks だった。

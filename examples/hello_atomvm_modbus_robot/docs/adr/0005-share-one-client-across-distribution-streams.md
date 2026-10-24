@@ -1,4 +1,4 @@
-# 0005: 1 個の Modbus Client を複数 distribution stream で共有する
+# 0005: 1個のModbus Clientを複数の分散接続ストリームで共有する
 
 - Status: accepted
 - Date: 2026-10-19

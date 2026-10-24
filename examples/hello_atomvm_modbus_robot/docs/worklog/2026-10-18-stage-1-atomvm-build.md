@@ -1,4 +1,4 @@
-# Stage 1 AtomVM build scaffold — 2026-10-18
+# Stage 1 AtomVMビルド基盤 — 2026-10-18
 
 ## 目的
 
@@ -14,7 +14,7 @@ PackBEAM artifact まで生成できることを host 上で確認する。
 - virtual UART: `DisterlProbe.ModbusUART`
 - application destination: registered process `:modbus_robot_drive`
 
-## Compatibility follow-up
+## 互換性の追試
 
 最初の `mix atomvm.check` は、host simulation で使っていた次の function が AtomVM 0.7.0-beta.0 にないと報告した。
 

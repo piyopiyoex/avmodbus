@@ -1,4 +1,4 @@
-# Stage 2 three-device standard Modbus multidrop — 2026-10-19
+# Stage 2 3台の標準Modbusマルチドロップ — 2026-10-19
 
 ## 目的
 
@@ -6,7 +6,7 @@
 Unit ID で選択し、transaction を重ねず安定して poll できることを確認する。この試験では Erlang distribution と FC-100 を
 使わない。
 
-## Hardware
+## ハードウェア
 
 | Role | Port | USB serial | Modbus role |
 | --- | --- | --- | --- |
@@ -28,7 +28,7 @@ Unit ID で選択し、transaction を重ねず安定して poll できること
 
 termination / bias resistance は今回個別に測定していない。記録値は現在の配線と HW-519 module の構成に限る。
 
-## Probe protocol
+## 疎通プロトコル
 
 Controller は各 cycle で必ず次の順序で Function Code 3 を送る。
 
@@ -60,7 +60,7 @@ modbus_robot_multidrop: complete result={:ok, %{successes: 120, failures: 0, dri
 Controller start から summary まで約 81.8 秒だった。全 cycle で Drive→Sensors の順序を維持し、CRC error、timeout、
 unexpected register、unit collision は記録されなかった。これは長時間 soak や performance benchmark ではない。
 
-## Independent Server reboot
+## Serverの単独再起動
 
 12 cycle / 24 request build を使い、Controller を動かしたまま各 Server を別々に RTS reset した。
 

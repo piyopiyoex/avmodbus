@@ -26,36 +26,6 @@ Modbus RTU・ASCII・TCP に対応し、データを読み取る Client と、�
 
 対応状況と実機で確認した構成は [互換性表](docs/compatibility.md) に記録しています。
 
-## 実験: AVModbus 上の distributed Erlang
-
-AVModbus の custom Function Code `100` を transport primitive として使い、AtomVM の
-`serial_dist` を Modbus RTU / RS485 上で動かすことに成功しています。2 台の XIAO
-ESP32-C5 で genuine distribution handshake、remote process の ping / pong、512-byte
-payload の連続往復、96-byte chunk と 9,600 baud での 4 KiB payload の3回連続往復、
-115,200 baud での 4 KiB payload の 1 往復、
-確立済み connection の 4 KiB 転送中に Server を再起動した後の再送・再同期を確認しました。
-
-これは [独立した実験用サンプル](examples/hello_atomvm_modbus_disterl/README.md) の成果です。
-AVModbus が distributed Erlang carrier を public API として提供している、または production
-用途をサポートしているという意味ではありません。polling、sequence / ACK、session recovery、
-virtual UART adapter はサンプル内にあり、`lib/avmodbus/` は変更していません。
-
-- [実験の構成と再現手順](examples/hello_atomvm_modbus_disterl/README.md)
-- [実機試験と測定結果](examples/hello_atomvm_modbus_disterl/docs/worklog/README.md)
-- [既知の制約](https://github.com/piyopiyoex/avmodbus/blob/main/examples/hello_atomvm_modbus_disterl/docs/limitations.md)
-
-## 実験: distributed Erlang 仮想ロボット
-
-通信確認から分散 application へ進む次の調査として、software だけで動く
-[仮想ロボット example](examples/hello_atomvm_modbus_robot/README.md) を用意しています。host simulation に加え、2 台の
-XIAO ESP32-C5 による distributed mission、3 台の shared RS485 bus による standard Modbus multidrop、および
-local AtomVM patch を使った 3-node distribution を確認済みです。3-node application では sensor-driven mission、
-Drive / Sensors の独立 recovery、application reply loss 後の same-ID command retry まで実機検証しています。
-
-3-node 構成は experimental であり、公式 AtomVM image だけで安定動作する機能ではありません。runtime blocker、実測結果、
-残る recovery / fairness の調査は [ロードマップ](examples/hello_atomvm_modbus_robot/docs/roadmap.md)、保証しない範囲は
-[既知の制約](examples/hello_atomvm_modbus_robot/docs/limitations.md) を参照してください。
-
 ## Client の例
 
 Unit ID `1` の Holding Register を、アドレス `0` から 2 個読み取ります。
@@ -85,6 +55,15 @@ RTU を使う場合は、先に UART のピンや通信速度を設定してく�
 ```
 
 この例でも、実機では UART 設定が必要です。
+
+## 実験用サンプル
+
+AVModbus の公開 API を利用した、次の実験も収録しています。
+
+- [Modbus RTU 上の distributed Erlang](examples/hello_atomvm_modbus_disterl/README.md) — 2 台の ESP32-C5 間で `serial_dist` を動かす実験
+- [distributed Erlang 仮想ロボット](examples/hello_atomvm_modbus_robot/README.md) — 3 台の ESP32-C5 と共有 RS485 バスを使う分散アプリケーション
+
+どちらも本番用途の機能ではありません。構成、実測結果、既知の制約は各サンプルの資料を参照してください。
 
 ## 開発に参加する
 

@@ -1,4 +1,4 @@
-# Modbus transaction tracing — 2026-10-16
+# Modbusトランザクションのトレース — 2026-10-16
 
 ## 目的
 
