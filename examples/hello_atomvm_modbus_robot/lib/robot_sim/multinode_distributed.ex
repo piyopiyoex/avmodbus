@@ -11,7 +11,7 @@ defmodule RobotSim.MultinodeDistributed do
   @compile {:no_warn_undefined, :net_kernel}
 
   alias AVModbus.Client
-  alias DisterlProbe.{ModbusUART, Payload, PollScheduler, Session}
+  alias DisterlProbe.{ModbusUART, Payload, PollScheduler, QueueBudget, Session}
 
   alias RobotSim.{
     ConcurrentTraffic,
@@ -35,6 +35,16 @@ defmodule RobotSim.MultinodeDistributed do
   @chunk_payload_bytes Application.compile_env(:robot_sim, :chunk_payload_bytes, 96)
   @max_queued_bytes Application.compile_env(:robot_sim, :max_queued_bytes, 8_192)
   @max_queued_chunks Application.compile_env(:robot_sim, :max_queued_chunks, 256)
+  @global_max_queued_bytes Application.compile_env(
+                             :robot_sim,
+                             :multinode_global_max_queued_bytes,
+                             8_192
+                           )
+  @global_max_queued_chunks Application.compile_env(
+                              :robot_sim,
+                              :multinode_global_max_queued_chunks,
+                              256
+                            )
   @fault_drop_responses Application.compile_env(:robot_sim, :fault_drop_responses, 0)
   @fault_min_payload_bytes Application.compile_env(:robot_sim, :fault_min_payload_bytes, 96)
   @fault_after_ms Application.compile_env(:robot_sim, :fault_after_ms, 10_000)
@@ -301,7 +311,7 @@ defmodule RobotSim.MultinodeDistributed do
            timeout: @timeout_ms
          ) do
       {:ok, client} ->
-        start_controller_adapters(client, scheduler)
+        start_controller_budget(client, scheduler)
 
       {:error, reason} ->
         GenServer.stop(scheduler)
@@ -309,26 +319,46 @@ defmodule RobotSim.MultinodeDistributed do
     end
   end
 
-  defp start_controller_adapters(client, scheduler) do
+  defp start_controller_budget(client, scheduler) do
+    case QueueBudget.start_link(
+           max_queued_bytes: @global_max_queued_bytes,
+           max_queued_chunks: @global_max_queued_chunks
+         ) do
+      {:ok, budget} ->
+        IO.puts(
+          "modbus_robot_multinode: global queue budget bytes=#{@global_max_queued_bytes} chunks=#{@global_max_queued_chunks}"
+        )
+
+        start_controller_adapters(client, scheduler, budget)
+
+      {:error, reason} ->
+        Client.stop(client)
+        GenServer.stop(scheduler)
+        halt("global queue budget start failed", reason)
+    end
+  end
+
+  defp start_controller_adapters(client, scheduler, budget) do
     peers = controller_peers(@drive_unit_id, @sensors_unit_id)
 
-    case open_client_adapters(client, scheduler, peers, []) do
+    case open_client_adapters(client, scheduler, budget, peers, []) do
       {:ok, adapters} ->
         Enum.each(adapters, fn adapter ->
           :ok = PollScheduler.register(scheduler, adapter.uart)
         end)
 
         :ok = PollScheduler.start(scheduler)
-        start_controller_distribution(client, scheduler, adapters)
+        start_controller_distribution(client, scheduler, budget, adapters)
 
       {:error, role, reason} ->
+        GenServer.stop(budget)
         Client.stop(client)
         GenServer.stop(scheduler)
         halt("#{role} adapter start failed", reason)
     end
   end
 
-  defp start_controller_distribution(client, scheduler, adapters) do
+  defp start_controller_distribution(client, scheduler, budget, adapters) do
     IO.puts("modbus_robot_multinode: waiting for #{length(adapters)} FC-100 peers")
     trace_connection(:carrier_wait_started, role: :controller, peers: length(adapters))
 
@@ -363,6 +393,7 @@ defmodule RobotSim.MultinodeDistributed do
       other ->
         trace_connection(:distribution_start_failed, role: :controller, reason: other)
         close_client_adapters(adapters)
+        GenServer.stop(budget)
         Client.stop(client)
         GenServer.stop(scheduler)
         halt("Controller net_kernel start failed", other)
@@ -1341,23 +1372,27 @@ defmodule RobotSim.MultinodeDistributed do
     end
   end
 
-  defp open_client_adapter(client, unit_id, scheduler) do
+  defp open_client_adapter(client, unit_id, scheduler, budget) do
     case ModbusUART.open(
-           uart_options(:client, unit_id, client: client, poll_scheduler: scheduler)
+           uart_options(:client, unit_id,
+             client: client,
+             poll_scheduler: scheduler,
+             queue_budget: budget
+           )
          ) do
       pid when is_pid(pid) -> {:ok, pid}
       {:error, _reason} = error -> error
     end
   end
 
-  defp open_client_adapters(_client, _scheduler, [], adapters),
+  defp open_client_adapters(_client, _scheduler, _budget, [], adapters),
     do: {:ok, Enum.reverse(adapters)}
 
-  defp open_client_adapters(client, scheduler, [peer | rest], adapters) do
-    case open_client_adapter(client, peer.unit_id, scheduler) do
+  defp open_client_adapters(client, scheduler, budget, [peer | rest], adapters) do
+    case open_client_adapter(client, peer.unit_id, scheduler, budget) do
       {:ok, uart} ->
         adapter = Map.put(peer, :uart, uart)
-        open_client_adapters(client, scheduler, rest, [adapter | adapters])
+        open_client_adapters(client, scheduler, budget, rest, [adapter | adapters])
 
       {:error, reason} ->
         close_client_adapters(adapters)

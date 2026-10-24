@@ -23,17 +23,21 @@
 
 ## バッファとバックプレッシャー
 
-- FC-100 carrier の outgoing queue は stream ごとに default 8,192 payload bytes / 256 chunks です。Controller の2 stream は独立した
-  上限を持ちます。
+- FC-100 carrier の outgoing queue は stream ごとに default 8,192 payload bytes / 256 chunks です。Controllerはこれに加えて、
+  全client streamで共有するdefault 8,192 bytes / 256 chunksのglobal上限を持ちます。
 - 上限は carrier が保持する payload の合計であり、binary、Erlang term、process mailbox、distribution controller を含む VM heap
   全体の上限ではありません。application process の mailbox に明示的な件数上限はありません。
 - queue 上限を超えた write は `{:error, :queue_full}` となり、carrier は fail fast して session を切り替えます。queue 済みまたは
   in-flight の stream data は破棄されるため、回復は application の timeout / retry に依存します。
 - `MODBUS_MAX_QUEUED_BYTES` と `MODBUS_MAX_QUEUED_CHUNKS` は compile-time configuration です。値を増やすことは delivery guarantee
   ではなく、ESP32-C5 の memory 使用量も増やします。
+- Controllerのglobal上限も`ROBOT_MULTINODE_GLOBAL_MAX_QUEUED_BYTES`と
+  `ROBOT_MULTINODE_GLOBAL_MAX_QUEUED_CHUNKS`によるcompile-time configurationです。global拒否は
+  `{:error, :global_queue_full}`となり、該当streamだけがsessionを切り替えます。peer間の公平な予約や待機型backpressureは提供しません。
 - host modelでstream別defaultを単純合算すると、32 remote peersのconfigured payload limitは262,144 bytes / 8,192 chunksに
   なります。これは事前確保量ではありませんが、3台実測のminimum free heap 68,848 bytesを超えるため、
-  current defaultをN streamsへ複製できるとは主張しません。global budget、peer数依存の上限、実heap測定は未実装です。
+  current defaultをN streamsへ複製できるとは主張しません。global budgetによりcarrier payload合計は制限しますが、peer数依存の
+  process / mailbox / distribution memoryと実heapの増分は未測定です。
 - concurrent traffic probeはroleごとに1 messageだけを未確認状態にするapplication ACKを使用します。ACK timeout時のretryは
   boundedですが、collector crashやretry上限超過後のdurable resumeは実装していません。collectorの全体timeoutは通信断や
   handshake中も進み、停止または延長されません。baseline送信、operatorの切断保持、再接続、残り送信を含む値に設定する必要があります。

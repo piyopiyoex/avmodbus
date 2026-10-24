@@ -74,6 +74,13 @@ multidrop_gap_ms = parse_integer.("ROBOT_MULTIDROP_GAP_MS", 20)
 chunk_payload_bytes = parse_integer.("MODBUS_CHUNK_PAYLOAD_BYTES", 96)
 max_queued_bytes = parse_integer.("MODBUS_MAX_QUEUED_BYTES", 8_192)
 max_queued_chunks = parse_integer.("MODBUS_MAX_QUEUED_CHUNKS", 256)
+
+multinode_global_max_queued_bytes =
+  parse_integer.("ROBOT_MULTINODE_GLOBAL_MAX_QUEUED_BYTES", 8_192)
+
+multinode_global_max_queued_chunks =
+  parse_integer.("ROBOT_MULTINODE_GLOBAL_MAX_QUEUED_CHUNKS", 256)
+
 fault_drop_responses = parse_integer.("MODBUS_FAULT_DROP_RESPONSES", 0)
 fault_min_payload_bytes = parse_integer.("MODBUS_FAULT_MIN_PAYLOAD_BYTES", 96)
 fault_after_ms = parse_integer.("MODBUS_FAULT_AFTER_MS", 10_000)
@@ -170,6 +177,14 @@ end
 
 if max_queued_chunks < 1 or max_queued_chunks > 65_535 do
   raise ArgumentError, "MODBUS_MAX_QUEUED_CHUNKS must be between 1 and 65535"
+end
+
+if multinode_global_max_queued_bytes < 1 do
+  raise ArgumentError, "ROBOT_MULTINODE_GLOBAL_MAX_QUEUED_BYTES must be a positive integer"
+end
+
+if multinode_global_max_queued_chunks < 1 do
+  raise ArgumentError, "ROBOT_MULTINODE_GLOBAL_MAX_QUEUED_CHUNKS must be a positive integer"
 end
 
 if fault_drop_responses < 0 do
@@ -317,6 +332,8 @@ config :robot_sim,
   chunk_payload_bytes: chunk_payload_bytes,
   max_queued_bytes: max_queued_bytes,
   max_queued_chunks: max_queued_chunks,
+  multinode_global_max_queued_bytes: multinode_global_max_queued_bytes,
+  multinode_global_max_queued_chunks: multinode_global_max_queued_chunks,
   fault_drop_responses: fault_drop_responses,
   fault_min_payload_bytes: fault_min_payload_bytes,
   fault_after_ms: fault_after_ms,

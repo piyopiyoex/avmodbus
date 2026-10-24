@@ -164,6 +164,12 @@ defmodule RobotSim.MultinodeModelTest do
     assert Enum.map(budgets, & &1.observed_queue_projection_bytes) ==
              [279, 558, 837, 2_232, 8_928]
 
+    assert Enum.map(budgets, & &1.effective_queue_payload_limit_bytes) ==
+             [8_192, 8_192, 8_192, 8_192, 8_192]
+
+    assert Enum.map(budgets, & &1.effective_queue_chunk_limit) ==
+             [256, 256, 256, 256, 256]
+
     refute Enum.at(budgets, 3).configured_limit_exceeds_baseline_heap_watermark
     assert Enum.at(budgets, 4).configured_limit_exceeds_baseline_heap_watermark
     assert Enum.all?(budgets, &(&1.atomvm_heap_projection == :unknown))
@@ -177,6 +183,12 @@ defmodule RobotSim.MultinodeModelTest do
 
     assert MultinodeModel.resource_budgets([2], max_queued_bytes: 0) ==
              {:error, {:invalid_option, :max_queued_bytes}}
+
+    assert MultinodeModel.resource_budgets([2], global_max_queued_bytes: 0) ==
+             {:error, {:invalid_option, :global_max_queued_bytes}}
+
+    assert MultinodeModel.resource_budgets([2], global_max_queued_chunks: 0) ==
+             {:error, {:invalid_option, :global_max_queued_chunks}}
   end
 
   defp peer_result(result, role) do

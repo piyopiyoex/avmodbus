@@ -36,3 +36,4 @@
 - [0020: 実機を1台ずつ増やさずホストモデルで規模を検証する](0020-model-scale-on-host-instead-of-adding-devices.md)
 - [0021: 復旧policyを変更する前に起動・復旧matrixを固定する](0021-observe-startup-and-recovery-before-changing-policy.md)
 - [0022: 初回接続のstale distributionをbounded restartする](0022-restart-initial-stale-distribution-with-a-bounded-budget.md)
+- [0023: Controllerの複数queueをglobal budgetで制限する](0023-bound-controller-queues-with-a-global-budget.md)

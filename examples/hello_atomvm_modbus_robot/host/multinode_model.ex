@@ -11,6 +11,8 @@ defmodule RobotSim.MultinodeModel do
 
   @default_max_queued_bytes 8_192
   @default_max_queued_chunks 256
+  @default_global_max_queued_bytes 8_192
+  @default_global_max_queued_chunks 256
   @observed_min_free_heap_bytes 68_848
   @observed_queue_high_water_bytes_per_peer 279
 
@@ -88,12 +90,24 @@ defmodule RobotSim.MultinodeModel do
     max_queued_bytes = Keyword.get(options, :max_queued_bytes, @default_max_queued_bytes)
     max_queued_chunks = Keyword.get(options, :max_queued_chunks, @default_max_queued_chunks)
 
+    global_max_queued_bytes =
+      Keyword.get(options, :global_max_queued_bytes, @default_global_max_queued_bytes)
+
+    global_max_queued_chunks =
+      Keyword.get(options, :global_max_queued_chunks, @default_global_max_queued_chunks)
+
     cond do
       not positive_integer?(max_queued_bytes) ->
         {:error, {:invalid_option, :max_queued_bytes}}
 
       not positive_integer?(max_queued_chunks) ->
         {:error, {:invalid_option, :max_queued_chunks}}
+
+      not positive_integer?(global_max_queued_bytes) ->
+        {:error, {:invalid_option, :global_max_queued_bytes}}
+
+      not positive_integer?(global_max_queued_chunks) ->
+        {:error, {:invalid_option, :global_max_queued_chunks}}
 
       not all_peer_counts_valid?(peer_counts) ->
         {:error, :invalid_peer_counts}
@@ -102,11 +116,16 @@ defmodule RobotSim.MultinodeModel do
         {:ok,
          Enum.map(peer_counts, fn peer_count ->
            configured_bytes = peer_count * max_queued_bytes
+           configured_chunks = peer_count * max_queued_chunks
 
            %{
              peer_count: peer_count,
              configured_queue_payload_limit_bytes: configured_bytes,
-             configured_queue_chunk_limit: peer_count * max_queued_chunks,
+             configured_queue_chunk_limit: configured_chunks,
+             global_queue_payload_limit_bytes: global_max_queued_bytes,
+             global_queue_chunk_limit: global_max_queued_chunks,
+             effective_queue_payload_limit_bytes: min(configured_bytes, global_max_queued_bytes),
+             effective_queue_chunk_limit: min(configured_chunks, global_max_queued_chunks),
              observed_queue_projection_bytes:
                peer_count * @observed_queue_high_water_bytes_per_peer,
              baseline_min_free_heap_bytes: @observed_min_free_heap_bytes,

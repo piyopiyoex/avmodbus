@@ -91,6 +91,8 @@ Enum.each(budgets, fn budget ->
   IO.puts(
     "peers=#{budget.peer_count} configured_bytes=#{budget.configured_queue_payload_limit_bytes} " <>
       "configured_chunks=#{budget.configured_queue_chunk_limit} " <>
+      "effective_bytes=#{budget.effective_queue_payload_limit_bytes} " <>
+      "effective_chunks=#{budget.effective_queue_chunk_limit} " <>
       "observed_projection_bytes=#{budget.observed_queue_projection_bytes} " <>
       "exceeds_heap_watermark=#{budget.configured_limit_exceeds_baseline_heap_watermark}"
   )

@@ -155,7 +155,8 @@ timeoutはcycle latencyへ加算される。bounded queueはoverloadをrejectし
 - [x] 同一boot内で自動復旧しない具体的なruntime blockerを記録する
 - [x] 初回readiness timeout後のbounded remote restartを追加する
 - [x] Drive / Sensorsがboard resetなしで同一boot内復旧することを実機確認する
-- [ ] Controller全体のglobal byte / chunk budgetを設計する
+- [x] Controller全体のglobal byte / chunk budgetを設計しhostで検証する
+- [x] global budget有効時の3台heapとqueue high-waterを実機測定する
 - [ ] 長時間通信断と1時間以上の安定性を実機測定する
 
 このStageでは7秒setup timerの単純な延長、AVModbus core変更、専用`modbus_dist` carrier、4台目の常設を完了条件にしない。

@@ -440,6 +440,8 @@ ROBOT_MODE=multinode ROBOT_ROLE=controller ATOMVM_UART_SPEED=115200 \
 | `ROBOT_MULTINODE_INITIAL_RECOVERY_ENABLED` | `true` | 初回readiness ACKが8秒以内に届かないremoteのdistributionをbounded restartする |
 | `ROBOT_MULTINODE_REMOTE_ACK_TIMEOUT_MS` | `90000` | remote が現在の connection ID の ACK を待つ期限。announce 間隔より大きくする |
 | `ROBOT_MULTINODE_REMOTE_MAX_RESTARTS` | `1` | 初回復旧とremote healthが共用するboard bootごとのrestart上限。0..10 |
+| `ROBOT_MULTINODE_GLOBAL_MAX_QUEUED_BYTES` | `8192` | Controllerの全client streamが共有するoutgoing payload上限 |
+| `ROBOT_MULTINODE_GLOBAL_MAX_QUEUED_CHUNKS` | `256` | Controllerの全client streamが共有するoutgoing chunk上限 |
 
 `MODBUS_FAULT_*` は Drive / Sensors 側でだけ意味を持つ transport fault injection です。通常構成では必ず
 `MODBUS_FAULT_DROP_RESPONSES=0` を使用してください。これは request を受理した後の Server response だけを破棄するため、
@@ -611,13 +613,18 @@ modelはdescriptor validation、round-robin順序、単一active transaction、s
 replacementをwall clockやrandomnessなしで再現します。poll回数の公平性は確認できましたが、failed peerの
 timeoutは全体cycleを遅延させます。また32 peersのstream別queue設定上限は262,144 bytesとなり、3台実測の
 Controller minimum free heap 68,848 bytesを超えます。これは事前確保量や実heap推定ではありませんが、defaultを
-N streamsへそのまま複製することをsupportできる根拠にはなりません。
+N streamsへそのまま複製することをsupportできる根拠にはなりません。現在のControllerはpeer数によらず既定8,192 bytes /
+256 chunksのglobal上限も適用し、ACK、session変更、adapter終了時に容量を解放します。上限超過は
+`{:error, :global_queue_full}`でfail fastし、待機型backpressureやVM全体のmemory上限は提供しません。
 
 modelは`host/multinode_model.ex`に置き、testとscriptが明示的にloadします。firmware用の`lib/`には含めず、
 PackBEAM artifactを変更しません。
 
 数値とmodelの境界は[host model worklog](docs/worklog/2026-10-24-scalable-multinode-host-model.md)、追加deviceを必須としない判断は
 [ADR 0020](docs/adr/0020-model-scale-on-host-instead-of-adding-devices.md)を参照してください。
+global上限の判断とhost検証は[ADR 0023](docs/adr/0023-bound-controller-queues-with-a-global-budget.md)と
+[global queue budget worklog](docs/worklog/2026-10-24-global-queue-budget.md)を参照してください。
+3台実機の32+32 trafficでは完全配送し、global high-water 906 bytes / 14 chunks、拒否0、30秒後0 / 0へのdrainを確認しました。
 
 ## 起動・復旧test matrix
 

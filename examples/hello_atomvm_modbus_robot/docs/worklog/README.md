@@ -40,3 +40,4 @@
 - [2026-10-24: スケーラブルなマルチノードホストモデル](2026-10-24-scalable-multinode-host-model.md)
 - [2026-10-24: 起動・復旧test matrixのhost・3台実機baseline](2026-10-24-startup-recovery-matrix.md)
 - [2026-10-24: 初回接続timeout後のbounded recovery](2026-10-24-initial-connection-recovery.md)
+- [2026-10-24: Controller global queue budgetのhost・3台実機検証](2026-10-24-global-queue-budget.md)

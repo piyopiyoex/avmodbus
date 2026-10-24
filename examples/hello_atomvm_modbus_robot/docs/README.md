@@ -21,6 +21,7 @@
 
 - [作業記録](worklog/README.md) — ホストテスト、実機試験、障害調査の時系列記録
 - [初回接続timeout後のbounded recovery](worklog/2026-10-24-initial-connection-recovery.md) — 同一boot内復旧の実機結果
+- [Controller global queue budget](worklog/2026-10-24-global-queue-budget.md) — 共有上限のhost testと3台実測
 
 ## 更新方針
 

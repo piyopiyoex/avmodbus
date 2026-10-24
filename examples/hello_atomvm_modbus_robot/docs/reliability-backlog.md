@@ -35,12 +35,15 @@ bounded remote restartで両roleの同一boot内復旧を確認しました。ba
 
 streamごとの8 KiB / 256 chunks上限とは別に、Controller全体の上限を設計します。
 
-- 全peerのqueue使用量を集計する
-- global byte / chunk budgetと拒否理由を定義する
-- ACK、session reset、adapter終了時のbudget解放をhost testで確認する
-- Controllerとremoteのfree heapを実機で測定する
+- [x] 全peerのqueue使用量を集計する
+- [x] global byte / chunk budgetと拒否理由を定義する
+- [x] 複数peerが同時に上限へ達するhost testを追加する
+- [x] ACK、session reset、adapter終了時のbudget解放をhost testで確認する
+- [x] Controllerとremoteのfree heapを実機で測定する
 
 queue上限はAtomVM process、mailbox、distribution framingを含むVM全体の上限ではないため、別々に記録します。
+設計とhost結果は[ADR 0023](adr/0023-bound-controller-queues-with-a-global-budget.md)と
+[global queue budget worklog](worklog/2026-10-24-global-queue-budget.md)を参照してください。
 
 ## Task 3: 長時間通信断からの復旧
 
@@ -63,7 +66,7 @@ timeout、再接続回数を時系列で記録し、idleとactive trafficを交�
 
 1. [x] Startup / recovery test matrix
 2. [x] matrixで再現したstartup / stale connectionの最小修正
-3. [ ] Global resource budget
+3. [x] Global resource budget
 4. [ ] Extended fault / endurance tests
 
 当面、AVModbus core、FC-100 wire protocol、仮想ロボット機能、専用`modbus_dist` carrierは変更しません。
