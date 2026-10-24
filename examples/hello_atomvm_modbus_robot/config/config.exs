@@ -96,6 +96,9 @@ multinode_soak_payload_bytes = parse_integer.("ROBOT_MULTINODE_SOAK_PAYLOAD_BYTE
 multinode_soak_interval_ms = parse_integer.("ROBOT_MULTINODE_SOAK_INTERVAL_MS", 250)
 multinode_soak_retries = parse_integer.("ROBOT_MULTINODE_SOAK_RETRIES", 1)
 multinode_traffic_samples = parse_integer.("ROBOT_MULTINODE_TRAFFIC_SAMPLES", 0)
+multinode_traffic_runs = parse_integer.("ROBOT_MULTINODE_TRAFFIC_RUNS", 1)
+multinode_traffic_idle_ms = parse_integer.("ROBOT_MULTINODE_TRAFFIC_IDLE_MS", 0)
+multinode_metrics_interval_ms = parse_integer.("ROBOT_MULTINODE_METRICS_INTERVAL_MS", 0)
 
 multinode_traffic_drive_interval_ms =
   parse_integer.("ROBOT_MULTINODE_TRAFFIC_DRIVE_INTERVAL_MS", 2_000)
@@ -248,6 +251,18 @@ if multinode_traffic_samples < 0 or multinode_traffic_samples > 256 do
   raise ArgumentError, "ROBOT_MULTINODE_TRAFFIC_SAMPLES must be between 0 and 256"
 end
 
+if multinode_traffic_runs < 1 or multinode_traffic_runs > 1_000 do
+  raise ArgumentError, "ROBOT_MULTINODE_TRAFFIC_RUNS must be between 1 and 1000"
+end
+
+if multinode_traffic_idle_ms < 0 do
+  raise ArgumentError, "ROBOT_MULTINODE_TRAFFIC_IDLE_MS must be a non-negative integer"
+end
+
+if multinode_metrics_interval_ms < 0 do
+  raise ArgumentError, "ROBOT_MULTINODE_METRICS_INTERVAL_MS must be a non-negative integer"
+end
+
 if multinode_traffic_drive_interval_ms < 1 or multinode_traffic_sensors_interval_ms < 1 do
   raise ArgumentError, "traffic producer intervals must be positive integers"
 end
@@ -355,6 +370,9 @@ config :robot_sim,
   multinode_soak_interval_ms: multinode_soak_interval_ms,
   multinode_soak_retries: multinode_soak_retries,
   multinode_traffic_samples: multinode_traffic_samples,
+  multinode_traffic_runs: multinode_traffic_runs,
+  multinode_traffic_idle_ms: multinode_traffic_idle_ms,
+  multinode_metrics_interval_ms: multinode_metrics_interval_ms,
   multinode_traffic_drive_interval_ms: multinode_traffic_drive_interval_ms,
   multinode_traffic_sensors_interval_ms: multinode_traffic_sensors_interval_ms,
   multinode_traffic_payload_bytes: multinode_traffic_payload_bytes,

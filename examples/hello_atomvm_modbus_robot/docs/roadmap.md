@@ -1,7 +1,8 @@
 # ロードマップ
 
 このexampleはhost-only simulationから2-node application、3-device Modbus multidrop、3-node distributionへ段階的に進みました。
-現在は3台をphysical baselineとして固定し、N remote peersのscaleをhost modelで検証しました。技術的blockerを特定して
+3台をphysical baselineとして固定し、N remote peersのscaleをhost modelで検証しました。さらに起動・復旧matrix、
+global resource budget、長時間通信断、約1時間の安定性試験まで完了しています。技術的blockerを特定して
 記録することも成果とします。
 
 現在の実行方法は [サンプル README](../README.md)、設計判断は [ADR](adr/README.md)、実測結果は
@@ -17,7 +18,7 @@
 | 3 | 実証完了 | 2 remote node の同時接続、Controller relay、複数 tick を実機確認 |
 | 4 | 完了 | adaptive mission、readiness lease、reply-loss retry を実機確認 |
 | 5 | 完了 | N remote peer host model、fairness、failure isolation、resource budget |
-| 6 | 進行中 | startup / recovery matrix、global resource budget、長時間安定性 |
+| 6 | 完了 | startup / recovery matrix、global resource budget、長時間安定性 |
 
 ## Stage 0: ローカル仮想ローバーシミュレーション
 
@@ -142,8 +143,8 @@ timeoutはcycle latencyへ加算される。bounded queueはoverloadをrejectし
 
 ## Stage 6: 接続復旧とリソース管理
 
-優先順位とPR分割は[実験計画](reliability-backlog.md)を正とする。最初のPRでは接続動作を変更せず、
-[起動・復旧test matrix](startup-recovery-matrix.md)と観測eventを固定する。
+実施順序と結果は[接続復旧とリソース管理の実験結果](reliability-backlog.md)を正とする。最初に接続動作を変更せず、
+[起動・復旧test matrix](startup-recovery-matrix.md)と観測eventを固定した。
 
 - [x] Controller、Drive、Sensorsの全起動順序をhost matrixへ定義する
 - [x] 初回handshake failureと接続後障害を別scenarioにする
@@ -157,7 +158,13 @@ timeoutはcycle latencyへ加算される。bounded queueはoverloadをrejectし
 - [x] Drive / Sensorsがboard resetなしで同一boot内復旧することを実機確認する
 - [x] Controller全体のglobal byte / chunk budgetを設計しhostで検証する
 - [x] global budget有効時の3台heapとqueue high-waterを実機測定する
-- [ ] 長時間通信断と1時間以上の安定性を実機測定する
+- [x] 長時間試験用のbounded run反復、periodic metrics、host log集計を追加する
+- [x] 30 / 90 / 180秒の長時間通信断を3台で測定する
+- [x] 1時間以上の安定性を実機測定する
+
+長時間通信断では自動復旧の成功条件とcurrent runtime blockerを分離して記録した。64分30秒のactive / idle profileでは
+12 runsを完全配送し、restartとglobal rejectionは0だった。散発したtransaction timeoutとmemory推移は
+[耐久試験worklog](worklog/2026-10-25-one-hour-active-idle-endurance.md)を参照する。
 
 このStageでは7秒setup timerの単純な延長、AVModbus core変更、専用`modbus_dist` carrier、4台目の常設を完了条件にしない。
 

@@ -16,6 +16,9 @@ protocol design は変更していません。follow-up では、共有 client �
 既存 carrier に加え、複数adapterのpollをround-robinで開始する任意schedulerを追加しています。
 **Stage 5: scalable multinode model**では3台を実機baselineとし、1、2、3、8、32 remote peersのfairness、failure、
 bounded queue、session recovery、resource budgetをhost上で検証しました。
+**Stage 6: startup / recoveryとresource管理**では、起動順序matrix、初回接続のbounded recovery、Controller全体のqueue budget、
+30 / 90 / 180秒の通信断、64分30秒のactive / idle耐久試験まで完了しました。現在の完了範囲と保証外の条件は
+[ロードマップ](docs/roadmap.md)と[既知の制約](docs/limitations.md)を参照してください。
 
 ## 現在できること
 
@@ -47,6 +50,9 @@ bounded queue、session recovery、resource budgetをhost上で検証しまし�
 - opt-in で connection ID 付き readiness ACK を監視し、application traffic がない half-open connection を bounded restart する
 - 到達不能なUnitがあってもround-robin pollにより正常なpeerのrequest deadlineとdistribution connectionを維持する
 - 1、2、3、8、32 remote peersの順序、fairness、failure、overload、session replacementをhost modelで再現する
+- Controller全体でFC-100 payloadとchunk数を制限し、peer間で共有するqueue使用量を集計する
+- 起動順序、初回handshake failure、長時間通信断、反復切断を共通event形式で比較する
+- bounded trafficとidleを反復し、3 roleのmemory、queue、timeout、restartを集計する
 
 各 Stage の進捗と完了条件は [ロードマップ](docs/roadmap.md) を参照してください。
 
@@ -529,7 +535,9 @@ shared Client と `uart_ports` を採用した理由は
 Controller reboot recovery、application traffic の短時間 fairness baseline、Drive / Sensors 間の Controller relay も実機確認済みです。
 concurrent producer の baseline、moderate、application ACK 付き 64+64および256+256 profileは2026-10-20に実機確認しました。
 response blackout では物理通信復帰後も非対称な half-open distribution connection が残る境界を確認しています。より長時間の
-数時間のsoakは未完了ですが、10分間のmemory / queue推移を記録しました。traffic ACK timeoutを契機にremote側distributionを明示的に再起動する回復に加え、
+数時間・数日のsoakは未実施ですが、10分間の256+256 profileと64分30秒のactive / idle profileでmemory / queue推移を記録しました。
+後者は12 runsを完全配送し、restartとglobal rejectionは0でしたが、Sensorsのtransaction timeout 8件をretryで回復しており、
+error-freeなphysical transportとは扱いません。traffic ACK timeoutを契機にremote側distributionを明示的に再起動する回復に加え、
 connection ID付きreadiness ACKでapplication trafficがないhalf-open connectionを検出するopt-in recoveryも実機確認済みです。
 paired-wire配線の物理切断試験ではSensors、右端Driveのどちらを外しても残るpeerが停止しました。breadboardでcontinuous trunkと
 node別branchを作った後の反復試験では、shared Clientへ独立pollを投入すると正常なUnit 1もqueue待ちでdeadlineを失うことが分かりました。
@@ -680,6 +688,9 @@ ROBOT_MODE=multinode ROBOT_ROLE=controller ATOMVM_UART_SPEED=115200 \
 | environment variable | default | 用途 |
 | --- | ---: | --- |
 | `ROBOT_MULTINODE_TRAFFIC_SAMPLES` | `0` | 0 は無効。1..256 messages / role |
+| `ROBOT_MULTINODE_TRAFFIC_RUNS` | `1` | active traffic runの反復回数。1..1000 |
+| `ROBOT_MULTINODE_TRAFFIC_IDLE_MS` | `0` | run完了から次のrun開始までのidle時間 |
+| `ROBOT_MULTINODE_METRICS_INTERVAL_MS` | `0` | Controller resourceとremote memoryの定期出力間隔。0は無効 |
 | `ROBOT_MULTINODE_TRAFFIC_DRIVE_INTERVAL_MS` | `2000` | Drive producer の送信間隔 |
 | `ROBOT_MULTINODE_TRAFFIC_SENSORS_INTERVAL_MS` | `1000` | Sensors producer の送信間隔 |
 | `ROBOT_MULTINODE_TRAFFIC_PAYLOAD_BYTES` | `16` | 0..128 bytes の deterministic payload |
@@ -715,6 +726,21 @@ max_interarrival_ms を示します。`fairness` は role 間の delivery ratio�
 - ACK window 1の64+64および256+256 runは完全配送し、settling後にqueueが0へ戻った。
 - Sensors branch切断中もround-robin pollingでDriveを維持し、復帰後に両role 128 / 128を完了した。
 - 最新AtomVM v0.7 snapshot + local patchの32+32 runは101,248 ms、error 0で完了した。
+- 16+16 messagesと270秒idleを12回反復する64分30秒profileは全runを完全配送した。
 
 数値、firmware条件、失敗経路は[作業記録](docs/worklog/README.md)を正とします。timeout、recovery、memoryの保証外の範囲は
 [既知の制約](docs/limitations.md)、scale modelの条件と結果は[multinode host model](docs/next-experiments.md)を参照してください。
+
+長時間試験では`ROBOT_MULTINODE_TRAFFIC_RUNS`と`ROBOT_MULTINODE_TRAFFIC_IDLE_MS`でactive / idleを反復できます。
+`ROBOT_MULTINODE_METRICS_INTERVAL_MS`を指定すると、Controllerはpeer別queue、global queue budget、free heap、transaction failureを
+`modbus_robot_resource:`として、Drive / Sensorsはfree heapを`modbus_robot_memory:`として定期出力します。集めた3 roleのlogは
+次のhost commandで集計できます。
+
+```sh
+mix run scripts/endurance_report.exs controller.log drive.log sensors.log
+```
+
+同じlogに別bootや試験後のidleが含まれる場合は`--since`と`--until`で同日の時刻範囲を指定できます。
+このreportはtraffic結果、queue high-water、観測したminimum free heap、restart eventを集計します。VM全体のmemory使用量や
+log欠損を推定するものではありません。実験条件と判定方法は
+[長時間通信断・安定性test plan](docs/endurance-test-plan.md)を参照してください。

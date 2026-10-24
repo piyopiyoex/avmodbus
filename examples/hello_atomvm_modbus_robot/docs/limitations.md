@@ -119,6 +119,19 @@
   36,943–38,388 msでdistributionを再起動しました。branch復帰後に同じsequenceから再開して両roleを完全配送しました。ただし
   Drive transaction failureは0–1、duplicate sampleは3–11件、elapsedは451,811–568,227 msと幅がありました。2回目の30秒snapshotでは
   Driveにreadiness trafficを含み得る117 bytes / 2 outstandingがあり、常に30秒で両queueが0になるとは保証しません。
+- 90秒remote health timeoutを使った64+64 runでは、約37秒のphysical応答停止後もrestartせず同じconnectionで復帰し、欠損・重複
+  なしで完了しました。一方、操作時間が約1分を超えたcalibrationではControllerが`net_tick_timeout`でSensorsを閉じた後、Sensorsの
+  restartが`net_kernel_stop_timeout`となり、Unit 2のphysical応答も停止しました。短時間復帰の成功をlease / tick境界を超える切断へ
+  外挿できません。条件は[worklog](worklog/2026-10-24-extended-fault-recovery.md)を参照してください。
+- 約199秒のidle切断では、Sensors restart成功後にbudgetを使い切り、復線後もdistribution handshakeは成立しませんでした。
+  physical pollingは約10分復帰しましたが、Sensors minimum free heapが14,428 bytesまで低下した後、Unit 2も再び応答不能になりました。
+  Drive connectionは維持しました。原因processは未確定であり、current v0.7 snapshotのruntime blockerとして
+  [worklog](worklog/2026-10-25-idle-180-second-disconnect.md)に記録しています。
+- 同一Sensors bootで短時間のbranch切断を3回反復した試験では、90秒remote health timeoutへ達せず、同じconnection IDのまま
+  3回とも復帰しました。faultを含む2 runsと後続runは両role 64 / 64、欠損・重複なしで完了し、restart budget消費と
+  global queue rejectionは0でした。ただし操作時刻とserial logを共通時計で精密測定しておらず、Driveにもfaultを含むrunごとに
+  単発transaction timeoutが1件あったため、正確な30秒境界や正常peerへの無影響は保証しません。詳細は
+  [worklog](worklog/2026-10-25-repeated-branch-disconnect.md)を参照してください。
 - handshake中には複数の`unexpected`、`unsupported_name`、`invalid_challenge`、`no_link_manager_response`、timeoutが発生しています。
   retryは最終的に収束しましたが、復旧時間の上限や任意の電気条件でのfailure isolationを保証しません。termination / biasも個別測定して
   いません。
@@ -157,6 +170,10 @@
 - 2026-10-23の別の256+256 profileも783,317 msで完全配送し、Controller側queue high-waterは両role 200 bytes / 3 chunks、
   minimum free heapは68,848 bytes、30秒後の両queueは0でした。2回の所要時間とmetricsは同一ではなく、これらの単一runから
   sustained throughputやmemory上限を保証しません。
+- 16+16 messagesと270秒idleを12回反復する64分30秒profileは全runを完全配送し、restartとglobal rejectionは0でした。
+  periodic free heapの単調減少はありませんでしたが、Sensorsでretry可能なtransaction timeoutを8件観測しました。
+  この1回のprofileから数時間・数日の安定性やerror-freeなphysical transportを保証しません。詳細は
+  [worklog](worklog/2026-10-25-one-hour-active-idle-endurance.md)を参照してください。
 - `MODBUS_FAULT_*` はServer responseだけを破棄する診断用設定です。双方向のRS485 cable断、partial frame、電源断を再現せず、
   通常運用のrecovery機構として使用するものではありません。
 - 以前はServer adapterを再生成するとresponse faultのcountとdelayも初期化され、同じfaultが再度armされました。現在の既定値では

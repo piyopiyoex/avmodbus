@@ -82,4 +82,5 @@ remoteのminimum値はqueue traceとconsole出力を有効にした測定であ�
 distribution controller、AVModbus transactionのmemoryは別に測定する必要がある。またglobal拒否はbackpressure待機ではなく、
 対象streamをfail fastさせる。
 
-短時間の2 runはmemory leakや長時間安定性を示さない。1時間以上のidle / active反復と長時間通信断は次のPRで扱う。
+短時間の2 runはmemory leakや長時間安定性を示さない。この時点で後続課題だった長時間通信断と約1時間のidle / active反復は、
+[長時間通信断・安定性test plan](../endurance-test-plan.md)に沿って実施済みである。

@@ -4,15 +4,16 @@
 
 ## 利用方法
 
-- [サンプル README](../README.md) — ホストシミュレーション、Stage 1–5の実行方法、座標規則、設定
+- [サンプル README](../README.md) — ホストシミュレーション、Stage 1–6の実行方法、座標規則、設定
 
 現在動く機能と再現手順はサンプル README を正とします。
 
 ## 設計資料
 
-- [ロードマップ](roadmap.md) — Stage ごとの完了条件と未着手の調査項目
-- [接続復旧とリソース管理の実験計画](reliability-backlog.md) — 次の実験の優先順位と順序
+- [ロードマップ](roadmap.md) — Stage ごとの完了条件、実証済み範囲、対象外の項目
+- [接続復旧とリソース管理の実験結果](reliability-backlog.md) — Stage 6の実施順序、結果、任意の追加検証
 - [起動・復旧test matrix](startup-recovery-matrix.md) — 起動順序、初回handshake failure、接続後障害の判定基準
+- [長時間通信断・安定性test plan](endurance-test-plan.md) — 30 / 90 / 180秒切断と約1時間運転の条件・判定方法
 - [マルチノードホストモデル](next-experiments.md) — N個のremote peer、公平性、障害、リソース上限の条件と結果
 - [既知の制約](limitations.md) — application、buffer、recovery、用途の境界
 - [設計判断記録](adr/README.md) — 長期的に維持する application 設計の判断
@@ -22,6 +23,11 @@
 - [作業記録](worklog/README.md) — ホストテスト、実機試験、障害調査の時系列記録
 - [初回接続timeout後のbounded recovery](worklog/2026-10-24-initial-connection-recovery.md) — 同一boot内復旧の実機結果
 - [Controller global queue budget](worklog/2026-10-24-global-queue-budget.md) — 共有上限のhost testと3台実測
+- [長時間試験の計測基盤](worklog/2026-10-24-endurance-instrumentation.md) — 反復run、定期metrics、host log集計
+- [短時間切断と長時間復旧](worklog/2026-10-24-extended-fault-recovery.md) — Sensors branch切断中のDrive継続、restart失敗と成功の境界
+- [idle 180秒切断](worklog/2026-10-25-idle-180-second-disconnect.md) — physical復帰後のdistribution再接続失敗とresource枯渇
+- [同一boot反復切断](worklog/2026-10-25-repeated-branch-disconnect.md) — 短時間切断3回のconnection維持と完全配送
+- [約1時間のactive / idle耐久試験](worklog/2026-10-25-one-hour-active-idle-endurance.md) — 12 runsの完全配送、memory推移、散発timeout
 
 ## 更新方針
 

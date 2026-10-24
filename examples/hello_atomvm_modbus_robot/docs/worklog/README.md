@@ -41,3 +41,8 @@
 - [2026-10-24: 起動・復旧test matrixのhost・3台実機baseline](2026-10-24-startup-recovery-matrix.md)
 - [2026-10-24: 初回接続timeout後のbounded recovery](2026-10-24-initial-connection-recovery.md)
 - [2026-10-24: Controller global queue budgetのhost・3台実機検証](2026-10-24-global-queue-budget.md)
+- [2026-10-24: 長時間通信断・安定性試験の計測基盤](2026-10-24-endurance-instrumentation.md)
+- [2026-10-24: Sensors branchの短時間切断と長時間復旧](2026-10-24-extended-fault-recovery.md)
+- [2026-10-25: Sensors branchのidle 180秒切断](2026-10-25-idle-180-second-disconnect.md)
+- [2026-10-25: Sensors branchの同一boot反復切断](2026-10-25-repeated-branch-disconnect.md)
+- [2026-10-25: 約1時間のactive / idle耐久試験](2026-10-25-one-hour-active-idle-endurance.md)
