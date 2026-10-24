@@ -34,3 +34,5 @@
 - [0018: 通信開始をACK付きで再送しrun IDで重複排除する](0018-retry-traffic-starts-with-idempotent-run-ids.md)
 - [0019: Controllerのトランスポート構成をpeer descriptorリスト駆動にする](0019-drive-controller-transport-from-peer-descriptors.md)
 - [0020: 実機を1台ずつ増やさずホストモデルで規模を検証する](0020-model-scale-on-host-instead-of-adding-devices.md)
+- [0021: 復旧policyを変更する前に起動・復旧matrixを固定する](0021-observe-startup-and-recovery-before-changing-policy.md)
+- [0022: 初回接続のstale distributionをbounded restartする](0022-restart-initial-stale-distribution-with-a-bounded-budget.md)

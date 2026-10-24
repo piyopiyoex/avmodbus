@@ -17,6 +17,7 @@
 | 3 | 実証完了 | 2 remote node の同時接続、Controller relay、複数 tick を実機確認 |
 | 4 | 完了 | adaptive mission、readiness lease、reply-loss retry を実機確認 |
 | 5 | 完了 | N remote peer host model、fairness、failure isolation、resource budget |
+| 6 | 進行中 | startup / recovery matrix、global resource budget、長時間安定性 |
 
 ## Stage 0: ローカル仮想ローバーシミュレーション
 
@@ -138,6 +139,26 @@ hardware testを行う。この判断は[ADR 0020](adr/0020-model-scale-on-host-
 timeoutはcycle latencyへ加算される。bounded queueはoverloadをrejectし、session replacementはstale queueを破棄する。
 32 peersのconfigured payload limit 262,144 bytesは3台実測のminimum free heap 68,848 bytesを超えるため、current defaultを
 そのままN streamsへ複製できるとは判断しない。
+
+## Stage 6: 接続復旧とリソース管理
+
+優先順位とPR分割は[実験計画](reliability-backlog.md)を正とする。最初のPRでは接続動作を変更せず、
+[起動・復旧test matrix](startup-recovery-matrix.md)と観測eventを固定する。
+
+- [x] Controller、Drive、Sensorsの全起動順序をhost matrixへ定義する
+- [x] 初回handshake failureと接続後障害を別scenarioにする
+- [x] opt-inのconnection lifecycle traceを追加する
+- [x] 自動復旧、runtime blocker、証跡不足を区別するhost testを追加する
+- [x] 3台で起動6順序matrixを実行する
+- [x] 初回setup failureをDrive / Sensorsで再現する
+- [x] 対象remoteだけのreset復旧中に他方を維持できるか実機確認する
+- [x] 同一boot内で自動復旧しない具体的なruntime blockerを記録する
+- [x] 初回readiness timeout後のbounded remote restartを追加する
+- [x] Drive / Sensorsがboard resetなしで同一boot内復旧することを実機確認する
+- [ ] Controller全体のglobal byte / chunk budgetを設計する
+- [ ] 長時間通信断と1時間以上の安定性を実機測定する
+
+このStageでは7秒setup timerの単純な延長、AVModbus core変更、専用`modbus_dist` carrier、4台目の常設を完了条件にしない。
 
 ## 今回は対象としないこと
 

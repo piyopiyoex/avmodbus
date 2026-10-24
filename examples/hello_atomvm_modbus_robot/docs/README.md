@@ -11,6 +11,8 @@
 ## 設計資料
 
 - [ロードマップ](roadmap.md) — Stage ごとの完了条件と未着手の調査項目
+- [接続復旧とリソース管理の実験計画](reliability-backlog.md) — 次の実験の優先順位と順序
+- [起動・復旧test matrix](startup-recovery-matrix.md) — 起動順序、初回handshake failure、接続後障害の判定基準
 - [マルチノードホストモデル](next-experiments.md) — N個のremote peer、公平性、障害、リソース上限の条件と結果
 - [既知の制約](limitations.md) — application、buffer、recovery、用途の境界
 - [設計判断記録](adr/README.md) — 長期的に維持する application 設計の判断
@@ -18,6 +20,7 @@
 ## 検証記録
 
 - [作業記録](worklog/README.md) — ホストテスト、実機試験、障害調査の時系列記録
+- [初回接続timeout後のbounded recovery](worklog/2026-10-24-initial-connection-recovery.md) — 同一boot内復旧の実機結果
 
 ## 更新方針
 

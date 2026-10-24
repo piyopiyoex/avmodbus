@@ -38,3 +38,5 @@
 - [2026-10-24: 最新AtomVM v0.7 snapshotでの32+32同時通信](2026-10-24-latest-v07-concurrent-traffic.md)
 - [2026-10-24: Peer descriptor駆動のControllerトランスポート構成](2026-10-24-peer-driven-controller-setup.md)
 - [2026-10-24: スケーラブルなマルチノードホストモデル](2026-10-24-scalable-multinode-host-model.md)
+- [2026-10-24: 起動・復旧test matrixのhost・3台実機baseline](2026-10-24-startup-recovery-matrix.md)
+- [2026-10-24: 初回接続timeout後のbounded recovery](2026-10-24-initial-connection-recovery.md)

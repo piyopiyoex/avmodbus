@@ -69,9 +69,10 @@
   ありません。
 - peer session change で古い reader を閉じると、回復可能な場合でも AtomVM console に
   `{serial_read_error, closed}` の crash report が表示されます。
-- AtomVMのdistribution setup timerは固定7秒です。Drive / Sensorsをconsoleで順番に長く監視してからControllerを起動すると、
-  後続nodeの起動前にsetupがtimeoutします。remote health無効の通常profileではstale connectionも自動teardownしないため、
-  3台のfresh-start確認では両remoteとControllerを短い間隔でcoordinated bootする必要があります。
+- AtomVMのdistribution setup timerは固定7秒です。Drive / Sensorsを先行起動してsetupがtimeoutすると、
+  `net_kernel.start/2`は成功済みでも`serial_dist`の片側stateが残ります。初回readiness ACK待ち8秒でremote側の
+  distributionをbounded restartすることで、Drive / Sensorsの両方がboard resetなしで復旧することを実機確認しました。
+  これは7秒timerを延長せず、stale stateをremote自身がteardownするexample側の復旧です。
 - 64 messages / role の concurrent run では23–24 messages受信後に両 carrier session が変わり、distribution 自体は再接続しましたが、
   session change 前の producer process は再開されませんでした。collector は残りを欠損として timeout します。transport reconnect は
   application workload の再開を保証しません。
@@ -98,8 +99,10 @@
 - restart上限を使ったbootのまま物理切断試験を繰り返すと、次の障害では`remote health restart budget exhausted`となります。
   反復試験で毎回自動restartを評価する場合は、各run前に対象remoteをclean bootし、起動時handshakeで上限を消費していないことを
   consoleで確認します。
-- readiness healthは最初のController ACKを受け取った後のconnectionだけを監視します。初回handshakeを確立できないnodeには既存のannounce retryを
-  続け、health restartは行いません。persistent workload ownerとdurable mission resumeは未実装です。
+- 初回復旧と接続後のremote healthは、同じboard boot単位のrestart budgetを共用します。既定の上限は1回で、
+  初回復旧で消費した場合、そのbootで後発したconnection outageに追加restartは行いません。正常接続後もbudgetは
+  補充しません。上限を増やすと、進行中の遅いhandshakeを次の8秒期限で切断する可能性があるため、
+  実機baselineは1回のみです。persistent workload ownerとdurable mission resumeは未実装です。
 - paired-wire配線でSensorsまたは右端DriveのA/Bを外した試験では、残るpeerも停止しました。物理配置上の位置と電気的なbranch isolationは
   同義ではなく、trunkをremovable nodeの端子に依存させる配線は独立peer faultの検証に使えません。
 - breadboard上のcontinuous A/B trunkとnode別branchによる初回試験では、Sensorsの最後のACKから48,760 ms後にremote healthが切断を

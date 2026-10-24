@@ -117,6 +117,12 @@ multinode_remote_health_enabled =
 multinode_remote_health_trace =
   parse_boolean.("ROBOT_MULTINODE_REMOTE_HEALTH_TRACE", false)
 
+multinode_connection_trace =
+  parse_boolean.("ROBOT_MULTINODE_CONNECTION_TRACE", false)
+
+multinode_initial_recovery_enabled =
+  parse_boolean.("ROBOT_MULTINODE_INITIAL_RECOVERY_ENABLED", true)
+
 multinode_remote_ack_timeout_ms =
   parse_integer.("ROBOT_MULTINODE_REMOTE_ACK_TIMEOUT_MS", 90_000)
 
@@ -343,6 +349,8 @@ config :robot_sim,
   multinode_restart_on_traffic_ack_timeout: multinode_restart_on_traffic_ack_timeout,
   multinode_remote_health_enabled: multinode_remote_health_enabled,
   multinode_remote_health_trace: multinode_remote_health_trace,
+  multinode_connection_trace: multinode_connection_trace,
+  multinode_initial_recovery_enabled: multinode_initial_recovery_enabled,
   multinode_remote_ack_timeout_ms: multinode_remote_ack_timeout_ms,
   multinode_remote_max_restarts: multinode_remote_max_restarts,
   sensor_mission_steps: sensor_mission_steps,

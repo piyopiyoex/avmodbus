@@ -436,8 +436,10 @@ ROBOT_MODE=multinode ROBOT_ROLE=controller ATOMVM_UART_SPEED=115200 \
 | `ROBOT_MULTINODE_RESTART_ON_TRAFFIC_ACK_TIMEOUT` | `false` | traffic ACK timeout 時に remote の distribution を再起動する診断設定 |
 | `ROBOT_MULTINODE_REMOTE_HEALTH_ENABLED` | `false` | remote が readiness ACK timeout で自身の distribution を再起動する診断設定 |
 | `ROBOT_MULTINODE_REMOTE_HEALTH_TRACE` | `false` | remote がconnection内のreadiness ACK gapとboot内high-waterを出力する測定設定 |
+| `ROBOT_MULTINODE_CONNECTION_TRACE` | `false` | 起動、handshake、stale検出、restart、再接続を共通event形式で出力する測定設定 |
+| `ROBOT_MULTINODE_INITIAL_RECOVERY_ENABLED` | `true` | 初回readiness ACKが8秒以内に届かないremoteのdistributionをbounded restartする |
 | `ROBOT_MULTINODE_REMOTE_ACK_TIMEOUT_MS` | `90000` | remote が現在の connection ID の ACK を待つ期限。announce 間隔より大きくする |
-| `ROBOT_MULTINODE_REMOTE_MAX_RESTARTS` | `1` | remote health による board boot ごとの restart 上限。0..10 |
+| `ROBOT_MULTINODE_REMOTE_MAX_RESTARTS` | `1` | 初回復旧とremote healthが共用するboard bootごとのrestart上限。0..10 |
 
 `MODBUS_FAULT_*` は Drive / Sensors 側でだけ意味を持つ transport fault injection です。通常構成では必ず
 `MODBUS_FAULT_DROP_RESPONSES=0` を使用してください。これは request を受理した後の Server response だけを破棄するため、
@@ -616,6 +618,20 @@ PackBEAM artifactを変更しません。
 
 数値とmodelの境界は[host model worklog](docs/worklog/2026-10-24-scalable-multinode-host-model.md)、追加deviceを必須としない判断は
 [ADR 0020](docs/adr/0020-model-scale-on-host-instead-of-adding-devices.md)を参照してください。
+
+## 起動・復旧test matrix
+
+接続管理を変更する前のbaselineとして、6通りの起動順序、Drive / Sensorsの初回handshake failure、接続後障害をhostで
+列挙・評価できます。
+
+```sh
+cd examples/hello_atomvm_modbus_robot
+mise exec -- mix test test/connection_trace_test.exs test/startup_recovery_matrix_test.exs
+mise exec -- mix run scripts/startup_recovery_matrix.exs
+```
+
+実機では3 roleを`ROBOT_MULTINODE_CONNECTION_TRACE=true`でbuildします。これはlogだけを追加し、timeoutやrestart policyを
+変更しません。scenario、event、判定方法、実機手順は[起動・復旧test matrix](docs/startup-recovery-matrix.md)を参照してください。
 
 ## 境界
 
