@@ -78,6 +78,12 @@ defmodule RobotSim.RemoteHealth do
     end
   end
 
+  @doc "boot単位のbudgetから1回のrestartを確保します。"
+  @spec request_restart(t(), integer()) :: {:restart | :exhausted | :waiting, t()}
+  def request_restart(state, now_ms) when is_integer(now_ms) do
+    reserve_restart(state, now_ms)
+  end
+
   @doc "Move detector state to a newly opened distribution connection."
   @spec reconnected(t(), pos_integer(), integer()) :: t()
   def reconnected(state, connection_id, now_ms)
@@ -91,7 +97,9 @@ defmodule RobotSim.RemoteHealth do
     }
   end
 
-  defp evaluate_overdue(%{restarts: restarts, max_restarts: max_restarts} = state, now_ms)
+  defp evaluate_overdue(state, now_ms), do: reserve_restart(state, now_ms)
+
+  defp reserve_restart(%{restarts: restarts, max_restarts: max_restarts} = state, now_ms)
        when restarts < max_restarts do
     {:restart,
      %{
@@ -102,8 +110,8 @@ defmodule RobotSim.RemoteHealth do
      }}
   end
 
-  defp evaluate_overdue(%{exhaustion_reported: false} = state, _now_ms),
+  defp reserve_restart(%{exhaustion_reported: false} = state, _now_ms),
     do: {:exhausted, %{state | exhaustion_reported: true}}
 
-  defp evaluate_overdue(state, _now_ms), do: {:waiting, state}
+  defp reserve_restart(state, _now_ms), do: {:waiting, state}
 end

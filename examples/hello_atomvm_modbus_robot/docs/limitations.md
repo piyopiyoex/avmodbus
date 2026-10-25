@@ -23,17 +23,21 @@
 
 ## バッファとバックプレッシャー
 
-- FC-100 carrier の outgoing queue は stream ごとに default 8,192 payload bytes / 256 chunks です。Controller の2 stream は独立した
-  上限を持ちます。
+- FC-100 carrier の outgoing queue は stream ごとに default 8,192 payload bytes / 256 chunks です。Controllerはこれに加えて、
+  全client streamで共有するdefault 8,192 bytes / 256 chunksのglobal上限を持ちます。
 - 上限は carrier が保持する payload の合計であり、binary、Erlang term、process mailbox、distribution controller を含む VM heap
   全体の上限ではありません。application process の mailbox に明示的な件数上限はありません。
 - queue 上限を超えた write は `{:error, :queue_full}` となり、carrier は fail fast して session を切り替えます。queue 済みまたは
   in-flight の stream data は破棄されるため、回復は application の timeout / retry に依存します。
 - `MODBUS_MAX_QUEUED_BYTES` と `MODBUS_MAX_QUEUED_CHUNKS` は compile-time configuration です。値を増やすことは delivery guarantee
   ではなく、ESP32-C5 の memory 使用量も増やします。
+- Controllerのglobal上限も`ROBOT_MULTINODE_GLOBAL_MAX_QUEUED_BYTES`と
+  `ROBOT_MULTINODE_GLOBAL_MAX_QUEUED_CHUNKS`によるcompile-time configurationです。global拒否は
+  `{:error, :global_queue_full}`となり、該当streamだけがsessionを切り替えます。peer間の公平な予約や待機型backpressureは提供しません。
 - host modelでstream別defaultを単純合算すると、32 remote peersのconfigured payload limitは262,144 bytes / 8,192 chunksに
   なります。これは事前確保量ではありませんが、3台実測のminimum free heap 68,848 bytesを超えるため、
-  current defaultをN streamsへ複製できるとは主張しません。global budget、peer数依存の上限、実heap測定は未実装です。
+  current defaultをN streamsへ複製できるとは主張しません。global budgetによりcarrier payload合計は制限しますが、peer数依存の
+  process / mailbox / distribution memoryと実heapの増分は未測定です。
 - concurrent traffic probeはroleごとに1 messageだけを未確認状態にするapplication ACKを使用します。ACK timeout時のretryは
   boundedですが、collector crashやretry上限超過後のdurable resumeは実装していません。collectorの全体timeoutは通信断や
   handshake中も進み、停止または延長されません。baseline送信、operatorの切断保持、再接続、残り送信を含む値に設定する必要があります。
@@ -69,9 +73,10 @@
   ありません。
 - peer session change で古い reader を閉じると、回復可能な場合でも AtomVM console に
   `{serial_read_error, closed}` の crash report が表示されます。
-- AtomVMのdistribution setup timerは固定7秒です。Drive / Sensorsをconsoleで順番に長く監視してからControllerを起動すると、
-  後続nodeの起動前にsetupがtimeoutします。remote health無効の通常profileではstale connectionも自動teardownしないため、
-  3台のfresh-start確認では両remoteとControllerを短い間隔でcoordinated bootする必要があります。
+- AtomVMのdistribution setup timerは固定7秒です。Drive / Sensorsを先行起動してsetupがtimeoutすると、
+  `net_kernel.start/2`は成功済みでも`serial_dist`の片側stateが残ります。初回readiness ACK待ち8秒でremote側の
+  distributionをbounded restartすることで、Drive / Sensorsの両方がboard resetなしで復旧することを実機確認しました。
+  これは7秒timerを延長せず、stale stateをremote自身がteardownするexample側の復旧です。
 - 64 messages / role の concurrent run では23–24 messages受信後に両 carrier session が変わり、distribution 自体は再接続しましたが、
   session change 前の producer process は再開されませんでした。collector は残りを欠損として timeout します。transport reconnect は
   application workload の再開を保証しません。
@@ -98,8 +103,10 @@
 - restart上限を使ったbootのまま物理切断試験を繰り返すと、次の障害では`remote health restart budget exhausted`となります。
   反復試験で毎回自動restartを評価する場合は、各run前に対象remoteをclean bootし、起動時handshakeで上限を消費していないことを
   consoleで確認します。
-- readiness healthは最初のController ACKを受け取った後のconnectionだけを監視します。初回handshakeを確立できないnodeには既存のannounce retryを
-  続け、health restartは行いません。persistent workload ownerとdurable mission resumeは未実装です。
+- 初回復旧と接続後のremote healthは、同じboard boot単位のrestart budgetを共用します。既定の上限は1回で、
+  初回復旧で消費した場合、そのbootで後発したconnection outageに追加restartは行いません。正常接続後もbudgetは
+  補充しません。上限を増やすと、進行中の遅いhandshakeを次の8秒期限で切断する可能性があるため、
+  実機baselineは1回のみです。persistent workload ownerとdurable mission resumeは未実装です。
 - paired-wire配線でSensorsまたは右端DriveのA/Bを外した試験では、残るpeerも停止しました。物理配置上の位置と電気的なbranch isolationは
   同義ではなく、trunkをremovable nodeの端子に依存させる配線は独立peer faultの検証に使えません。
 - breadboard上のcontinuous A/B trunkとnode別branchによる初回試験では、Sensorsの最後のACKから48,760 ms後にremote healthが切断を
@@ -112,6 +119,19 @@
   36,943–38,388 msでdistributionを再起動しました。branch復帰後に同じsequenceから再開して両roleを完全配送しました。ただし
   Drive transaction failureは0–1、duplicate sampleは3–11件、elapsedは451,811–568,227 msと幅がありました。2回目の30秒snapshotでは
   Driveにreadiness trafficを含み得る117 bytes / 2 outstandingがあり、常に30秒で両queueが0になるとは保証しません。
+- 90秒remote health timeoutを使った64+64 runでは、約37秒のphysical応答停止後もrestartせず同じconnectionで復帰し、欠損・重複
+  なしで完了しました。一方、操作時間が約1分を超えたcalibrationではControllerが`net_tick_timeout`でSensorsを閉じた後、Sensorsの
+  restartが`net_kernel_stop_timeout`となり、Unit 2のphysical応答も停止しました。短時間復帰の成功をlease / tick境界を超える切断へ
+  外挿できません。条件は[worklog](worklog/2026-10-24-extended-fault-recovery.md)を参照してください。
+- 約199秒のidle切断では、Sensors restart成功後にbudgetを使い切り、復線後もdistribution handshakeは成立しませんでした。
+  physical pollingは約10分復帰しましたが、Sensors minimum free heapが14,428 bytesまで低下した後、Unit 2も再び応答不能になりました。
+  Drive connectionは維持しました。原因processは未確定であり、current v0.7 snapshotのruntime blockerとして
+  [worklog](worklog/2026-10-25-idle-180-second-disconnect.md)に記録しています。
+- 同一Sensors bootで短時間のbranch切断を3回反復した試験では、90秒remote health timeoutへ達せず、同じconnection IDのまま
+  3回とも復帰しました。faultを含む2 runsと後続runは両role 64 / 64、欠損・重複なしで完了し、restart budget消費と
+  global queue rejectionは0でした。ただし操作時刻とserial logを共通時計で精密測定しておらず、Driveにもfaultを含むrunごとに
+  単発transaction timeoutが1件あったため、正確な30秒境界や正常peerへの無影響は保証しません。詳細は
+  [worklog](worklog/2026-10-25-repeated-branch-disconnect.md)を参照してください。
 - handshake中には複数の`unexpected`、`unsupported_name`、`invalid_challenge`、`no_link_manager_response`、timeoutが発生しています。
   retryは最終的に収束しましたが、復旧時間の上限や任意の電気条件でのfailure isolationを保証しません。termination / biasも個別測定して
   いません。
@@ -150,6 +170,10 @@
 - 2026-10-23の別の256+256 profileも783,317 msで完全配送し、Controller側queue high-waterは両role 200 bytes / 3 chunks、
   minimum free heapは68,848 bytes、30秒後の両queueは0でした。2回の所要時間とmetricsは同一ではなく、これらの単一runから
   sustained throughputやmemory上限を保証しません。
+- 16+16 messagesと270秒idleを12回反復する64分30秒profileは全runを完全配送し、restartとglobal rejectionは0でした。
+  periodic free heapの単調減少はありませんでしたが、Sensorsでretry可能なtransaction timeoutを8件観測しました。
+  この1回のprofileから数時間・数日の安定性やerror-freeなphysical transportを保証しません。詳細は
+  [worklog](worklog/2026-10-25-one-hour-active-idle-endurance.md)を参照してください。
 - `MODBUS_FAULT_*` はServer responseだけを破棄する診断用設定です。双方向のRS485 cable断、partial frame、電源断を再現せず、
   通常運用のrecovery機構として使用するものではありません。
 - 以前はServer adapterを再生成するとresponse faultのcountとdelayも初期化され、同じfaultが再度armされました。現在の既定値では

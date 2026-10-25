@@ -11,6 +11,7 @@ defmodule DisterlProbe.ModbusUARTTest do
     Protocol,
     ResponseFault,
     ResponseTimeout,
+    QueueBudget,
     TransactionStats
   }
 
@@ -188,6 +189,7 @@ defmodule DisterlProbe.ModbusUARTTest do
     assert snapshot.outstanding == 1
     assert snapshot.max_queued_bytes == 7
     assert snapshot.max_outstanding == 3
+    assert snapshot.global_queue_budget == nil
     assert snapshot.transactions.successes == 1
     assert snapshot.transactions.average_elapsed_ms == 50
     assert snapshot.memory == nil
@@ -298,6 +300,90 @@ defmodule DisterlProbe.ModbusUARTTest do
     refute next.trace_queue_active
   end
 
+  test "a shared budget rejects the whole write and releases this adapter queue" do
+    {:ok, budget} = QueueBudget.start_link(max_queued_bytes: 100, max_queued_chunks: 2)
+    other_adapter = spawn(fn -> receive do: (:stop -> :ok) end)
+    assert :ok = QueueBudget.reserve(budget, other_adapter, 80, 1)
+
+    state =
+      Channel.new(450, max_queued_bytes: 1_024, max_queued_chunks: 16)
+      |> adapter_state()
+      |> Map.put(:queue_budget, budget)
+
+    old_session = state.channel.session
+
+    assert {:reply, {:error, :global_queue_full}, next} =
+             callback({:write, :binary.copy(<<0x22>>, 96)}, state)
+
+    refute next.channel.session == old_session
+    assert Channel.done?(next.channel)
+
+    assert %{
+             queued_bytes: 80,
+             queued_chunks: 1,
+             active_owners: 1,
+             rejected: 1
+           } = QueueBudget.snapshot(budget)
+
+    send(other_adapter, :stop)
+  end
+
+  test "an acknowledged chunk releases shared budget capacity" do
+    {:ok, budget} = QueueBudget.start_link(max_queued_bytes: 100, max_queued_chunks: 4)
+    {:ok, channel} = Channel.queue(Channel.new(460), "abc")
+    assert :ok = QueueBudget.reserve(budget, self(), 3, 1)
+
+    state =
+      channel
+      |> adapter_state()
+      |> Map.merge(%{
+        role: :server,
+        queue_budget: budget,
+        response_fault: ResponseFault.new()
+      })
+
+    {:ok, incoming} = Protocol.encode(560, 0, 460, 1, <<>>)
+    assert {:reply, {:ok, _response}, next} = callback({:exchange, incoming}, state)
+    assert next.channel.queued_bytes == 0
+    assert %{queued_bytes: 0, queued_chunks: 0} = QueueBudget.snapshot(budget)
+  end
+
+  test "a peer session replacement releases stale shared budget capacity" do
+    {:ok, budget} = QueueBudget.start_link(max_queued_bytes: 100, max_queued_chunks: 4)
+    {:ok, channel} = Channel.queue(%{Channel.new(470) | peer_session: 570}, "stale")
+    assert :ok = QueueBudget.reserve(budget, self(), 5, 1)
+
+    state =
+      channel
+      |> adapter_state()
+      |> Map.merge(%{
+        role: :server,
+        queue_budget: budget,
+        response_fault: ResponseFault.new()
+      })
+
+    {:ok, incoming} = Protocol.encode(571, 0, 0, 0, <<>>)
+    assert {:reply, {:ok, _response}, next} = callback({:exchange, incoming}, state)
+    assert next.channel.peer_session == 571
+    assert next.channel.queued_bytes == 0
+    assert %{queued_bytes: 0, queued_chunks: 0} = QueueBudget.snapshot(budget)
+  end
+
+  test "adapter termination releases all shared budget capacity" do
+    {:ok, budget} = QueueBudget.start_link(max_queued_bytes: 100, max_queued_chunks: 4)
+    assert :ok = QueueBudget.reserve(budget, self(), 50, 2)
+
+    state =
+      Channel.new(480)
+      |> adapter_state()
+      |> Map.merge(%{queue_budget: budget, owns_resource: false})
+
+    assert :ok = ModbusUART.terminate(:normal, state)
+
+    assert %{queued_bytes: 0, queued_chunks: 0, active_owners: 0} =
+             QueueBudget.snapshot(budget)
+  end
+
   test "a new read closes and replaces a stale blocked reader" do
     first_tag = make_ref()
     second_tag = make_ref()
@@ -384,6 +470,7 @@ defmodule DisterlProbe.ModbusUARTTest do
       stats: TransactionStats.new(),
       trace_queue: false,
       trace_queue_active: false,
+      queue_budget: nil,
       unit_id: 1,
       max_queued_bytes_observed: 0,
       max_outstanding_observed: 0

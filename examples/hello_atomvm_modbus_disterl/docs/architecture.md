@@ -44,6 +44,8 @@ Node B sends queued data only in a response to a poll.
 - data sequence は `1..65,535` を使い、65,535 の次は 1 へ wrap する
 - ACK の新旧は wraparound を考慮した serial-number arithmetic で判定する
 - byte / chunk 上限または sequence 空間の上限に達した場合は、新しい message の queue を拒否する
+- 複数のclient adapterを使うconsumerは、任意の`DisterlProbe.QueueBudget`を共有してstream横断のbyte / chunk上限を追加できる。
+  ACK、session変更、adapter終了で予約を解放し、global上限超過は`:global_queue_full`として該当streamをfail fastさせる
 - 各起動時に non-zero の 32-bit session ID を生成する。local rolloverでは直前のIDと同値にならないようにする
 - ACK は `acknowledged_session` と一致する local session にだけ適用する
 - peer session が未確定のとき、以前の local session 宛ての packet は payload を含めて破棄する

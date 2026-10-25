@@ -20,6 +20,16 @@ defmodule RobotSim.RemoteHealthTest do
     assert next.last_ack_ms == 1_101
   end
 
+  test "disabled health can share its boot budget with an explicit startup restart" do
+    health = RemoteHealth.new(10, 1_000, enabled: false, max_restarts: 1)
+
+    assert {:restart, restarting} = RemoteHealth.request_restart(health, 8_000)
+    assert restarting.restarts == 1
+    assert restarting.last_ack_ms == 8_000
+    assert {:exhausted, exhausted} = RemoteHealth.request_restart(restarting, 16_000)
+    assert {:waiting, ^exhausted} = RemoteHealth.request_restart(exhausted, 24_000)
+  end
+
   test "restart exhaustion is reported once while the outage continues" do
     health = RemoteHealth.new(10, 1_000, enabled: true, ack_timeout_ms: 100, max_restarts: 0)
     assert {:exhausted, exhausted} = RemoteHealth.evaluate(health, 1_101)

@@ -74,6 +74,13 @@ multidrop_gap_ms = parse_integer.("ROBOT_MULTIDROP_GAP_MS", 20)
 chunk_payload_bytes = parse_integer.("MODBUS_CHUNK_PAYLOAD_BYTES", 96)
 max_queued_bytes = parse_integer.("MODBUS_MAX_QUEUED_BYTES", 8_192)
 max_queued_chunks = parse_integer.("MODBUS_MAX_QUEUED_CHUNKS", 256)
+
+multinode_global_max_queued_bytes =
+  parse_integer.("ROBOT_MULTINODE_GLOBAL_MAX_QUEUED_BYTES", 8_192)
+
+multinode_global_max_queued_chunks =
+  parse_integer.("ROBOT_MULTINODE_GLOBAL_MAX_QUEUED_CHUNKS", 256)
+
 fault_drop_responses = parse_integer.("MODBUS_FAULT_DROP_RESPONSES", 0)
 fault_min_payload_bytes = parse_integer.("MODBUS_FAULT_MIN_PAYLOAD_BYTES", 96)
 fault_after_ms = parse_integer.("MODBUS_FAULT_AFTER_MS", 10_000)
@@ -89,6 +96,9 @@ multinode_soak_payload_bytes = parse_integer.("ROBOT_MULTINODE_SOAK_PAYLOAD_BYTE
 multinode_soak_interval_ms = parse_integer.("ROBOT_MULTINODE_SOAK_INTERVAL_MS", 250)
 multinode_soak_retries = parse_integer.("ROBOT_MULTINODE_SOAK_RETRIES", 1)
 multinode_traffic_samples = parse_integer.("ROBOT_MULTINODE_TRAFFIC_SAMPLES", 0)
+multinode_traffic_runs = parse_integer.("ROBOT_MULTINODE_TRAFFIC_RUNS", 1)
+multinode_traffic_idle_ms = parse_integer.("ROBOT_MULTINODE_TRAFFIC_IDLE_MS", 0)
+multinode_metrics_interval_ms = parse_integer.("ROBOT_MULTINODE_METRICS_INTERVAL_MS", 0)
 
 multinode_traffic_drive_interval_ms =
   parse_integer.("ROBOT_MULTINODE_TRAFFIC_DRIVE_INTERVAL_MS", 2_000)
@@ -116,6 +126,12 @@ multinode_remote_health_enabled =
 
 multinode_remote_health_trace =
   parse_boolean.("ROBOT_MULTINODE_REMOTE_HEALTH_TRACE", false)
+
+multinode_connection_trace =
+  parse_boolean.("ROBOT_MULTINODE_CONNECTION_TRACE", false)
+
+multinode_initial_recovery_enabled =
+  parse_boolean.("ROBOT_MULTINODE_INITIAL_RECOVERY_ENABLED", true)
 
 multinode_remote_ack_timeout_ms =
   parse_integer.("ROBOT_MULTINODE_REMOTE_ACK_TIMEOUT_MS", 90_000)
@@ -164,6 +180,14 @@ end
 
 if max_queued_chunks < 1 or max_queued_chunks > 65_535 do
   raise ArgumentError, "MODBUS_MAX_QUEUED_CHUNKS must be between 1 and 65535"
+end
+
+if multinode_global_max_queued_bytes < 1 do
+  raise ArgumentError, "ROBOT_MULTINODE_GLOBAL_MAX_QUEUED_BYTES must be a positive integer"
+end
+
+if multinode_global_max_queued_chunks < 1 do
+  raise ArgumentError, "ROBOT_MULTINODE_GLOBAL_MAX_QUEUED_CHUNKS must be a positive integer"
 end
 
 if fault_drop_responses < 0 do
@@ -225,6 +249,18 @@ end
 
 if multinode_traffic_samples < 0 or multinode_traffic_samples > 256 do
   raise ArgumentError, "ROBOT_MULTINODE_TRAFFIC_SAMPLES must be between 0 and 256"
+end
+
+if multinode_traffic_runs < 1 or multinode_traffic_runs > 1_000 do
+  raise ArgumentError, "ROBOT_MULTINODE_TRAFFIC_RUNS must be between 1 and 1000"
+end
+
+if multinode_traffic_idle_ms < 0 do
+  raise ArgumentError, "ROBOT_MULTINODE_TRAFFIC_IDLE_MS must be a non-negative integer"
+end
+
+if multinode_metrics_interval_ms < 0 do
+  raise ArgumentError, "ROBOT_MULTINODE_METRICS_INTERVAL_MS must be a non-negative integer"
 end
 
 if multinode_traffic_drive_interval_ms < 1 or multinode_traffic_sensors_interval_ms < 1 do
@@ -311,6 +347,8 @@ config :robot_sim,
   chunk_payload_bytes: chunk_payload_bytes,
   max_queued_bytes: max_queued_bytes,
   max_queued_chunks: max_queued_chunks,
+  multinode_global_max_queued_bytes: multinode_global_max_queued_bytes,
+  multinode_global_max_queued_chunks: multinode_global_max_queued_chunks,
   fault_drop_responses: fault_drop_responses,
   fault_min_payload_bytes: fault_min_payload_bytes,
   fault_after_ms: fault_after_ms,
@@ -332,6 +370,9 @@ config :robot_sim,
   multinode_soak_interval_ms: multinode_soak_interval_ms,
   multinode_soak_retries: multinode_soak_retries,
   multinode_traffic_samples: multinode_traffic_samples,
+  multinode_traffic_runs: multinode_traffic_runs,
+  multinode_traffic_idle_ms: multinode_traffic_idle_ms,
+  multinode_metrics_interval_ms: multinode_metrics_interval_ms,
   multinode_traffic_drive_interval_ms: multinode_traffic_drive_interval_ms,
   multinode_traffic_sensors_interval_ms: multinode_traffic_sensors_interval_ms,
   multinode_traffic_payload_bytes: multinode_traffic_payload_bytes,
@@ -343,6 +384,8 @@ config :robot_sim,
   multinode_restart_on_traffic_ack_timeout: multinode_restart_on_traffic_ack_timeout,
   multinode_remote_health_enabled: multinode_remote_health_enabled,
   multinode_remote_health_trace: multinode_remote_health_trace,
+  multinode_connection_trace: multinode_connection_trace,
+  multinode_initial_recovery_enabled: multinode_initial_recovery_enabled,
   multinode_remote_ack_timeout_ms: multinode_remote_ack_timeout_ms,
   multinode_remote_max_restarts: multinode_remote_max_restarts,
   sensor_mission_steps: sensor_mission_steps,

@@ -20,6 +20,7 @@ defmodule DisterlProbe.ModbusUART do
     MemorySnapshot,
     PollScheduler,
     Protocol,
+    QueueBudget,
     ResponseFault,
     ResponseTimeout,
     TransactionStats
@@ -128,6 +129,7 @@ defmodule DisterlProbe.ModbusUART do
       stats: TransactionStats.new(Keyword.get(options, :trace_transactions, false)),
       trace_queue: Keyword.get(options, :trace_queue, false),
       trace_queue_active: false,
+      queue_budget: Keyword.get(options, :queue_budget),
       max_queued_bytes_observed: 0,
       max_outstanding_observed: 0,
       response_fault:
@@ -229,31 +231,34 @@ defmodule DisterlProbe.ModbusUART do
 
   defp queue_write(data, state) do
     log_stream_data("queued", data)
+    chunks = chunk_count(byte_size(data), state.chunk_payload_bytes)
 
-    case queue_chunks(state.channel, data, state.chunk_payload_bytes) do
-      {:ok, channel} ->
-        response_timeout =
-          ResponseTimeout.observe_write(
-            state.response_timeout,
-            byte_size(data),
-            state.chunk_payload_bytes
-          )
+    with :ok <- reserve_queue_budget(state, byte_size(data), chunks),
+         {:ok, channel} <- queue_chunks(state.channel, data, state.chunk_payload_bytes) do
+      response_timeout =
+        ResponseTimeout.observe_write(
+          state.response_timeout,
+          byte_size(data),
+          state.chunk_payload_bytes
+        )
 
-        log_timeout_change(state.response_timeout, response_timeout, byte_size(data))
+      log_timeout_change(state.response_timeout, response_timeout, byte_size(data))
 
-        next = %{
-          state
-          | channel: channel,
-            response_timeout: response_timeout,
-            trace_queue_active: state.trace_queue_active or traceable_write?(byte_size(data)),
-            max_queued_bytes_observed: max(state.max_queued_bytes_observed, channel.queued_bytes),
-            max_outstanding_observed: max(state.max_outstanding_observed, channel.outstanding)
-        }
+      next = %{
+        state
+        | channel: channel,
+          response_timeout: response_timeout,
+          trace_queue_active: state.trace_queue_active or traceable_write?(byte_size(data)),
+          max_queued_bytes_observed: max(state.max_queued_bytes_observed, channel.queued_bytes),
+          max_outstanding_observed: max(state.max_outstanding_observed, channel.outstanding)
+      }
 
-        log_queue("accepted", next, byte_size(data))
-        {:reply, :ok, next}
-
+      log_queue("accepted", next, byte_size(data))
+      {:reply, :ok, next}
+    else
       {:error, _reason} = error ->
+        sync_queue_budget(state)
+
         IO.puts(
           "modbus_uart: queue rejected unit=#{state.unit_id} write_bytes=#{byte_size(data)} " <>
             "reason=#{inspect(elem(error, 1))} queued_bytes=#{state.channel.queued_bytes} " <>
@@ -316,19 +321,24 @@ defmodule DisterlProbe.ModbusUART do
   def handle_info(_message, state), do: {:noreply, state}
 
   @impl true
-  def terminate(_reason, %{owns_resource: false}), do: :ok
+  def terminate(_reason, state) do
+    release_queue_budget(state)
+    close_transport(state)
+  end
 
-  def terminate(_reason, %{role: :client, resource: resource}) when resource != nil do
+  defp close_transport(%{owns_resource: false}), do: :ok
+
+  defp close_transport(%{role: :client, resource: resource}) when resource != nil do
     Client.stop(resource)
     :ok
   end
 
-  def terminate(_reason, %{role: :server, resource: resource}) when is_pid(resource) do
+  defp close_transport(%{role: :server, resource: resource}) when is_pid(resource) do
     Server.RTU.stop(resource)
     :ok
   end
 
-  def terminate(_reason, _state), do: :ok
+  defp close_transport(_state), do: :ok
 
   defp open_transport(:client, serial, state, options) do
     case Keyword.fetch(options, :client) do
@@ -402,6 +412,7 @@ defmodule DisterlProbe.ModbusUART do
       outstanding: state.channel.outstanding,
       max_queued_bytes: state.max_queued_bytes_observed,
       max_outstanding: state.max_outstanding_observed,
+      global_queue_budget: queue_budget_snapshot(state),
       transactions: TransactionStats.summary(state.stats),
       memory: MemorySnapshot.capture()
     }
@@ -420,7 +431,9 @@ defmodule DisterlProbe.ModbusUART do
          stream <- reset_restarted_peer(state, incoming.session),
          next <- deliver(stream, channel, delivered),
          {:ok, reply} <- Channel.packet(next.channel) do
-      {:ok, maybe_log_drained_queue(previous_channel, next), reply}
+      next = maybe_log_drained_queue(previous_channel, next)
+      sync_queue_budget(next)
+      {:ok, next, reply}
     end
   end
 
@@ -576,6 +589,16 @@ defmodule DisterlProbe.ModbusUART do
   end
 
   defp recover_rejected_write(state, :queue_full) do
+    restart_rejected_stream(state)
+  end
+
+  defp recover_rejected_write(state, :global_queue_full) do
+    restart_rejected_stream(state)
+  end
+
+  defp recover_rejected_write(state, _reason), do: state
+
+  defp restart_rejected_stream(state) do
     previous_session = state.channel.session
     channel = Channel.restart(state.channel)
 
@@ -583,12 +606,38 @@ defmodule DisterlProbe.ModbusUART do
       "modbus_uart: queue-full stream reset session=#{previous_session} -> #{channel.session}"
     )
 
-    %{
+    next = %{
       reset_stream(state, state.reader)
       | channel: channel,
         trace_queue_active: false
     }
+
+    sync_queue_budget(next)
+    next
   end
 
-  defp recover_rejected_write(state, _reason), do: state
+  defp reserve_queue_budget(%{queue_budget: nil}, _bytes, _chunks), do: :ok
+
+  defp reserve_queue_budget(%{queue_budget: budget}, bytes, chunks),
+    do: QueueBudget.reserve(budget, self(), bytes, chunks)
+
+  defp sync_queue_budget(%{queue_budget: nil}), do: :ok
+
+  defp sync_queue_budget(%{queue_budget: budget, channel: channel}),
+    do: QueueBudget.set_usage(budget, self(), channel.queued_bytes, channel.outstanding)
+
+  defp release_queue_budget(%{queue_budget: nil}), do: :ok
+
+  defp release_queue_budget(%{queue_budget: budget}),
+    do: QueueBudget.release(budget, self())
+
+  defp queue_budget_snapshot(%{queue_budget: nil}), do: nil
+
+  defp queue_budget_snapshot(%{queue_budget: budget}),
+    do: QueueBudget.snapshot(budget)
+
+  defp chunk_count(0, _chunk_payload_bytes), do: 0
+
+  defp chunk_count(bytes, chunk_payload_bytes),
+    do: div(bytes + chunk_payload_bytes - 1, chunk_payload_bytes)
 end
