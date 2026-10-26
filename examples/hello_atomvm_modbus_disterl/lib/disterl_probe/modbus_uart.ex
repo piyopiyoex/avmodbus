@@ -13,6 +13,11 @@ defmodule DisterlProbe.ModbusUART do
   Server adapterは任意の`activity_observer`を指定できます。有効なFC-100 exchangeが
   長時間途切れた後、transport activityの復帰を通知します。この通知は観測専用であり、
   distribution connectionをrestartするかどうかはadapterでは判断しません。
+
+  `exchange_observer`を指定すると、ServerがFC-100 requestを受理した時点と、responseを
+  Serverへ返したかfault injectionで破棄した時点を通知します。`exchange_observer_mode`は
+  既定の`:all`と、fault対象およびfault終了後の最初のresponseだけを通知する`:fault_window`を
+  選べます。物理UART上のresponse到達を保証する通知ではありません。
   """
 
   use GenServer
@@ -137,6 +142,10 @@ defmodule DisterlProbe.ModbusUART do
       queue_budget: Keyword.get(options, :queue_budget),
       max_queued_bytes_observed: 0,
       max_outstanding_observed: 0,
+      exchange_observer: Keyword.get(options, :exchange_observer),
+      exchange_observer_mode: Keyword.get(options, :exchange_observer_mode, :all),
+      exchange_recovery_notified: false,
+      exchange_count: 0,
       activity_observer: Keyword.get(options, :activity_observer),
       activity_gap_ms: Keyword.get(options, :activity_gap_ms, 0),
       activity_confirmations: Keyword.get(options, :activity_confirmations, 2),
@@ -221,7 +230,12 @@ defmodule DisterlProbe.ModbusUART do
     with {:ok, incoming} <- Protocol.decode(payload),
          {:ok, next, reply} <- receive_decoded_exchange(state, incoming) do
       accepted_at_ms = now_ms()
-      next = observe_transport_activity(next, incoming, accepted_at_ms)
+      exchange_id = state.exchange_count + 1
+
+      next =
+        next
+        |> Map.put(:exchange_count, exchange_id)
+        |> observe_transport_activity(incoming, accepted_at_ms)
 
       case ResponseFault.after_accept(
              next.response_fault,
@@ -229,13 +243,39 @@ defmodule DisterlProbe.ModbusUART do
              accepted_at_ms
            ) do
         {:reply, response_fault} ->
-          {:reply, {:ok, reply}, %{next | response_fault: response_fault}}
+          next = %{next | response_fault: response_fault}
+          next = notify_returned_exchange(next, exchange_id, incoming, reply)
+
+          {:reply, {:ok, reply}, next}
 
         {:drop, response_fault} ->
           log_dropped_response(response_fault, incoming)
 
-          {:reply, {:error, {:exception, :server_device_failure}},
-           %{next | response_fault: response_fault}}
+          next = %{
+            next
+            | response_fault: response_fault,
+              exchange_recovery_notified: false
+          }
+
+          notify_exchange(
+            next,
+            exchange_id,
+            :request_accepted,
+            incoming,
+            byte_size(incoming.payload),
+            nil
+          )
+
+          notify_exchange(
+            next,
+            exchange_id,
+            :response_dropped,
+            incoming,
+            byte_size(incoming.payload),
+            byte_size(reply)
+          )
+
+          {:reply, {:error, {:exception, :server_device_failure}}, next}
       end
     else
       {:error, _reason} -> {:reply, {:error, {:exception, :illegal_data_value}}, state}
@@ -550,6 +590,69 @@ defmodule DisterlProbe.ModbusUART do
     state
     |> Map.put(:last_exchange_ms, now_ms)
     |> Map.put(:activity_confirmation, confirmation)
+  end
+
+  defp notify_exchange(
+         state,
+         exchange_id,
+         event,
+         incoming,
+         request_payload_bytes,
+         response_payload_bytes
+       ) do
+    observer = Map.get(state, :exchange_observer)
+
+    if is_pid(observer) do
+      send(
+        observer,
+        {:modbus_uart_exchange, self(), state.unit_id, exchange_id, event, incoming.session,
+         request_payload_bytes, response_payload_bytes}
+      )
+    end
+
+    :ok
+  end
+
+  defp notify_returned_exchange(state, exchange_id, incoming, reply) do
+    if notify_returned_exchange?(state) do
+      notify_exchange(
+        state,
+        exchange_id,
+        :request_accepted,
+        incoming,
+        byte_size(incoming.payload),
+        nil
+      )
+
+      notify_exchange(
+        state,
+        exchange_id,
+        :response_returned,
+        incoming,
+        byte_size(incoming.payload),
+        byte_size(reply)
+      )
+
+      if Map.get(state, :exchange_observer_mode, :all) == :fault_window,
+        do: %{state | exchange_recovery_notified: true},
+        else: state
+    else
+      state
+    end
+  end
+
+  defp notify_returned_exchange?(state) do
+    case Map.get(state, :exchange_observer_mode, :all) do
+      :all ->
+        true
+
+      :fault_window ->
+        state.response_fault.dropped > 0 and
+          not Map.get(state, :exchange_recovery_notified, false)
+
+      _unsupported ->
+        false
+    end
   end
 
   defp log_peer_restart(previous, current) do

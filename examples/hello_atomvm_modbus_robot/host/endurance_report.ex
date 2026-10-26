@@ -3,8 +3,10 @@ defmodule RobotSim.EnduranceReport do
   Controller / Drive / Sensorsのserial logからendurance指標を集計するhost専用moduleです。
 
   通常のconsole行は無視し、`modbus_robot_resource`、`modbus_robot_memory`、
-  traffic完了、endurance、connection traceの機械可読な行だけを対象にします。
+  traffic完了、endurance、connection trace、exchange traceの機械可読な行だけを対象にします。
   """
+
+  @exchange_events ["request_accepted", "response_returned", "response_dropped"]
 
   @connection_events [
     "stale_detected",
@@ -114,6 +116,9 @@ defmodule RobotSim.EnduranceReport do
 
       String.contains?(line, "modbus_robot_connection:") ->
         analyze_connection(line, report)
+
+      String.contains?(line, "modbus_robot_exchange:") ->
+        analyze_exchange(line, report)
 
       true ->
         report
@@ -275,6 +280,21 @@ defmodule RobotSim.EnduranceReport do
       %{report | connections: connections, connection_timestamps: connection_timestamps}
     else
       report
+    end
+  end
+
+  defp analyze_exchange(line, report) do
+    fields = fields(line)
+    event = Map.get(fields, "event")
+
+    with {:ok, role} <- remote_role(Map.get(fields, "role")),
+         true <- event in @exchange_events,
+         {:ok, _exchange_id} <- integer(fields, "exchange_id") do
+      role_counts = Map.fetch!(report.exchanges, role)
+      next_counts = Map.update!(role_counts, event, &(&1 + 1))
+      %{report | exchanges: Map.put(report.exchanges, role, next_counts)}
+    else
+      _error -> malformed(report)
     end
   end
 
@@ -505,6 +525,10 @@ defmodule RobotSim.EnduranceReport do
         peers: %{drive: empty_peer, sensors: empty_peer}
       },
       remotes: %{drive: empty_remote, sensors: empty_remote},
+      exchanges: %{
+        drive: Map.new(@exchange_events, &{&1, 0}),
+        sensors: Map.new(@exchange_events, &{&1, 0})
+      },
       connections: Map.new(@connection_events, &{&1, 0}),
       connection_timestamps: %{},
       malformed_lines: 0

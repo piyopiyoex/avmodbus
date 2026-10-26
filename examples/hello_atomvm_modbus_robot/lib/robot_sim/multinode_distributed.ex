@@ -18,6 +18,7 @@ defmodule RobotSim.MultinodeDistributed do
     ConnectionTrace,
     Drive,
     Endurance,
+    ExchangeTrace,
     MissionWorker,
     MultinodeStats,
     RecoveryWorker,
@@ -120,6 +121,7 @@ defmodule RobotSim.MultinodeDistributed do
                               :multinode_transport_activity_trace,
                               false
                             )
+  @exchange_trace Application.compile_env(:robot_sim, :multinode_exchange_trace, false)
   @connection_trace Application.compile_env(
                       :robot_sim,
                       :multinode_connection_trace,
@@ -445,7 +447,8 @@ defmodule RobotSim.MultinodeDistributed do
 
   defp start_remote_kernel(role, fault_drop_responses \\ @fault_drop_responses) do
     extra =
-      [fault_drop_responses: fault_drop_responses] ++ remote_transport_activity_options()
+      [fault_drop_responses: fault_drop_responses] ++
+        remote_transport_activity_options() ++ remote_exchange_options()
 
     ports = [uart_options(:server, @unit_id, extra)]
 
@@ -587,6 +590,19 @@ defmodule RobotSim.MultinodeDistributed do
         )
 
         remote_loop(role, boot_id, connection_id, health, traffic_run_id)
+
+      {:modbus_uart_exchange, _adapter, @unit_id, exchange_id, event, peer_session,
+       request_payload_bytes, response_payload_bytes} ->
+        trace_remote_exchange(
+          role,
+          exchange_id,
+          event,
+          peer_session,
+          request_payload_bytes,
+          response_payload_bytes
+        )
+
+        remote_loop(role, boot_id, connection_id, health, traffic_run_id)
     end
   end
 
@@ -665,6 +681,19 @@ defmodule RobotSim.MultinodeDistributed do
           confirmation,
           required
         )
+
+      {:modbus_uart_exchange, _adapter, @unit_id, exchange_id, event, peer_session,
+       request_payload_bytes, response_payload_bytes} ->
+        trace_remote_exchange(
+          role,
+          exchange_id,
+          event,
+          peer_session,
+          request_payload_bytes,
+          response_payload_bytes
+        )
+
+        connected_remote_loop(role, boot_id, connection_id, health, traffic_run_id)
     end
   end
 
@@ -838,6 +867,30 @@ defmodule RobotSim.MultinodeDistributed do
       confirmation: confirmation,
       required: required
     )
+  end
+
+  defp trace_remote_exchange(
+         role,
+         exchange_id,
+         event,
+         peer_session,
+         request_payload_bytes,
+         response_payload_bytes
+       ) do
+    fields = [
+      role: role,
+      unit_id: @unit_id,
+      exchange_id: exchange_id,
+      peer_session: peer_session,
+      request_payload_bytes: request_payload_bytes
+    ]
+
+    fields =
+      if response_payload_bytes == nil,
+        do: fields,
+        else: fields ++ [response_payload_bytes: response_payload_bytes]
+
+    ExchangeTrace.emit(@exchange_trace, event, monotonic_ms(), fields)
   end
 
   if @defer_restart_until_transport_ready do
@@ -1770,6 +1823,13 @@ defmodule RobotSim.MultinodeDistributed do
     end
   else
     defp remote_transport_activity_options, do: []
+  end
+
+  if @exchange_trace do
+    defp remote_exchange_options,
+      do: [exchange_observer: self(), exchange_observer_mode: :fault_window]
+  else
+    defp remote_exchange_options, do: []
   end
 
   defp halt(message, reason) do

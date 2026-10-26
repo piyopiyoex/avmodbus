@@ -133,6 +133,9 @@ multinode_defer_restart_until_transport_ready =
 multinode_transport_activity_trace =
   parse_boolean.("ROBOT_MULTINODE_TRANSPORT_ACTIVITY_TRACE", false)
 
+multinode_exchange_trace =
+  parse_boolean.("ROBOT_MULTINODE_EXCHANGE_TRACE", false)
+
 multinode_transport_ready_confirmations =
   parse_integer.("ROBOT_MULTINODE_TRANSPORT_READY_CONFIRMATIONS", 2)
 
@@ -409,6 +412,7 @@ config :robot_sim,
   multinode_remote_health_trace: multinode_remote_health_trace,
   multinode_defer_restart_until_transport_ready: multinode_defer_restart_until_transport_ready,
   multinode_transport_activity_trace: multinode_transport_activity_trace,
+  multinode_exchange_trace: multinode_exchange_trace,
   multinode_transport_ready_confirmations: multinode_transport_ready_confirmations,
   multinode_connection_trace: multinode_connection_trace,
   multinode_initial_recovery_enabled: multinode_initial_recovery_enabled,

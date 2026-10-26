@@ -4,7 +4,7 @@
 
 ## 利用方法
 
-- [サンプル README](../README.md) — ホストシミュレーション、Stage 1–8の実行方法、座標規則、設定
+- [サンプル README](../README.md) — ホストシミュレーション、Stage 1–9の実行方法、座標規則、設定
 
 現在動く機能と再現手順はサンプル README を正とします。
 
@@ -15,6 +15,7 @@
 - [長時間通信断後の復旧調査](long-outage-recovery-plan.md) — Stage 7の仮説、lifecycle event、比較手順
 - [Stage 8–12 次期復旧実験](recovery-experiments.md) — recovery再現性、非対称障害、runtime、application recoveryの計画
 - [Stage 8 recovery policy反復試験](stage-8-recovery-repeatability.md) — 120秒・300秒切断のmatrix、結果、採用判断
+- [Stage 9 非対称response blackout試験](stage-9-asymmetric-response-blackout.md) — request受理とresponse outcomeの比較条件
 - [起動・復旧test matrix](startup-recovery-matrix.md) — 起動順序、初回handshake failure、接続後障害の判定基準
 - [長時間通信断・安定性test plan](endurance-test-plan.md) — 30 / 90 / 180秒切断と約1時間運転の条件・判定方法
 - [マルチノードホストモデル](next-experiments.md) — N個のremote peer、公平性、障害、リソース上限の条件と結果

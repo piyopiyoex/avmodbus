@@ -7,6 +7,7 @@ Host simulationから2-node application、3台のModbus multidrop、3-node distr
 段階的に実証しています。現在は3台を実機baselineとし、共有busのfairness、bounded queue、起動・接続復旧、長時間通信断、
 約1時間の安定性を調べています。Stage 8では長時間のSensors branch切断に対し、current policyは0 / 4、deferred policyは
 4 / 4で復旧しました。非対称障害は未検証のため、deferred policyはopt-inのままです。
+Stage 9ではrequestを受信し続けるresponse blackoutの観測を分離し、実機比較を準備しています。
 
 既存の[`hello_atomvm_modbus_disterl`](../hello_atomvm_modbus_disterl/README.md)をlocal path dependencyとして再利用し、
 AVModbus coreとFC-100 wire protocolは変更していません。完了範囲と保証外の条件は
@@ -436,6 +437,7 @@ ROBOT_MODE=multinode ROBOT_ROLE=controller ATOMVM_UART_SPEED=115200 \
 | `ROBOT_MULTINODE_REMOTE_HEALTH_TRACE` | `false` | remote がconnection内のreadiness ACK gapとboot内high-waterを出力する測定設定 |
 | `ROBOT_MULTINODE_DEFER_RESTART_UNTIL_TRANSPORT_READY` | `false` | ACK timeout後も、有効なFC-100 exchangeの復帰確認までremote restartを保留する比較実験設定 |
 | `ROBOT_MULTINODE_TRANSPORT_ACTIVITY_TRACE` | `false` | recovery policyを変えずに、長時間gap後のFC-100 exchange復帰をconnection eventとして記録する測定設定 |
+| `ROBOT_MULTINODE_EXCHANGE_TRACE` | `false` | ServerのFC-100 request受理とresponse返却・破棄を別eventで記録する測定設定 |
 | `ROBOT_MULTINODE_TRANSPORT_READY_CONFIRMATIONS` | `2` | 長時間のexchange gap後にtransport復帰と判定する連続exchange数。1..10 |
 | `ROBOT_MULTINODE_CONNECTION_TRACE` | `false` | 起動、handshake、stale検出、restart、再接続を共通event形式で出力する測定設定 |
 | `ROBOT_MULTINODE_INITIAL_RECOVERY_ENABLED` | `true` | 初回readiness ACKが8秒以内に届かないremoteのdistributionをbounded restartする |

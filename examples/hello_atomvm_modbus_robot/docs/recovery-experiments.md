@@ -21,13 +21,15 @@ Currentは0 / 4、deferredは4 / 4だった。非対称response blackoutが未�
 
 ## Stage 9: 非対称通信障害
 
-- [ ] Example内に限定したFC-100 response blackoutを設計する
-- [ ] Request受信とresponse deliveryを別eventとして記録する
+状態: 進行中
+
+- [x] Example内に限定したFC-100 response blackoutを設計する
+- [x] Request受信とresponse outcomeを別eventとして記録する
 - [ ] current / deferred policyと正常なDrive connectionへの影響を比較する
 - [ ] 双方向の通信成立を示す追加signalが必要か判断する
 
 Serverがrequestを受信し続ける障害では、Stage 7のtransport activity observerだけでは復帰を判定できない。この制約を再現してから
-新しいsignalの要否を判断する。
+新しいsignalの要否を判断する。条件と判定項目は[Stage 9試験計画](stage-9-asymmetric-response-blackout.md)を正とする。
 
 ## Stage 10: AtomVM distribution lifecycle
 

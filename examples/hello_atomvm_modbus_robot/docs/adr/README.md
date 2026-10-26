@@ -41,3 +41,4 @@
 - [0025: trafficとrecoveryの成功判定を分離する](0025-separate-traffic-and-recovery-report-results.md)
 - [0026: transport観測をrecovery policyから分離する](0026-separate-transport-observation-from-recovery-policy.md)
 - [0027: Deferred restartをopt-inのまま維持する](0027-keep-deferred-restart-opt-in.md)
+- [0028: Serverのresponse処理をtransport activityと分けて観測する](0028-observe-server-response-outcomes-separately.md)

@@ -120,6 +120,47 @@ defmodule RobotSim.EnduranceReportTest do
     assert {:ok, %{successful: true}} = EnduranceReport.analyze(logs, mode: "recovery")
   end
 
+  test "role別にexchange outcomeを集計する" do
+    logs = %{
+      sensors: """
+      modbus_robot_exchange: at_ms=1 event=request_accepted role=sensors unit_id=2 exchange_id=10 peer_session=20 request_payload_bytes=96
+      modbus_robot_exchange: at_ms=2 event=response_dropped role=sensors unit_id=2 exchange_id=10 peer_session=20 request_payload_bytes=96 response_payload_bytes=109
+      modbus_robot_exchange: at_ms=3 event=request_accepted role=sensors unit_id=2 exchange_id=11 peer_session=20 request_payload_bytes=0
+      modbus_robot_exchange: at_ms=4 event=response_returned role=sensors unit_id=2 exchange_id=11 peer_session=20 request_payload_bytes=0 response_payload_bytes=13
+      """,
+      drive: """
+      modbus_robot_exchange: at_ms=5 event=request_accepted role=drive unit_id=1 exchange_id=1 peer_session=30 request_payload_bytes=0
+      modbus_robot_exchange: at_ms=6 event=response_returned role=drive unit_id=1 exchange_id=1 peer_session=30 request_payload_bytes=0 response_payload_bytes=13
+      """
+    }
+
+    assert {:ok, report} = EnduranceReport.analyze(logs)
+
+    assert report.exchanges.sensors == %{
+             "request_accepted" => 2,
+             "response_returned" => 1,
+             "response_dropped" => 1
+           }
+
+    assert report.exchanges.drive == %{
+             "request_accepted" => 1,
+             "response_returned" => 1,
+             "response_dropped" => 0
+           }
+
+    assert report.malformed_lines == 0
+  end
+
+  test "不正なexchange traceをmalformedとして数える" do
+    logs = %{
+      sensors:
+        "modbus_robot_exchange: at_ms=1 event=response_dropped role=sensors exchange_id=broken\n"
+    }
+
+    assert {:ok, report} = EnduranceReport.analyze(logs)
+    assert report.malformed_lines == 1
+  end
+
   test "recovery eventが完了していない試験を失敗として報告する" do
     logs =
       recovery_only_logs()

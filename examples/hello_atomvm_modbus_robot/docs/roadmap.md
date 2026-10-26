@@ -22,7 +22,7 @@ Stage 8ではcurrent / deferred policyを各4回比較し、deferredの4回す�
 | 6 | 完了 | startup / recovery matrix、global resource budget、長時間安定性 |
 | 7 | 完了 | 長時間通信断後のrestart timingを比較し、transport復帰後の自動回復を実機確認 |
 | 8 | 完了 | recovery reportを分離し、current 0 / 4、deferred 4 / 4を実機比較 |
-| 9 | 計画 | 非対称response blackoutと復帰signalを調査 |
+| 9 | 進行中 | 非対称response blackoutの観測を分離し、current / deferredを比較 |
 | 10 | 計画 | AtomVM distribution lifecycleの最小再現とresource調査 |
 | 11 | 計画 | Mission中断後のapplication recoveryを統合検証 |
 | 12 | 任意 | 必要な仮説が生じた場合だけ4台目で実機scaleを確認 |
