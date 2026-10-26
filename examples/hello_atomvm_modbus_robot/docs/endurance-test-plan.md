@@ -94,7 +94,7 @@ mix run scripts/endurance_report.exs \
 - Controller minimum free heap、global queue high-water、global rejection
 - peer別queue high-waterとtransaction failure
 - Drive / Sensorsのminimum free heap
-- stale検出、connection restart、restart失敗、reconnect、復旧確認event数
+- stale検出、kernel stop / start、connection restart、restart失敗、reconnect、復旧確認event数
 
 periodic logは観測点であり、連続的な最大値・最小値ではありません。reportの`successful: true`は読み込んだlogの整合とtraffic完了を
 表し、開始したrestartがすべて成功していることを確認します。memory leakがないことや任意の通信断から復旧することは証明しません。

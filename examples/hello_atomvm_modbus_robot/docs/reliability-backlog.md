@@ -116,3 +116,6 @@ retryで回復しましたが、error-freeなphysical transportとは扱いま�
 当面、AVModbus core、FC-100 wire protocol、仮想ロボット機能、専用`modbus_dist` carrierは変更しません。
 AtomVMのlocal compatibility patchは検証済みbaselineとして扱い、新しいruntime変更が必要と確認できた場合に
 このrepositoryの文書とlocal patchで整理します。
+
+約180秒切断後に残ったdistribution再接続失敗とresource低下は、Stage 6の未実施項目ではなく、測定で特定した後続の調査対象です。
+Stage 7で検証した仮説、比較手順、結果は[長時間通信断後の復旧調査](long-outage-recovery-plan.md)を参照してください。

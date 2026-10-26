@@ -36,6 +36,72 @@ defmodule RobotSim.RemoteHealthTest do
     assert {:waiting, ^exhausted} = RemoteHealth.evaluate(exhausted, 1_202)
   end
 
+  test "deferred policyはrestart budgetを消費せずtransport readinessを待つ" do
+    health =
+      RemoteHealth.new(10, 1_000,
+        enabled: true,
+        ack_timeout_ms: 100,
+        max_restarts: 1,
+        defer_restart: true
+      )
+
+    assert {:deferred, pending} = RemoteHealth.evaluate(health, 1_101)
+    assert pending.restart_pending
+    assert pending.restart_deferred_at_ms == 1_101
+    assert pending.restarts == 0
+
+    assert {:waiting, ^pending} = RemoteHealth.evaluate(pending, 1_202)
+    assert {:restart, restarting} = RemoteHealth.request_deferred_restart(pending, 1_203)
+    refute restarting.restart_pending
+    assert restarting.restart_deferred_at_ms == nil
+    assert restarting.restarts == 1
+    assert restarting.last_ack_ms == 1_203
+  end
+
+  test "同じconnectionのACKは保留中のrestartを取り消す" do
+    health =
+      RemoteHealth.new(10, 1_000,
+        enabled: true,
+        ack_timeout_ms: 100,
+        defer_restart: true
+      )
+
+    assert {:deferred, pending} = RemoteHealth.evaluate(health, 1_101)
+    recovered = RemoteHealth.acknowledge(pending, 10, 1_120)
+
+    refute recovered.restart_pending
+    assert recovered.restart_deferred_at_ms == nil
+    assert recovered.restarts == 0
+    assert {:healthy, ^recovered} = RemoteHealth.evaluate(recovered, 1_150)
+    assert {:waiting, ^recovered} = RemoteHealth.request_deferred_restart(recovered, 1_151)
+  end
+
+  test "stale ACKは保留中のrestartを取り消さない" do
+    health =
+      RemoteHealth.new(10, 1_000,
+        enabled: true,
+        ack_timeout_ms: 100,
+        defer_restart: true
+      )
+
+    assert {:deferred, pending} = RemoteHealth.evaluate(health, 1_101)
+    assert RemoteHealth.acknowledge(pending, 9, 1_120) == pending
+  end
+
+  test "deferred policyはboot restart budget枯渇後に再び保留しない" do
+    health =
+      RemoteHealth.new(10, 1_000,
+        enabled: true,
+        ack_timeout_ms: 100,
+        max_restarts: 0,
+        defer_restart: true
+      )
+
+    assert {:exhausted, exhausted} = RemoteHealth.evaluate(health, 1_101)
+    refute exhausted.restart_pending
+    assert {:waiting, ^exhausted} = RemoteHealth.evaluate(exhausted, 1_202)
+  end
+
   test "stale connection ACKs do not refresh health" do
     health = RemoteHealth.new(10, 1_000, enabled: true, ack_timeout_ms: 100)
     assert RemoteHealth.acknowledge(health, 9, 1_050) == health

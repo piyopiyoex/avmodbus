@@ -348,6 +348,55 @@ defmodule DisterlProbe.ModbusUARTTest do
     assert %{queued_bytes: 0, queued_chunks: 0} = QueueBudget.snapshot(budget)
   end
 
+  test "Serverは長時間のexchange gap後に上限付きの確認通知を送る" do
+    now_ms = :erlang.monotonic_time(:millisecond)
+
+    state =
+      Channel.new(465)
+      |> adapter_state()
+      |> Map.merge(%{
+        role: :server,
+        response_fault: ResponseFault.new(),
+        activity_observer: self(),
+        activity_gap_ms: 100,
+        activity_confirmations: 2,
+        activity_confirmation: 0,
+        last_exchange_ms: now_ms - 101
+      })
+
+    {:ok, first_request} = Protocol.encode(565, 0, 0, 0, <<>>)
+    assert {:reply, {:ok, _response}, first} = callback({:exchange, first_request}, state)
+
+    assert_receive {:modbus_uart_transport_activity, adapter, 1, 565, gap_ms, 1, 2}
+    assert adapter == self()
+    assert gap_ms > 100
+
+    assert {:reply, {:ok, _response}, second} = callback({:exchange, first_request}, first)
+    assert_receive {:modbus_uart_transport_activity, ^adapter, 1, 565, _gap_ms, 2, 2}
+
+    assert {:reply, {:ok, _response}, _third} = callback({:exchange, first_request}, second)
+    refute_receive {:modbus_uart_transport_activity, _, _, _, _, _, _}
+  end
+
+  test "Serverは通常のexchange activityを通知しない" do
+    state =
+      Channel.new(466)
+      |> adapter_state()
+      |> Map.merge(%{
+        role: :server,
+        response_fault: ResponseFault.new(),
+        activity_observer: self(),
+        activity_gap_ms: 100,
+        activity_confirmations: 2,
+        activity_confirmation: 0,
+        last_exchange_ms: :erlang.monotonic_time(:millisecond)
+      })
+
+    {:ok, request} = Protocol.encode(566, 0, 0, 0, <<>>)
+    assert {:reply, {:ok, _response}, _next} = callback({:exchange, request}, state)
+    refute_receive {:modbus_uart_transport_activity, _, _, _, _, _, _}
+  end
+
   test "a peer session replacement releases stale shared budget capacity" do
     {:ok, budget} = QueueBudget.start_link(max_queued_bytes: 100, max_queued_chunks: 4)
     {:ok, channel} = Channel.queue(%{Channel.new(470) | peer_session: 570}, "stale")

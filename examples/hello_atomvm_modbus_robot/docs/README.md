@@ -4,7 +4,7 @@
 
 ## 利用方法
 
-- [サンプル README](../README.md) — ホストシミュレーション、Stage 1–6の実行方法、座標規則、設定
+- [サンプル README](../README.md) — ホストシミュレーション、Stage 1–7の実行方法、座標規則、設定
 
 現在動く機能と再現手順はサンプル README を正とします。
 
@@ -12,6 +12,7 @@
 
 - [ロードマップ](roadmap.md) — Stage ごとの完了条件、実証済み範囲、対象外の項目
 - [接続復旧とリソース管理の実験結果](reliability-backlog.md) — Stage 6の実施順序、結果、任意の追加検証
+- [長時間通信断後の復旧調査](long-outage-recovery-plan.md) — Stage 7の仮説、lifecycle event、比較手順
 - [起動・復旧test matrix](startup-recovery-matrix.md) — 起動順序、初回handshake failure、接続後障害の判定基準
 - [長時間通信断・安定性test plan](endurance-test-plan.md) — 30 / 90 / 180秒切断と約1時間運転の条件・判定方法
 - [マルチノードホストモデル](next-experiments.md) — N個のremote peer、公平性、障害、リソース上限の条件と結果
@@ -28,6 +29,8 @@
 - [idle 180秒切断](worklog/2026-10-25-idle-180-second-disconnect.md) — physical復帰後のdistribution再接続失敗とresource枯渇
 - [同一boot反復切断](worklog/2026-10-25-repeated-branch-disconnect.md) — 短時間切断3回のconnection維持と完全配送
 - [約1時間のactive / idle耐久試験](worklog/2026-10-25-one-hour-active-idle-endurance.md) — 12 runsの完全配送、memory推移、散発timeout
+- [Stage 7 長時間通信断時の現行ポリシー基準値](worklog/2026-10-26-stage-7-current-policy-baseline.md) — timeout未満の同一connection復帰とkernel stop failure
+- [Stage 7 transport復帰後のrestart保留](worklog/2026-10-26-stage-7-deferred-restart.md) — transport復帰確認後にbudgetを消費するopt-in policy
 
 ## 更新方針
 

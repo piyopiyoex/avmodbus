@@ -14,7 +14,14 @@ defmodule RobotSim.EnduranceReportTest do
     modbus_robot_resource: phase=after peer=drive queued_bytes=0 outstanding=0 max_queued_bytes=200 max_outstanding=3 free_heap_bytes=69000 minimum_free_heap_bytes=64000 global_queued_bytes=0 global_queued_chunks=0 global_max_queued_bytes=920 global_max_queued_chunks=15 global_rejected=0 transaction_failures=2
     modbus_robot_resource: phase=periodic peer=sensors queued_bytes=12 outstanding=1 max_queued_bytes=210 max_outstanding=4 free_heap_bytes=69000 minimum_free_heap_bytes=64000 global_queued_bytes=22 global_queued_chunks=2 global_max_queued_bytes=920 global_max_queued_chunks=15 global_rejected=1 transaction_failures=0
     modbus_robot_multinode: concurrent traffic report run=100 outcome=complete
+    modbus_robot_connection: at_ms=1 event=restart_deferred role=sensors
+    modbus_robot_connection: at_ms=1 event=transport_resumed role=sensors
+    modbus_robot_connection: at_ms=1 event=transport_ready role=sensors
     modbus_robot_connection: at_ms=1 event=restart_started role=sensors
+    modbus_robot_connection: at_ms=1 event=kernel_stop_requested role=sensors
+    modbus_robot_connection: at_ms=1 event=kernel_stop_completed role=sensors
+    modbus_robot_connection: at_ms=1 event=kernel_start_started role=sensors
+    modbus_robot_connection: at_ms=1 event=kernel_start_succeeded role=sensors
     modbus_robot_connection: at_ms=2 event=restart_succeeded role=sensors
     modbus_robot_connection: at_ms=3 event=remote_reconnected role=sensors
     modbus_robot_connection: at_ms=4 event=recovery_verified role=sensors
@@ -58,7 +65,14 @@ defmodule RobotSim.EnduranceReportTest do
     assert report.controller.peers.drive.transaction_failures == 3
     assert report.remotes.drive.minimum_free_heap_bytes == 76_000
     assert report.remotes.sensors.minimum_observed_free_heap_bytes == 82_000
+    assert report.connections["restart_deferred"] == 1
+    assert report.connections["transport_resumed"] == 1
+    assert report.connections["transport_ready"] == 1
     assert report.connections["restart_started"] == 1
+    assert report.connections["kernel_stop_requested"] == 1
+    assert report.connections["kernel_stop_completed"] == 1
+    assert report.connections["kernel_start_started"] == 1
+    assert report.connections["kernel_start_succeeded"] == 1
     assert report.connections["restart_succeeded"] == 1
     assert report.connections["remote_reconnected"] == 1
     assert report.connections["recovery_verified"] == 1
@@ -73,6 +87,16 @@ defmodule RobotSim.EnduranceReportTest do
     refute report.successful
     assert report.connections["restart_started"] == 1
     assert report.connections["restart_failed"] == 1
+  end
+
+  test "kernel stopまたはstart failureを成功扱いにしない" do
+    for event <- ["kernel_stop_failed", "kernel_start_failed"] do
+      logs = complete_logs(event)
+
+      assert {:ok, report} = EnduranceReport.analyze(logs)
+      assert report.connections[event] == 1
+      refute report.successful
+    end
   end
 
   test "途中終了した試験でもoutcomeを得たrun数を集計する" do
