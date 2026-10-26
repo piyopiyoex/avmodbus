@@ -17,7 +17,8 @@ protocol design は変更していません。follow-up では、共有 client �
 **Stage 5: scalable multinode model**では3台を実機baselineとし、1、2、3、8、32 remote peersのfairness、failure、
 bounded queue、session recovery、resource budgetをhost上で検証しました。
 **Stage 6: startup / recoveryとresource管理**では、起動順序matrix、初回接続のbounded recovery、Controller全体のqueue budget、
-30 / 90 / 180秒の通信断、64分30秒のactive / idle耐久試験まで完了しました。現在の完了範囲と保証外の条件は
+30 / 90 / 180秒の通信断、64分30秒のactive / idle耐久試験まで完了しました。**Stage 7**では長時間通信断後の
+deferred restartを実機確認し、**Stage 8**では復旧試験の反復測定基盤を整備しています。現在の完了範囲と保証外の条件は
 [ロードマップ](docs/roadmap.md)と[既知の制約](docs/limitations.md)を参照してください。
 
 ## 現在できること
@@ -750,6 +751,7 @@ mix run scripts/endurance_report.exs controller.log drive.log sensors.log
 ```
 
 同じlogに別bootや試験後のidleが含まれる場合は`--since`と`--until`で同日の時刻範囲を指定できます。
-このreportはtraffic結果、queue high-water、観測したminimum free heap、restart eventを集計します。VM全体のmemory使用量や
-log欠損を推定するものではありません。実験条件と判定方法は
+Recovery-only試験では`--mode recovery`を指定します。このreportはtraffic / recoveryの個別結果、queue high-water、観測した
+minimum free heap、restart event、host timestampから求めた復旧時間を集計します。VM全体のmemory使用量やlog欠損を
+推定するものではありません。実験条件と判定方法は
 [長時間通信断・安定性test plan](docs/endurance-test-plan.md)を参照してください。

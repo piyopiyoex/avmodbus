@@ -38,3 +38,4 @@
 - [0022: 初回接続のstale distributionをbounded restartする](0022-restart-initial-stale-distribution-with-a-bounded-budget.md)
 - [0023: Controllerの複数queueをglobal budgetで制限する](0023-bound-controller-queues-with-a-global-budget.md)
 - [0024: Boundedなtraffic runを反復して長時間安定性を測る](0024-repeat-bounded-traffic-runs-for-endurance.md)
+- [0025: trafficとrecoveryの成功判定を分離する](0025-separate-traffic-and-recovery-report-results.md)

@@ -49,6 +49,16 @@ defmodule RobotSim.EnduranceReportTest do
              })
 
     assert report.successful
+
+    assert report.evaluation == %{
+             mode: :traffic,
+             successful: true,
+             traffic: :passed,
+             recovery: :passed,
+             observation: :complete,
+             logs: :valid
+           }
+
     assert report.traffic == %{complete: 2, timeout: 0, other: 0}
 
     assert report.endurance == %{
@@ -78,6 +88,46 @@ defmodule RobotSim.EnduranceReportTest do
     assert report.connections["recovery_verified"] == 1
     assert report.connections["peer_maintained"] == 1
     assert report.malformed_lines == 0
+  end
+
+  test "recovery-only試験をtrafficと分けて成功判定する" do
+    logs = recovery_only_logs()
+
+    assert {:ok, default_report} = EnduranceReport.analyze(logs)
+    refute default_report.successful
+    assert default_report.evaluation.traffic == :not_run
+    assert default_report.evaluation.recovery == :passed
+
+    assert {:ok, report} = EnduranceReport.analyze(logs, mode: :recovery)
+    assert report.successful
+
+    assert report.evaluation == %{
+             mode: :recovery,
+             successful: true,
+             traffic: :not_run,
+             recovery: :passed,
+             observation: :complete,
+             logs: :valid
+           }
+
+    assert report.recovery_metrics == %{
+             transport_ready_to_restart_started_ms: 53,
+             transport_ready_to_recovery_verified_ms: 10_634,
+             restart_started_to_restart_succeeded_ms: 192,
+             restart_succeeded_to_remote_reconnected_ms: 4_611
+           }
+
+    assert {:ok, %{successful: true}} = EnduranceReport.analyze(logs, mode: "recovery")
+  end
+
+  test "recovery eventが完了していない試験を失敗として報告する" do
+    logs =
+      recovery_only_logs()
+      |> Map.update!(:controller, &String.replace(&1, "event=recovery_verified", "event=ignored"))
+
+    assert {:ok, report} = EnduranceReport.analyze(logs, mode: :recovery)
+    refute report.successful
+    assert report.evaluation.recovery == :failed
   end
 
   test "traffic完了後のrestart失敗を成功扱いにしない" do
@@ -187,6 +237,11 @@ defmodule RobotSim.EnduranceReportTest do
              {:error, :invalid_time_window}
   end
 
+  test "不正な集計modeを拒否する" do
+    assert EnduranceReport.analyze(%{}, mode: :unknown) == {:error, :invalid_mode}
+    assert EnduranceReport.analyze(%{}, mode: "unknown") == {:error, :invalid_mode}
+  end
+
   test "trafficが完了してもremote metricsがなければ成功にしない" do
     logs = %{
       controller: """
@@ -218,6 +273,26 @@ defmodule RobotSim.EnduranceReportTest do
         "modbus_robot_memory: role=drive free_heap_bytes=80000 largest_free_block_bytes=60000 minimum_free_heap_bytes=76000\n",
       sensors:
         "modbus_robot_memory: role=sensors free_heap_bytes=82000 largest_free_block_bytes=61000 minimum_free_heap_bytes=78000\n"
+    }
+  end
+
+  defp recovery_only_logs do
+    %{
+      controller: """
+      [10:05:31.648] modbus_robot_connection: at_ms=1 event=remote_reconnected role=sensors
+      [10:05:37.426] modbus_robot_connection: at_ms=2 event=recovery_verified role=sensors
+      [10:05:37.436] modbus_robot_connection: at_ms=3 event=peer_maintained role=drive
+      [10:05:40.000] modbus_robot_resource: phase=after peer=drive queued_bytes=0 outstanding=0 max_queued_bytes=32 max_outstanding=4 free_heap_bytes=70000 minimum_free_heap_bytes=65000 global_queued_bytes=0 global_queued_chunks=0 global_max_queued_bytes=267 global_max_queued_chunks=5 global_rejected=0 transaction_failures=3
+      [10:05:40.001] modbus_robot_resource: phase=after peer=sensors queued_bytes=0 outstanding=0 max_queued_bytes=267 max_outstanding=5 free_heap_bytes=70000 minimum_free_heap_bytes=65000 global_queued_bytes=0 global_queued_chunks=0 global_max_queued_bytes=267 global_max_queued_chunks=5 global_rejected=0 transaction_failures=270
+      """,
+      drive:
+        "[10:05:40.000] modbus_robot_memory: role=drive free_heap_bytes=85724 largest_free_block_bytes=60000 minimum_free_heap_bytes=80060\n",
+      sensors: """
+      [10:05:26.792] modbus_robot_connection: at_ms=4 event=transport_ready role=sensors
+      [10:05:26.845] modbus_robot_connection: at_ms=5 event=restart_started role=sensors
+      [10:05:27.037] modbus_robot_connection: at_ms=6 event=restart_succeeded role=sensors
+      [10:05:40.000] modbus_robot_memory: role=sensors free_heap_bytes=87404 largest_free_block_bytes=61000 minimum_free_heap_bytes=79784
+      """
     }
   end
 end

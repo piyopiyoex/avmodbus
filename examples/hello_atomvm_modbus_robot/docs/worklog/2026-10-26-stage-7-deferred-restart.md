@@ -95,6 +95,11 @@ periodic memory sampleの最小値はSensors 87,404 bytes、Drive 85,724 bytes�
 このwindowではtraffic campaignを実行していないため、reportの総合`successful`はfalseになる。これはconnection recovery失敗ではなく、
 集計器がtraffic完了を総合成功の必須条件としているためである。
 
+後続の[ADR 0025](../adr/0025-separate-traffic-and-recovery-report-results.md)でtrafficとrecovery-onlyの判定を分離した。この記述は
+Stage 7実施時点のreport結果として残す。同じraw logを`--mode recovery`で再集計すると`successful: true`、
+`traffic: :not_run`、`recovery: :passed`となった。詳細は
+[Stage 8 recovery-only report](2026-10-26-stage-8-recovery-report.md)を参照する。
+
 ## 判断
 
 - current policyは約97秒の操作応答区間で、物理復帰前の`net_kernel.stop/0`がtimeoutした。

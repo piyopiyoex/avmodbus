@@ -20,6 +20,11 @@ global resource budget、長時間通信断、約1時間の安定性試験まで
 | 5 | 完了 | N remote peer host model、fairness、failure isolation、resource budget |
 | 6 | 完了 | startup / recovery matrix、global resource budget、長時間安定性 |
 | 7 | 完了 | 長時間通信断後のrestart timingを比較し、transport復帰後の自動回復を実機確認 |
+| 8 | 進行中 | recovery reportを分離し、current / deferred policyを反復比較 |
+| 9 | 計画 | 非対称response blackoutと復帰signalを調査 |
+| 10 | 計画 | AtomVM distribution lifecycleの最小再現とresource調査 |
+| 11 | 計画 | Mission中断後のapplication recoveryを統合検証 |
+| 12 | 任意 | 必要な仮説が生じた場合だけ4台目で実機scaleを確認 |
 
 ## Stage 0: ローカル仮想ローバーシミュレーション
 
@@ -194,6 +199,12 @@ current policyは約97秒の操作応答区間で、physical transport復帰前�
 復旧した。Drive connectionは維持し、restart上限とtimeoutは増やしていない。比較時間が同一でないこと、非対称response blackoutは
 対象外であること、general-purpose recoveryではないことは[作業記録](worklog/2026-10-26-stage-7-deferred-restart.md)と
 [既知の制約](limitations.md)に残す。
+
+## Stage 8–12: 次期復旧実験
+
+詳細な順序、完了条件、維持する設計境界は[次期復旧実験](recovery-experiments.md)を正とする。Stage 8では最初にtrafficと
+recovery-onlyの成功判定を分離し、反復試験の共通測定基盤を整える。Stage 9の非対称障害とStage 10のruntime最小再現は
+独立して進められる。Stage 11はその結果をapplication recoveryへ反映し、Stage 12は具体的な実機仮説が生じた場合だけ行う。
 
 ## 今回は対象としないこと
 
