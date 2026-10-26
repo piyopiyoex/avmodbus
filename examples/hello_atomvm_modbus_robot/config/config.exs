@@ -130,6 +130,9 @@ multinode_remote_health_trace =
 multinode_defer_restart_until_transport_ready =
   parse_boolean.("ROBOT_MULTINODE_DEFER_RESTART_UNTIL_TRANSPORT_READY", false)
 
+multinode_transport_activity_trace =
+  parse_boolean.("ROBOT_MULTINODE_TRANSPORT_ACTIVITY_TRACE", false)
+
 multinode_transport_ready_confirmations =
   parse_integer.("ROBOT_MULTINODE_TRANSPORT_READY_CONFIRMATIONS", 2)
 
@@ -312,6 +315,11 @@ if multinode_defer_restart_until_transport_ready and not multinode_remote_health
         "ROBOT_MULTINODE_DEFER_RESTART_UNTIL_TRANSPORT_READYを有効にするにはROBOT_MULTINODE_REMOTE_HEALTH_ENABLED=trueが必要です"
 end
 
+if multinode_transport_activity_trace and not multinode_connection_trace do
+  raise ArgumentError,
+        "ROBOT_MULTINODE_TRANSPORT_ACTIVITY_TRACEを有効にするにはROBOT_MULTINODE_CONNECTION_TRACE=trueが必要です"
+end
+
 if multinode_transport_ready_confirmations < 1 or multinode_transport_ready_confirmations > 10 do
   raise ArgumentError, "ROBOT_MULTINODE_TRANSPORT_READY_CONFIRMATIONSは1から10の範囲で指定してください"
 end
@@ -400,6 +408,7 @@ config :robot_sim,
   multinode_remote_health_enabled: multinode_remote_health_enabled,
   multinode_remote_health_trace: multinode_remote_health_trace,
   multinode_defer_restart_until_transport_ready: multinode_defer_restart_until_transport_ready,
+  multinode_transport_activity_trace: multinode_transport_activity_trace,
   multinode_transport_ready_confirmations: multinode_transport_ready_confirmations,
   multinode_connection_trace: multinode_connection_trace,
   multinode_initial_recovery_enabled: multinode_initial_recovery_enabled,

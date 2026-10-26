@@ -141,6 +141,11 @@
   Drive connectionを維持しました。ただしcurrent policyのfailure試験は約97秒の操作応答区間であり、同一時間の対照試験では
   ありません。この単一runから任意の長時間切断、反復障害、負荷、electrical conditionでの回復を保証しません。詳細は
   [transport復帰後のrestart保留](worklog/2026-10-26-stage-7-deferred-restart.md)を参照してください。
+- Stage 8では目標120秒・300秒のbranch切断を各policyで2回ずつ反復した。Currentはphysical transport復帰前にrestart budgetを
+  消費して0 / 4、deferredは観測した166.510–393.908秒のFC-100 gap後に4 / 4で復旧した。Deferredのtransport readyから
+  Sensors / Drive両probe成功までは10.690–12.119秒だった。ただしobserverのgapはadapter単位で、adapter再生成前の切断区間を
+  含まない場合がある。2 runs / conditionは探索的な結果であり、非対称response blackoutを扱えないためdeferredはopt-inを維持する。
+  詳細は[Stage 8反復試験](worklog/2026-10-26-stage-8-recovery-repeatability.md)を参照してください。
 - 同一Sensors bootで短時間のbranch切断を3回反復した試験では、90秒remote health timeoutへ達せず、同じconnection IDのまま
   3回とも復帰しました。faultを含む2 runsと後続runは両role 64 / 64、欠損・重複なしで完了し、restart budget消費と
   global queue rejectionは0でした。ただし操作時刻とserial logを共通時計で精密測定しておらず、Driveにもfaultを含むrunごとに

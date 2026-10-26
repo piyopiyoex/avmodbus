@@ -1,20 +1,23 @@
 # Stage 8–12 次期復旧実験
 
-Stage 7までの結果を基準に、3台構成でrecovery policyの再現性、非対称障害、runtime lifecycle、application recoveryを調べる。
+Stage 8までの結果を基準に、3台構成で非対称障害、runtime lifecycle、application recoveryを調べる。
 4台目は具体的な実機仮説が生じた場合だけ使用する。
 
 ## Stage 8: Recovery policyの再現性
 
-状態: 進行中
+状態: 完了
 
 - [x] recovery-only試験とtraffic試験の成功判定をreport上で分離する
 - [x] transport readyからapplication probe成功までのhost timestamp差を集計する
-- [ ] current / deferred policyの共通測定項目を固定する
-- [ ] 約120秒・300秒の通信断をclean bootから反復する
-- [ ] 成功率、復旧時間、restart budget、free heap、Drive connectionを比較する
-- [ ] deferred policyを既定値にするか、opt-inを維持するか判断する
+- [x] current / deferred policyの共通測定項目を固定する
+- [x] 約120秒・300秒の通信断をclean bootから反復する
+- [x] 成功率、復旧時間、restart budget、free heap、Drive connectionを比較する
+- [x] deferred policyを既定値にするか、opt-inを維持するか判断する
 
 各runは独立したtime windowとして集計し、単発の成功を一般的な復旧保証とは扱わない。
+条件と操作手順は[Stage 8 recovery policy反復試験](stage-8-recovery-repeatability.md)を正とする。
+Currentは0 / 4、deferredは4 / 4だった。非対称response blackoutが未検証のため、deferredは既定値へ変更せずopt-inを維持する。
+実測値は[作業記録](worklog/2026-10-26-stage-8-recovery-repeatability.md)を参照する。
 
 ## Stage 9: 非対称通信障害
 

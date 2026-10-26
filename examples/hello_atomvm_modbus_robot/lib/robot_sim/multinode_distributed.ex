@@ -115,11 +115,11 @@ defmodule RobotSim.MultinodeDistributed do
                                          :multinode_defer_restart_until_transport_ready,
                                          false
                                        )
-  @transport_ready_confirmations Application.compile_env(
-                                   :robot_sim,
-                                   :multinode_transport_ready_confirmations,
-                                   2
-                                 )
+  @transport_activity_trace Application.compile_env(
+                              :robot_sim,
+                              :multinode_transport_activity_trace,
+                              false
+                            )
   @connection_trace Application.compile_env(
                       :robot_sim,
                       :multinode_connection_trace,
@@ -574,6 +574,19 @@ defmodule RobotSim.MultinodeDistributed do
         log_remote_memory(role)
         schedule_remote_memory_metrics(role)
         remote_loop(role, boot_id, connection_id, health, traffic_run_id)
+
+      {:modbus_uart_transport_activity, _adapter, @unit_id, peer_session, gap_ms, confirmation,
+       required} ->
+        trace_remote_transport_activity(
+          role,
+          connection_id,
+          peer_session,
+          gap_ms,
+          confirmation,
+          required
+        )
+
+        remote_loop(role, boot_id, connection_id, health, traffic_run_id)
     end
   end
 
@@ -753,18 +766,16 @@ defmodule RobotSim.MultinodeDistributed do
          confirmation,
          required
        ) do
-    event = if confirmation >= required, do: :transport_ready, else: :transport_resumed
-
-    trace_connection_with_memory(event,
-      role: role,
-      connection_id: connection_id,
-      peer_session: peer_session,
-      transport_gap_ms: gap_ms,
-      confirmation: confirmation,
-      required: required
+    trace_remote_transport_activity(
+      role,
+      connection_id,
+      peer_session,
+      gap_ms,
+      confirmation,
+      required
     )
 
-    if confirmation >= required do
+    if restart_after_transport_activity?(confirmation, required) do
       now_ms = monotonic_ms()
 
       case RemoteHealth.evaluate(health, now_ms) do
@@ -807,6 +818,33 @@ defmodule RobotSim.MultinodeDistributed do
     else
       connected_remote_loop(role, boot_id, connection_id, health, traffic_run_id)
     end
+  end
+
+  defp trace_remote_transport_activity(
+         role,
+         connection_id,
+         peer_session,
+         gap_ms,
+         confirmation,
+         required
+       ) do
+    event = if confirmation >= required, do: :transport_ready, else: :transport_resumed
+
+    trace_connection_with_memory(event,
+      role: role,
+      connection_id: connection_id,
+      peer_session: peer_session,
+      transport_gap_ms: gap_ms,
+      confirmation: confirmation,
+      required: required
+    )
+  end
+
+  if @defer_restart_until_transport_ready do
+    defp restart_after_transport_activity?(confirmation, required),
+      do: confirmation >= required
+  else
+    defp restart_after_transport_activity?(_confirmation, _required), do: false
   end
 
   defp restart_after_transport_ready(
@@ -1716,16 +1754,22 @@ defmodule RobotSim.MultinodeDistributed do
       ]
   end
 
-  defp remote_transport_activity_options do
-    if @defer_restart_until_transport_ready do
+  if @transport_activity_trace or @defer_restart_until_transport_ready do
+    @transport_ready_confirmations Application.compile_env(
+                                     :robot_sim,
+                                     :multinode_transport_ready_confirmations,
+                                     2
+                                   )
+
+    defp remote_transport_activity_options do
       [
         activity_observer: self(),
         activity_gap_ms: @remote_ack_timeout_ms,
         activity_confirmations: @transport_ready_confirmations
       ]
-    else
-      []
     end
+  else
+    defp remote_transport_activity_options, do: []
   end
 
   defp halt(message, reason) do
