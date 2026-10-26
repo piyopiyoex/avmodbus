@@ -49,3 +49,4 @@
 - [2026-10-25: Stage 7 長時間通信断復旧の計測基盤](2026-10-25-stage-7-recovery-instrumentation.md)
 - [2026-10-26: Stage 7 長時間通信断時の現行ポリシー基準値](2026-10-26-stage-7-current-policy-baseline.md)
 - [2026-10-26: Stage 7 transport復帰後のrestart保留](2026-10-26-stage-7-deferred-restart.md)
+- [2026-10-26: Stage 8 recovery-only report](2026-10-26-stage-8-recovery-report.md)

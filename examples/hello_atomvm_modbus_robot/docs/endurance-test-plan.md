@@ -77,6 +77,14 @@ retry可能なtransaction timeoutを8件観測したため、無失敗条件は�
 mix run scripts/endurance_report.exs controller.log drive.log sensors.log
 ```
 
+既定の`traffic` modeはtraffic campaignを成功判定します。recovery-only試験では評価対象を明示します。
+
+```sh
+mix run scripts/endurance_report.exs \
+  --mode recovery \
+  controller.log drive.log sensors.log
+```
+
 同じlogに事前確認、別boot、試験後の追加観測が含まれる場合は、3 roleで共通する開始・終了時刻を指定します。
 時刻は同じ日の`HH:MM:SS.mmm`で、指定範囲外の行とtimestampのない行を集計から除外します。
 
@@ -95,6 +103,9 @@ mix run scripts/endurance_report.exs \
 - peer別queue high-waterとtransaction failure
 - Drive / Sensorsのminimum free heap
 - stale検出、kernel stop / start、connection restart、restart失敗、reconnect、復旧確認event数
+- traffic / recoveryの個別評価と、選択したmodeの総合成功判定
+- host timestampがある場合のtransport ready、restart、reconnect、application probe間の時間
 
-periodic logは観測点であり、連続的な最大値・最小値ではありません。reportの`successful: true`は読み込んだlogの整合とtraffic完了を
-表し、開始したrestartがすべて成功していることを確認します。memory leakがないことや任意の通信断から復旧することは証明しません。
+periodic logは観測点であり、連続的な最大値・最小値ではありません。`successful`は`--mode`で選択した評価の結果です。
+内訳は`evaluation`、復旧時間は`recovery_metrics`で確認します。この結果はmemory leakがないことや、任意の通信断から
+復旧することを証明しません。判定の境界は[ADR 0025](adr/0025-separate-traffic-and-recovery-report-results.md)を参照してください。

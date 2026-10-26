@@ -25,5 +25,6 @@
 - serial出力自体がtimingとmemoryへ影響するため、intervalを短くしすぎず、設定値をworklogへ残す必要がある。
 - periodic sample間の瞬間的なheap最小値は取得できない。Controller adapterの既存minimum値とremoteの`MemorySnapshot` minimum値を
   併記する。
-- reportの成功判定はtraffic結果とlog整合だけを表し、memory stabilityやfailure recoveryを自動判定しない。
+- 当初のreport成功判定はtraffic結果とlog整合だけを対象とした。Recovery-only判定への拡張は
+  [ADR 0025](0025-separate-traffic-and-recovery-report-results.md)で分離して扱う。
 - AVModbus core、FC-100 wire protocol、専用distribution carrierは変更しない。

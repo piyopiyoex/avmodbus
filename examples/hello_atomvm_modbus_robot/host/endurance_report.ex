@@ -26,18 +26,19 @@ defmodule RobotSim.EnduranceReport do
     "peer_maintained"
   ]
 
-  @doc "role別logを集計します。`since`と`until`には同日の`HH:MM:SS.mmm`を指定できます。"
+  @doc "role別logを集計します。`mode`は`:traffic`または`:recovery`を指定できます。"
   def analyze(logs, options \\ [])
 
   def analyze(logs, options) when is_map(logs) and is_list(options) do
     with {:ok, since} <- validate_timestamp(Keyword.get(options, :since)),
          {:ok, until} <- validate_timestamp(Keyword.get(options, :until)),
+         {:ok, mode} <- validate_mode(Keyword.get(options, :mode)),
          :ok <- validate_window(since, until) do
       logs
       |> Enum.reduce(initial_report(), fn {_source, text}, report ->
         analyze_text(text, report, since, until)
       end)
-      |> finalize()
+      |> finalize(mode)
     end
   end
 
@@ -71,6 +72,13 @@ defmodule RobotSim.EnduranceReport do
   end
 
   defp validate_window(_since, _until), do: :ok
+
+  defp validate_mode(nil), do: {:ok, :traffic}
+  defp validate_mode(:traffic), do: {:ok, :traffic}
+  defp validate_mode(:recovery), do: {:ok, :recovery}
+  defp validate_mode("traffic"), do: {:ok, :traffic}
+  defp validate_mode("recovery"), do: {:ok, :recovery}
+  defp validate_mode(_mode), do: {:error, :invalid_mode}
 
   defp inside_window?(_line, nil, nil), do: true
 
@@ -249,9 +257,36 @@ defmodule RobotSim.EnduranceReport do
 
     if event in @connection_events do
       connections = Map.update!(report.connections, event, &(&1 + 1))
-      %{report | connections: connections}
+
+      connection_timestamps =
+        case line_timestamp_ms(line) do
+          nil ->
+            report.connection_timestamps
+
+          timestamp_ms ->
+            Map.update(
+              report.connection_timestamps,
+              event,
+              timestamp_ms,
+              &min(&1, timestamp_ms)
+            )
+        end
+
+      %{report | connections: connections, connection_timestamps: connection_timestamps}
     else
       report
+    end
+  end
+
+  defp line_timestamp_ms(line) do
+    case Regex.run(~r/^\[(\d{2}):(\d{2}):(\d{2})\.(\d{3})\]/, line) do
+      [_, hour, minute, second, millisecond] ->
+        ((String.to_integer(hour) * 60 + String.to_integer(minute)) * 60 +
+           String.to_integer(second)) *
+          1_000 + String.to_integer(millisecond)
+
+      _other ->
+        nil
     end
   end
 
@@ -320,7 +355,7 @@ defmodule RobotSim.EnduranceReport do
   defp minimum(current, value), do: min(current, value)
   defp malformed(report), do: %{report | malformed_lines: report.malformed_lines + 1}
 
-  defp finalize(report) do
+  defp finalize(report, mode) do
     controller = %{
       report.controller
       | peers:
@@ -330,17 +365,103 @@ defmodule RobotSim.EnduranceReport do
     }
 
     report = %{report | controller: controller}
+    traffic = traffic_evaluation(report)
+    recovery = recovery_evaluation(report.connections)
+    observation = if complete_observation?(report), do: :complete, else: :incomplete
+    logs = if report.malformed_lines == 0, do: :valid, else: :malformed
+
+    successful =
+      case mode do
+        :traffic ->
+          traffic == :passed and observation == :complete and logs == :valid and
+            connection_recovery_complete?(report.connections)
+
+        :recovery ->
+          recovery == :passed and observation == :complete and logs == :valid
+      end
+
+    evaluation = %{
+      mode: mode,
+      successful: successful,
+      traffic: traffic,
+      recovery: recovery,
+      observation: observation,
+      logs: logs
+    }
 
     {:ok,
-     Map.put(
-       report,
-       :successful,
-       report.traffic.complete > 0 and report.traffic.timeout == 0 and
-         report.traffic.other == 0 and report.malformed_lines == 0 and
-         (report.endurance.planned_runs == 0 or report.endurance.finished) and
-         connection_recovery_complete?(report.connections) and
-         complete_observation?(report)
-     )}
+     report
+     |> Map.delete(:connection_timestamps)
+     |> Map.put(:recovery_metrics, recovery_metrics(report.connection_timestamps))
+     |> Map.put(:evaluation, evaluation)
+     |> Map.put(:successful, successful)}
+  end
+
+  defp traffic_evaluation(report) do
+    observed =
+      report.traffic.complete + report.traffic.timeout + report.traffic.other > 0 or
+        report.endurance.started_runs > 0
+
+    cond do
+      not observed ->
+        :not_run
+
+      report.traffic.complete > 0 and report.traffic.timeout == 0 and
+        report.traffic.other == 0 and
+          (report.endurance.planned_runs == 0 or report.endurance.finished) ->
+        :passed
+
+      true ->
+        :failed
+    end
+  end
+
+  defp recovery_evaluation(connections) do
+    observed = Enum.any?(@connection_events, &(connections[&1] > 0))
+    verified = connections["recovery_verified"]
+    maintained = connections["peer_maintained"]
+    restarted = connections["restart_succeeded"]
+    reconnected = connections["remote_reconnected"]
+
+    cond do
+      not observed ->
+        :not_run
+
+      not connection_recovery_complete?(connections) ->
+        :failed
+
+      verified == 0 or maintained < verified ->
+        :failed
+
+      restarted > 0 and reconnected < restarted ->
+        :failed
+
+      true ->
+        :passed
+    end
+  end
+
+  defp recovery_metrics(timestamps) do
+    %{
+      transport_ready_to_restart_started_ms:
+        elapsed_ms(timestamps, "transport_ready", "restart_started"),
+      transport_ready_to_recovery_verified_ms:
+        elapsed_ms(timestamps, "transport_ready", "recovery_verified"),
+      restart_started_to_restart_succeeded_ms:
+        elapsed_ms(timestamps, "restart_started", "restart_succeeded"),
+      restart_succeeded_to_remote_reconnected_ms:
+        elapsed_ms(timestamps, "restart_succeeded", "remote_reconnected")
+    }
+  end
+
+  defp elapsed_ms(timestamps, from, to) do
+    with from_ms when is_integer(from_ms) <- Map.get(timestamps, from),
+         to_ms when is_integer(to_ms) <- Map.get(timestamps, to),
+         true <- to_ms >= from_ms do
+      to_ms - from_ms
+    else
+      _other -> nil
+    end
   end
 
   defp connection_recovery_complete?(connections) do
@@ -385,6 +506,7 @@ defmodule RobotSim.EnduranceReport do
       },
       remotes: %{drive: empty_remote, sensors: empty_remote},
       connections: Map.new(@connection_events, &{&1, 0}),
+      connection_timestamps: %{},
       malformed_lines: 0
     }
   end
