@@ -19,7 +19,16 @@ defmodule RobotSim.ConnectionTrace do
     :remote_connected,
     :remote_reconnected,
     :stale_detected,
+    :restart_deferred,
+    :transport_resumed,
+    :transport_ready,
     :restart_started,
+    :kernel_stop_requested,
+    :kernel_stop_completed,
+    :kernel_stop_failed,
+    :kernel_start_started,
+    :kernel_start_succeeded,
+    :kernel_start_failed,
     :restart_succeeded,
     :restart_failed,
     :restart_budget_exhausted,
@@ -41,7 +50,16 @@ defmodule RobotSim.ConnectionTrace do
           | :remote_connected
           | :remote_reconnected
           | :stale_detected
+          | :restart_deferred
+          | :transport_resumed
+          | :transport_ready
           | :restart_started
+          | :kernel_stop_requested
+          | :kernel_stop_completed
+          | :kernel_stop_failed
+          | :kernel_start_started
+          | :kernel_start_succeeded
+          | :kernel_start_failed
           | :restart_succeeded
           | :restart_failed
           | :restart_budget_exhausted

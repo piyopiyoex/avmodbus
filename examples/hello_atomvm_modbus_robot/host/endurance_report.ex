@@ -8,7 +8,16 @@ defmodule RobotSim.EnduranceReport do
 
   @connection_events [
     "stale_detected",
+    "restart_deferred",
+    "transport_resumed",
+    "transport_ready",
     "restart_started",
+    "kernel_stop_requested",
+    "kernel_stop_completed",
+    "kernel_stop_failed",
+    "kernel_start_started",
+    "kernel_start_succeeded",
+    "kernel_start_failed",
     "restart_succeeded",
     "restart_failed",
     "restart_budget_exhausted",
@@ -335,7 +344,9 @@ defmodule RobotSim.EnduranceReport do
   end
 
   defp connection_recovery_complete?(connections) do
-    connections["restart_failed"] == 0 and
+    connections["kernel_stop_failed"] == 0 and
+      connections["kernel_start_failed"] == 0 and
+      connections["restart_failed"] == 0 and
       connections["restart_budget_exhausted"] == 0 and
       connections["restart_started"] == connections["restart_succeeded"]
   end
@@ -373,16 +384,7 @@ defmodule RobotSim.EnduranceReport do
         peers: %{drive: empty_peer, sensors: empty_peer}
       },
       remotes: %{drive: empty_remote, sensors: empty_remote},
-      connections: %{
-        "stale_detected" => 0,
-        "restart_started" => 0,
-        "restart_succeeded" => 0,
-        "restart_failed" => 0,
-        "restart_budget_exhausted" => 0,
-        "remote_reconnected" => 0,
-        "recovery_verified" => 0,
-        "peer_maintained" => 0
-      },
+      connections: Map.new(@connection_events, &{&1, 0}),
       malformed_lines: 0
     }
   end

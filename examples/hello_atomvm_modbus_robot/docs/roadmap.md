@@ -3,7 +3,7 @@
 このexampleはhost-only simulationから2-node application、3-device Modbus multidrop、3-node distributionへ段階的に進みました。
 3台をphysical baselineとして固定し、N remote peersのscaleをhost modelで検証しました。さらに起動・復旧matrix、
 global resource budget、長時間通信断、約1時間の安定性試験まで完了しています。技術的blockerを特定して
-記録することも成果とします。
+記録することも成果とします。Stage 7では、長時間通信断後のrestart timingを比較し、transport復帰後の自動回復まで確認しました。
 
 現在の実行方法は [サンプル README](../README.md)、設計判断は [ADR](adr/README.md)、実測結果は
 [作業記録](worklog/README.md) を正とします。
@@ -19,6 +19,7 @@ global resource budget、長時間通信断、約1時間の安定性試験まで
 | 4 | 完了 | adaptive mission、readiness lease、reply-loss retry を実機確認 |
 | 5 | 完了 | N remote peer host model、fairness、failure isolation、resource budget |
 | 6 | 完了 | startup / recovery matrix、global resource budget、長時間安定性 |
+| 7 | 完了 | 長時間通信断後のrestart timingを比較し、transport復帰後の自動回復を実機確認 |
 
 ## Stage 0: ローカル仮想ローバーシミュレーション
 
@@ -167,6 +168,32 @@ timeoutはcycle latencyへ加算される。bounded queueはoverloadをrejectし
 [耐久試験worklog](worklog/2026-10-25-one-hour-active-idle-endurance.md)を参照する。
 
 このStageでは7秒setup timerの単純な延長、AVModbus core変更、専用`modbus_dist` carrier、4台目の常設を完了条件にしない。
+
+## Stage 7: 長時間通信断後の復旧調査
+
+Stage 6で再現した約180秒切断後のdistribution再接続失敗とSensorsのfree heap低下を対象にする。実験条件、仮説、eventの意味は
+[長時間通信断後の復旧調査](long-outage-recovery-plan.md)を正とする。
+
+- [x] `net_kernel` stop / startとdistribution reconnectionを別eventにする
+- [x] restart境界へmemory snapshotを付ける
+- [x] host reportでlifecycle eventを集計する
+- [x] instrumented firmwareを3台へ導入する
+- [x] 短時間切断を正常復旧baselineとして記録する
+- [x] health timeoutを越えた切断で`net_kernel` stop failureを再現する
+- [x] clean bootからtimeoutを大きく越える長時間切断をdeferred policyで検証する
+- [x] transport復帰後にrestartする条件を定義し、opt-in policyをhostで検証する
+- [x] deferred policyをcurrent policyと実機比較する
+- [x] free heap低下の開始区間または計測上の限界を記録する
+- [x] 復旧可能な条件と既知の制約をworklogと`limitations.md`へ反映する
+
+restart上限の増加やtimeout延長は原因切り分け前に行わない。AVModbus coreとFC-100 wire protocolは変更せず、AtomVM runtimeの
+問題が疑われる場合も、このrepositoryの検証記録とlocal compatibility patchの範囲で扱う。
+
+current policyは約97秒の操作応答区間で、physical transport復帰前の`net_kernel.stop/0`がtimeoutした。deferred policyは
+約350.8秒のFC-100 exchange gap後に、2回の有効exchangeを確認してからrestartし、約10.6秒でSensors / Drive両probeまで
+復旧した。Drive connectionは維持し、restart上限とtimeoutは増やしていない。比較時間が同一でないこと、非対称response blackoutは
+対象外であること、general-purpose recoveryではないことは[作業記録](worklog/2026-10-26-stage-7-deferred-restart.md)と
+[既知の制約](limitations.md)に残す。
 
 ## 今回は対象としないこと
 

@@ -127,6 +127,12 @@ multinode_remote_health_enabled =
 multinode_remote_health_trace =
   parse_boolean.("ROBOT_MULTINODE_REMOTE_HEALTH_TRACE", false)
 
+multinode_defer_restart_until_transport_ready =
+  parse_boolean.("ROBOT_MULTINODE_DEFER_RESTART_UNTIL_TRANSPORT_READY", false)
+
+multinode_transport_ready_confirmations =
+  parse_integer.("ROBOT_MULTINODE_TRANSPORT_READY_CONFIRMATIONS", 2)
+
 multinode_connection_trace =
   parse_boolean.("ROBOT_MULTINODE_CONNECTION_TRACE", false)
 
@@ -301,6 +307,15 @@ if multinode_remote_max_restarts < 0 or multinode_remote_max_restarts > 10 do
   raise ArgumentError, "ROBOT_MULTINODE_REMOTE_MAX_RESTARTS must be between 0 and 10"
 end
 
+if multinode_defer_restart_until_transport_ready and not multinode_remote_health_enabled do
+  raise ArgumentError,
+        "ROBOT_MULTINODE_DEFER_RESTART_UNTIL_TRANSPORT_READYを有効にするにはROBOT_MULTINODE_REMOTE_HEALTH_ENABLED=trueが必要です"
+end
+
+if multinode_transport_ready_confirmations < 1 or multinode_transport_ready_confirmations > 10 do
+  raise ArgumentError, "ROBOT_MULTINODE_TRANSPORT_READY_CONFIRMATIONSは1から10の範囲で指定してください"
+end
+
 if sensor_mission_steps < 1 do
   raise ArgumentError, "ROBOT_SENSOR_MISSION_STEPS must be a positive integer"
 end
@@ -384,6 +399,8 @@ config :robot_sim,
   multinode_restart_on_traffic_ack_timeout: multinode_restart_on_traffic_ack_timeout,
   multinode_remote_health_enabled: multinode_remote_health_enabled,
   multinode_remote_health_trace: multinode_remote_health_trace,
+  multinode_defer_restart_until_transport_ready: multinode_defer_restart_until_transport_ready,
+  multinode_transport_ready_confirmations: multinode_transport_ready_confirmations,
   multinode_connection_trace: multinode_connection_trace,
   multinode_initial_recovery_enabled: multinode_initial_recovery_enabled,
   multinode_remote_ack_timeout_ms: multinode_remote_ack_timeout_ms,

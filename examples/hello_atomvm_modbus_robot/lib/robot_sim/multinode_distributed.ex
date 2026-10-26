@@ -110,6 +110,16 @@ defmodule RobotSim.MultinodeDistributed do
                          :multinode_remote_health_trace,
                          false
                        )
+  @defer_restart_until_transport_ready Application.compile_env(
+                                         :robot_sim,
+                                         :multinode_defer_restart_until_transport_ready,
+                                         false
+                                       )
+  @transport_ready_confirmations Application.compile_env(
+                                   :robot_sim,
+                                   :multinode_transport_ready_confirmations,
+                                   2
+                                 )
   @connection_trace Application.compile_env(
                       :robot_sim,
                       :multinode_connection_trace,
@@ -420,7 +430,8 @@ defmodule RobotSim.MultinodeDistributed do
           RemoteHealth.new(connection_id, monotonic_ms(),
             enabled: @remote_health_enabled,
             ack_timeout_ms: @remote_ack_timeout_ms,
-            max_restarts: @remote_max_restarts
+            max_restarts: @remote_max_restarts,
+            defer_restart: @defer_restart_until_transport_ready
           )
 
         schedule_remote_memory_metrics(role)
@@ -433,7 +444,10 @@ defmodule RobotSim.MultinodeDistributed do
   end
 
   defp start_remote_kernel(role, fault_drop_responses \\ @fault_drop_responses) do
-    ports = [uart_options(:server, @unit_id, fault_drop_responses: fault_drop_responses)]
+    extra =
+      [fault_drop_responses: fault_drop_responses] ++ remote_transport_activity_options()
+
+    ports = [uart_options(:server, @unit_id, extra)]
 
     case :net_kernel.start(identity(role), dist_options(ports)) do
       {:ok, _pid} ->
@@ -461,7 +475,7 @@ defmodule RobotSim.MultinodeDistributed do
   end
 
   defp begin_remote_connection(role, boot_id, connection_id, health, traffic_run_id) do
-    trace_connection(:readiness_wait_started,
+    trace_connection_with_memory(:readiness_wait_started,
       role: role,
       boot_id: boot_id,
       connection_id: connection_id
@@ -478,7 +492,7 @@ defmodule RobotSim.MultinodeDistributed do
       {:multinode_ack, ^role, ^connection_id} ->
         IO.puts("modbus_robot_multinode: #{role} acknowledged by Controller")
 
-        trace_connection(:readiness_acknowledged,
+        trace_connection_with_memory(:readiness_acknowledged,
           role: role,
           boot_id: boot_id,
           connection_id: connection_id
@@ -499,7 +513,7 @@ defmodule RobotSim.MultinodeDistributed do
         remote_loop(role, boot_id, connection_id, health, traffic_run_id)
 
       {:initial_connection_observation_timeout, ^connection_id} ->
-        trace_connection(:initial_connection_timeout,
+        trace_connection_with_memory(:initial_connection_timeout,
           role: role,
           boot_id: boot_id,
           connection_id: connection_id,
@@ -624,6 +638,20 @@ defmodule RobotSim.MultinodeDistributed do
         log_remote_memory(role)
         schedule_remote_memory_metrics(role)
         connected_remote_loop(role, boot_id, connection_id, health, traffic_run_id)
+
+      {:modbus_uart_transport_activity, _adapter, @unit_id, peer_session, gap_ms, confirmation,
+       required} ->
+        handle_remote_transport_activity(
+          role,
+          boot_id,
+          connection_id,
+          health,
+          traffic_run_id,
+          peer_session,
+          gap_ms,
+          confirmation,
+          required
+        )
     end
   end
 
@@ -682,6 +710,16 @@ defmodule RobotSim.MultinodeDistributed do
     now_ms = monotonic_ms()
 
     case RemoteHealth.evaluate(health, now_ms) do
+      {:deferred, next_health} ->
+        trace_connection_with_memory(:restart_deferred,
+          role: role,
+          connection_id: connection_id,
+          elapsed_ms: now_ms - health.last_ack_ms,
+          restarts: next_health.restarts
+        )
+
+        continue_remote_health(role, boot_id, connection_id, next_health, traffic_run_id)
+
       {:restart, next_health} ->
         elapsed_ms = now_ms - health.last_ack_ms
 
@@ -700,6 +738,102 @@ defmodule RobotSim.MultinodeDistributed do
         continue_remote_health(role, boot_id, connection_id, next_health, traffic_run_id)
 
       {_status, next_health} ->
+        continue_remote_health(role, boot_id, connection_id, next_health, traffic_run_id)
+    end
+  end
+
+  defp handle_remote_transport_activity(
+         role,
+         boot_id,
+         connection_id,
+         health,
+         traffic_run_id,
+         peer_session,
+         gap_ms,
+         confirmation,
+         required
+       ) do
+    event = if confirmation >= required, do: :transport_ready, else: :transport_resumed
+
+    trace_connection_with_memory(event,
+      role: role,
+      connection_id: connection_id,
+      peer_session: peer_session,
+      transport_gap_ms: gap_ms,
+      confirmation: confirmation,
+      required: required
+    )
+
+    if confirmation >= required do
+      now_ms = monotonic_ms()
+
+      case RemoteHealth.evaluate(health, now_ms) do
+        {:deferred, pending} ->
+          trace_connection_with_memory(:restart_deferred,
+            role: role,
+            connection_id: connection_id,
+            elapsed_ms: now_ms - health.last_ack_ms,
+            restarts: pending.restarts
+          )
+
+          restart_after_transport_ready(
+            role,
+            boot_id,
+            connection_id,
+            pending,
+            traffic_run_id,
+            gap_ms,
+            now_ms
+          )
+
+        {:waiting, %{restart_pending: true} = pending} ->
+          restart_after_transport_ready(
+            role,
+            boot_id,
+            connection_id,
+            pending,
+            traffic_run_id,
+            gap_ms,
+            now_ms
+          )
+
+        {:exhausted, next_health} ->
+          log_restart_budget_exhausted(role, connection_id, next_health, :transport_ready)
+          continue_remote_health(role, boot_id, connection_id, next_health, traffic_run_id)
+
+        {_status, next_health} ->
+          continue_remote_health(role, boot_id, connection_id, next_health, traffic_run_id)
+      end
+    else
+      connected_remote_loop(role, boot_id, connection_id, health, traffic_run_id)
+    end
+  end
+
+  defp restart_after_transport_ready(
+         role,
+         boot_id,
+         connection_id,
+         health,
+         traffic_run_id,
+         gap_ms,
+         now_ms
+       ) do
+    case RemoteHealth.request_deferred_restart(health, now_ms) do
+      {:restart, next_health} ->
+        restart_remote_distribution(
+          role,
+          boot_id,
+          connection_id,
+          next_health,
+          traffic_run_id,
+          {:transport_ready_after_ack_timeout, gap_ms}
+        )
+
+      {:exhausted, next_health} ->
+        log_restart_budget_exhausted(role, connection_id, next_health, :transport_ready)
+        continue_remote_health(role, boot_id, connection_id, next_health, traffic_run_id)
+
+      {:waiting, next_health} ->
         continue_remote_health(role, boot_id, connection_id, next_health, traffic_run_id)
     end
   end
@@ -746,7 +880,7 @@ defmodule RobotSim.MultinodeDistributed do
         "role=#{role} connection=#{connection_id} restarts=#{health.restarts} source=#{source}"
     )
 
-    trace_connection(:restart_budget_exhausted,
+    trace_connection_with_memory(:restart_budget_exhausted,
       role: role,
       connection_id: connection_id,
       restarts: health.restarts,
@@ -790,7 +924,7 @@ defmodule RobotSim.MultinodeDistributed do
         "connection=#{previous_connection_id} reason=#{inspect(reason)}"
     )
 
-    trace_connection(:restart_started,
+    trace_connection_with_memory(:restart_started,
       role: role,
       connection_id: previous_connection_id,
       reason: reason
@@ -806,7 +940,7 @@ defmodule RobotSim.MultinodeDistributed do
             "connection=#{next_connection_id}"
         )
 
-        trace_connection(:restart_succeeded,
+        trace_connection_with_memory(:restart_succeeded,
           role: role,
           previous_connection_id: previous_connection_id,
           connection_id: next_connection_id
@@ -815,7 +949,7 @@ defmodule RobotSim.MultinodeDistributed do
         begin_remote_connection(role, boot_id, next_connection_id, next_health, traffic_run_id)
 
       {:error, restart_reason} ->
-        trace_connection(:restart_failed, role: role, reason: restart_reason)
+        trace_connection_with_memory(:restart_failed, role: role, reason: restart_reason)
         halt("#{role} distribution restart failed", restart_reason)
     end
   end
@@ -824,11 +958,18 @@ defmodule RobotSim.MultinodeDistributed do
     fault_drop_responses =
       restart_fault_drop_responses(@fault_drop_responses, @fault_rearm_on_restart)
 
+    trace_connection_with_memory(:kernel_stop_requested, role: role)
+
     case :net_kernel.stop() do
       :ok ->
         await_remote_kernel_stop(role, @net_kernel_stop_poll_attempts, fault_drop_responses)
 
       other ->
+        trace_connection_with_memory(:kernel_stop_failed,
+          role: role,
+          reason: {:net_kernel_stop_failed, other}
+        )
+
         {:error, {:net_kernel_stop_failed, other}}
     end
   end
@@ -837,7 +978,18 @@ defmodule RobotSim.MultinodeDistributed do
        when attempts_left > 0 do
     case Process.whereis(:net_kernel) do
       nil ->
-        start_remote_kernel(role, fault_drop_responses)
+        trace_connection_with_memory(:kernel_stop_completed, role: role)
+        trace_connection_with_memory(:kernel_start_started, role: role)
+
+        case start_remote_kernel(role, fault_drop_responses) do
+          :ok ->
+            trace_connection_with_memory(:kernel_start_succeeded, role: role)
+            :ok
+
+          {:error, reason} = error ->
+            trace_connection_with_memory(:kernel_start_failed, role: role, reason: reason)
+            error
+        end
 
       _pid ->
         receive do
@@ -848,8 +1000,10 @@ defmodule RobotSim.MultinodeDistributed do
     end
   end
 
-  defp await_remote_kernel_stop(_role, 0, _fault_drop_responses) do
-    {:error, {:net_kernel_stop_timeout, Process.whereis(:net_kernel)}}
+  defp await_remote_kernel_stop(role, 0, _fault_drop_responses) do
+    reason = {:net_kernel_stop_timeout, Process.whereis(:net_kernel)}
+    trace_connection_with_memory(:kernel_stop_failed, role: role, reason: reason)
+    {:error, reason}
   end
 
   defp announce(role, boot_id, connection_id) do
@@ -1107,6 +1261,24 @@ defmodule RobotSim.MultinodeDistributed do
 
   defp trace_connection(event, fields) do
     ConnectionTrace.emit(@connection_trace, event, monotonic_ms(), fields)
+  end
+
+  if @connection_trace do
+    defp trace_connection_with_memory(event, fields) do
+      trace_connection(event, fields ++ memory_trace_fields(MemorySnapshot.capture()))
+    end
+
+    defp memory_trace_fields(nil), do: []
+
+    defp memory_trace_fields(memory) do
+      [
+        free_heap_bytes: memory.free_heap_bytes,
+        largest_free_block_bytes: memory.largest_free_block_bytes,
+        minimum_free_heap_bytes: memory.minimum_free_heap_bytes
+      ]
+    end
+  else
+    defp trace_connection_with_memory(event, fields), do: trace_connection(event, fields)
   end
 
   defp trace_maintained_peer(role, %{boot_id: boot_id, connection_id: connection_id}) do
@@ -1542,6 +1714,18 @@ defmodule RobotSim.MultinodeDistributed do
         trace_transactions: @trace_transactions,
         trace_queue: @trace_queue
       ]
+  end
+
+  defp remote_transport_activity_options do
+    if @defer_restart_until_transport_ready do
+      [
+        activity_observer: self(),
+        activity_gap_ms: @remote_ack_timeout_ms,
+        activity_confirmations: @transport_ready_confirmations
+      ]
+    else
+      []
+    end
   end
 
   defp halt(message, reason) do

@@ -442,6 +442,8 @@ ROBOT_MODE=multinode ROBOT_ROLE=controller ATOMVM_UART_SPEED=115200 \
 | `ROBOT_MULTINODE_RESTART_ON_TRAFFIC_ACK_TIMEOUT` | `false` | traffic ACK timeout 時に remote の distribution を再起動する診断設定 |
 | `ROBOT_MULTINODE_REMOTE_HEALTH_ENABLED` | `false` | remote が readiness ACK timeout で自身の distribution を再起動する診断設定 |
 | `ROBOT_MULTINODE_REMOTE_HEALTH_TRACE` | `false` | remote がconnection内のreadiness ACK gapとboot内high-waterを出力する測定設定 |
+| `ROBOT_MULTINODE_DEFER_RESTART_UNTIL_TRANSPORT_READY` | `false` | ACK timeout後も、有効なFC-100 exchangeの復帰確認までremote restartを保留する比較実験設定 |
+| `ROBOT_MULTINODE_TRANSPORT_READY_CONFIRMATIONS` | `2` | 長時間のexchange gap後にtransport復帰と判定する連続exchange数。1..10 |
 | `ROBOT_MULTINODE_CONNECTION_TRACE` | `false` | 起動、handshake、stale検出、restart、再接続を共通event形式で出力する測定設定 |
 | `ROBOT_MULTINODE_INITIAL_RECOVERY_ENABLED` | `true` | 初回readiness ACKが8秒以内に届かないremoteのdistributionをbounded restartする |
 | `ROBOT_MULTINODE_REMOTE_ACK_TIMEOUT_MS` | `90000` | remote が現在の connection ID の ACK を待つ期限。announce 間隔より大きくする |
@@ -482,6 +484,13 @@ stop / restartします。restart回数はboard bootごとに制限され、古�
 [readiness ACK gap baseline](docs/worklog/2026-10-23-remote-health-gap-baseline.md)を参照してください。
 256+256 trafficへ延長した別runではDrive 23,586 ms、Sensors 23,995 msまで伸びました。詳細は
 [長時間ACK gap測定](docs/worklog/2026-10-23-extended-ack-gap-run.md)を参照してください。
+
+Stage 7の比較実験では、remote側だけで
+`ROBOT_MULTINODE_DEFER_RESTART_UNTIL_TRANSPORT_READY=true`を指定できます。readiness ACK期限を超えてもrestart budgetを
+消費せず、有効なFC-100 exchangeが設定回数連続した後にだけ`net_kernel` restartを開始します。同じconnectionでACKが先に
+復帰した場合は保留を解除します。この設定は物理branch切断のrestart timingを調べるためのopt-inであり、Serverがrequestを
+受信し続ける非対称response blackoutの復旧判定には使えません。設計と検証手順は
+[長時間通信断後の復旧調査](docs/long-outage-recovery-plan.md)を参照してください。
 
 この設定は1本だけdistribution connectionを持つremote用のopt-in実験機能です。timeoutはbus congestionでも発生し得るため、通常構成では
 既定の`false`を使用します。設計は[ADR 0012](docs/adr/0012-detect-remote-health-with-readiness-acks.md)、実機結果は

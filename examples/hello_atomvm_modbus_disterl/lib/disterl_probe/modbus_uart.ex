@@ -9,6 +9,10 @@ defmodule DisterlProbe.ModbusUART do
   A client adapter normally owns its `AVModbus.Client`. Passing `client:` lets
   multiple logical adapters share an externally owned serial managed-client
   handle (or a legacy raw client pid) and physical UART.
+
+  Server adapterは任意の`activity_observer`を指定できます。有効なFC-100 exchangeが
+  長時間途切れた後、transport activityの復帰を通知します。この通知は観測専用であり、
+  distribution connectionをrestartするかどうかはadapterでは判断しません。
   """
 
   use GenServer
@@ -104,6 +108,7 @@ defmodule DisterlProbe.ModbusUART do
   @impl true
   def init(options) do
     role = Keyword.fetch!(options, :role)
+    initialized_at_ms = now_ms()
 
     state = %{
       role: role,
@@ -132,6 +137,11 @@ defmodule DisterlProbe.ModbusUART do
       queue_budget: Keyword.get(options, :queue_budget),
       max_queued_bytes_observed: 0,
       max_outstanding_observed: 0,
+      activity_observer: Keyword.get(options, :activity_observer),
+      activity_gap_ms: Keyword.get(options, :activity_gap_ms, 0),
+      activity_confirmations: Keyword.get(options, :activity_confirmations, 2),
+      activity_confirmation: 0,
+      last_exchange_ms: initialized_at_ms,
       response_fault:
         ResponseFault.new(
           [
@@ -139,7 +149,7 @@ defmodule DisterlProbe.ModbusUART do
             min_payload_bytes: Keyword.get(options, :fault_min_payload_bytes, 96),
             after_ms: Keyword.get(options, :fault_after_ms, 10_000)
           ],
-          now_ms()
+          initialized_at_ms
         )
     }
 
@@ -210,10 +220,13 @@ defmodule DisterlProbe.ModbusUART do
   def handle_call({:exchange, payload}, _from, %{role: :server} = state) do
     with {:ok, incoming} <- Protocol.decode(payload),
          {:ok, next, reply} <- receive_decoded_exchange(state, incoming) do
+      accepted_at_ms = now_ms()
+      next = observe_transport_activity(next, incoming, accepted_at_ms)
+
       case ResponseFault.after_accept(
              next.response_fault,
              byte_size(incoming.payload),
-             now_ms()
+             accepted_at_ms
            ) do
         {:reply, response_fault} ->
           {:reply, {:ok, reply}, %{next | response_fault: response_fault}}
@@ -503,6 +516,41 @@ defmodule DisterlProbe.ModbusUART do
     do: PollScheduler.complete(scheduler, self())
 
   defp now_ms, do: :erlang.monotonic_time(:millisecond)
+
+  defp observe_transport_activity(state, incoming, now_ms) do
+    observer = Map.get(state, :activity_observer)
+    gap_threshold_ms = Map.get(state, :activity_gap_ms, 0)
+    required = Map.get(state, :activity_confirmations, 2)
+    previous_confirmation = Map.get(state, :activity_confirmation, 0)
+    last_exchange_ms = Map.get(state, :last_exchange_ms, now_ms)
+    gap_ms = max(now_ms - last_exchange_ms, 0)
+
+    confirmation =
+      cond do
+        is_pid(observer) and is_integer(gap_threshold_ms) and gap_threshold_ms > 0 and
+          is_integer(required) and required > 0 and gap_ms > gap_threshold_ms ->
+          1
+
+        is_pid(observer) and is_integer(required) and required > 0 and
+          previous_confirmation > 0 and previous_confirmation < required ->
+          previous_confirmation + 1
+
+        true ->
+          previous_confirmation
+      end
+
+    if is_pid(observer) and confirmation > 0 and confirmation != previous_confirmation do
+      send(
+        observer,
+        {:modbus_uart_transport_activity, self(), state.unit_id, incoming.session, gap_ms,
+         confirmation, required}
+      )
+    end
+
+    state
+    |> Map.put(:last_exchange_ms, now_ms)
+    |> Map.put(:activity_confirmation, confirmation)
+  end
 
   defp log_peer_restart(previous, current) do
     IO.puts("modbus_uart: peer session changed #{previous} -> #{current}; resetting stream")

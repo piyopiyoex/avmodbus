@@ -45,6 +45,37 @@ defmodule RobotSim.ConnectionTraceTest do
     end
   end
 
+  test "kernel restartの各境界を個別eventとして公開する" do
+    assert Enum.all?(
+             [
+               :kernel_stop_requested,
+               :kernel_stop_completed,
+               :kernel_stop_failed,
+               :kernel_start_started,
+               :kernel_start_succeeded,
+               :kernel_start_failed
+             ],
+             &(&1 in ConnectionTrace.events())
+           )
+
+    assert ConnectionTrace.format(:kernel_start_succeeded, 123,
+             role: :sensors,
+             free_heap_bytes: 80_000,
+             largest_free_block_bytes: 60_000,
+             minimum_free_heap_bytes: 70_000
+           ) ==
+             "modbus_robot_connection: at_ms=123 event=kernel_start_succeeded " <>
+               "role=sensors free_heap_bytes=80000 largest_free_block_bytes=60000 " <>
+               "minimum_free_heap_bytes=70000"
+  end
+
+  test "transport復帰待ちの各境界を個別eventとして公開する" do
+    assert Enum.all?(
+             [:restart_deferred, :transport_resumed, :transport_ready],
+             &(&1 in ConnectionTrace.events())
+           )
+  end
+
   test "他のconsole logを無視してconnection traceをparseする" do
     assert Matrix.parse_line("ordinary log") == :ignore
 
