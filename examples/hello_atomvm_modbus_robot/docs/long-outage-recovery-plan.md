@@ -1,7 +1,9 @@
 # 長時間通信断後の復旧調査
 
+状態: 完了（2026-10-26）
+
 Stage 7では、3台構成のSensors branchを長時間切断した後にdistributionが復旧せず、Sensorsのfree heapが低下した条件を
-切り分けます。自動retryの回数やtimeoutを先に増やさず、current policyの再現性とresourceを消費した処理範囲を確認します。
+切り分けた。自動retryの回数やtimeoutを先に増やさず、current policyの再現性とresourceを消費した処理範囲を確認した。
 
 Stage 6の実測結果は[接続復旧とリソース管理の実験結果](reliability-backlog.md)、約199秒の観測区間を含むfailure記録は
 [idle 180秒切断worklog](worklog/2026-10-25-idle-180-second-disconnect.md)を正とします。
@@ -66,9 +68,9 @@ Stage 7ではrestartを次の境界へ分けて記録します。eventには取�
 - [x] instrumented firmwareを3台へ導入する
 
 process数やmailbox量はAtomVM v0.7 snapshotで利用できるAPIを確認してから追加します。取得できない値を完了条件にはしません。
-host testとbuild結果は[Stage 7計測基盤worklog](worklog/2026-10-25-stage-7-recovery-instrumentation.md)に記録します。
+host testとbuild結果は[Stage 7計測基盤worklog](worklog/2026-10-25-stage-7-recovery-instrumentation.md)に記録した。
 
-### Phase 2: Current policyのbaseline
+### Phase 2: 現行ポリシーの基準値
 
 各scenarioは3台のclean bootから開始し、同じbootでrestart budgetを持ち越しません。
 
@@ -81,8 +83,8 @@ host testとbuild結果は[Stage 7計測基盤worklog](worklog/2026-10-25-stage-
 branch取り外しと復元は外部時計でも記録し、serial logから推定した区間と分けます。短時間baselineと長時間failureを同じbootで
 連続実行しません。
 
-current policyの最初の比較結果は
-[長時間通信断current policy baseline](worklog/2026-10-26-stage-7-current-policy-baseline.md)に記録します。
+current policyの比較結果は
+[長時間通信断時の現行ポリシー基準値](worklog/2026-10-26-stage-7-current-policy-baseline.md)に記録した。
 
 ### Phase 3: Restart timingの比較
 
@@ -103,7 +105,7 @@ response blackoutにはexchange gapが生じないため、このpolicyの対象
 
 実機ではcurrent policyが約97秒の操作応答区間でkernel stopに失敗した一方、deferred policyは約350.8秒のFC-100 exchange gap後に
 自動復旧した。比較した切断時間は同一ではないが、transport readyより前にkernel stopを行わないという対象条件は確認できた。
-詳細は[deferred restart worklog](worklog/2026-10-26-stage-7-deferred-restart.md)を正とする。
+詳細は[transport復帰後のrestart保留](worklog/2026-10-26-stage-7-deferred-restart.md)を正とする。
 
 ## 完了条件
 

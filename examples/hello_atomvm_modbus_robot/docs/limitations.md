@@ -131,7 +131,7 @@
   確認できず`net_kernel_stop_timeout`となりました。`kernel_start_started`には到達せず、Sensors free heapはrestart開始時も
   約91 KiBでした。長時間通信断のfailureはmemory低下だけでは説明できず、同じruntime snapshotでもkernel stop段階で
   終了する場合があります。詳細は
-  [current policy baseline](worklog/2026-10-26-stage-7-current-policy-baseline.md)を参照してください。
+  [現行ポリシーの基準値](worklog/2026-10-26-stage-7-current-policy-baseline.md)を参照してください。
 - Stage 7のdeferred restartは、有効なFC-100 exchangeが長時間途切れた物理branch切断だけを比較対象にします。既定値では無効で、
   remote health timeoutやrestart上限は変更しません。連続exchangeの受理はremote側UARTの復帰を示しますが、responseのController到達、
   distribution handshake、application probeの成功までは保証しません。非対称response blackoutではServer側exchangeが継続するため、
@@ -140,7 +140,7 @@
   readiness ACK、Controller再接続、Sensors / Drive両probeまで自動復旧しました。transport readyから両probe成功までは約10.6秒で、
   Drive connectionを維持しました。ただしcurrent policyのfailure試験は約97秒の操作応答区間であり、同一時間の対照試験では
   ありません。この単一runから任意の長時間切断、反復障害、負荷、electrical conditionでの回復を保証しません。詳細は
-  [deferred restart worklog](worklog/2026-10-26-stage-7-deferred-restart.md)を参照してください。
+  [transport復帰後のrestart保留](worklog/2026-10-26-stage-7-deferred-restart.md)を参照してください。
 - 同一Sensors bootで短時間のbranch切断を3回反復した試験では、90秒remote health timeoutへ達せず、同じconnection IDのまま
   3回とも復帰しました。faultを含む2 runsと後続runは両role 64 / 64、欠損・重複なしで完了し、restart budget消費と
   global queue rejectionは0でした。ただし操作時刻とserial logを共通時計で精密測定しておらず、Driveにもfaultを含むrunごとに

@@ -117,5 +117,5 @@ retryで回復しましたが、error-freeなphysical transportとは扱いま�
 AtomVMのlocal compatibility patchは検証済みbaselineとして扱い、新しいruntime変更が必要と確認できた場合に
 このrepositoryの文書とlocal patchで整理します。
 
-約180秒切断後に残ったdistribution再接続失敗とresource低下は、Stage 6の未実施項目ではなく、測定で特定した次の調査対象です。
-後続の仮説と比較手順は[Stage 7の復旧調査](long-outage-recovery-plan.md)を参照してください。
+約180秒切断後に残ったdistribution再接続失敗とresource低下は、Stage 6の未実施項目ではなく、測定で特定した後続の調査対象です。
+Stage 7で検証した仮説、比較手順、結果は[長時間通信断後の復旧調査](long-outage-recovery-plan.md)を参照してください。

@@ -1,4 +1,4 @@
-# Stage 7長時間通信断current policy baseline
+# Stage 7 長時間通信断時の現行ポリシー基準値
 
 ## 目的
 
@@ -32,7 +32,7 @@ failureではなく、firmware導入時のUSB経路の問題として分けて�
 RESETをまたぐconsole記録にはPTY付き`tio`を使った。非対話のpicocomはCDC ACM切断後に終了したため、fault試験の正式logには
 自動再接続した`tio`のtimestamp付きlogを用いた。
 
-## 障害なしbaseline
+## 障害なしの基準値
 
 3台へinstrumented firmwareを導入し、adaptive mission完了、両peerの継続poll、queueの0へのdrainを確認した。
 Sensorsを単独RESETした試験では、Controllerが新しいFC-100 sessionを検出し、Sensors再起動から約4秒で
@@ -97,5 +97,6 @@ Sensors periodic free heapはfault前後とも約91–92 KiBで、restart budget
 - 約199秒scenarioのheap低下と、今回の`net_kernel_stop_timeout`は同一原因と断定できない。
 - restart回数やtimeoutを増やす根拠は得られていない。
 
-次はphysical transportが復帰するまでrestartを保留する条件を設計し、current policyをcontrolとして比較する。単発poll成功だけを
-readinessとせず、FC-100 sessionと連続transaction成功を用いたboundedな条件をhostで先に検証する。
+この結果を基準に、physical transportが復帰するまでrestartを保留する条件を設計した。単発poll成功だけをreadinessとせず、
+FC-100 sessionと連続transaction成功を用いたboundedな条件をhostで先に検証した。比較結果は
+[transport復帰後のrestart保留](2026-10-26-stage-7-deferred-restart.md)に記録した。

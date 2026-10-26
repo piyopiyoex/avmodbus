@@ -1,4 +1,4 @@
-# Stage 7長時間通信断復旧の計測基盤
+# Stage 7 長時間通信断復旧の計測基盤
 
 ## 目的
 
@@ -23,7 +23,7 @@ connection traceを有効にしたAtomVM実機では、restart、kernel stop / s
 `RobotSim.EnduranceReport`は新eventを個別に集計し、kernel stop / start failureがあれば`successful: false`とする。過去のlogには
 新eventがないため、event数が0でも従来のrestart集計を壊さない。
 
-## Host検証
+## ホスト検証
 
 `examples/hello_atomvm_modbus_robot/`で次を実行した。
 
@@ -35,7 +35,7 @@ mise exec -- mix test
 結果は122 tests、0 failuresだった。途中のfocused runではconnection trace、endurance report、startup recovery matrixの
 30 testsも0 failuresだった。
 
-## AtomVM compatibilityとPackBEAM
+## AtomVM互換性とPackBEAM
 
 Controller、Drive、Sensorsの各roleについて、次の条件で`mix atomvm.check`と`mix atomvm.packbeam`を実行した。
 
@@ -58,6 +58,7 @@ mise exec -- mix atomvm.check
 - distribution recovery成功には、その後の`readiness_acknowledged`、`remote_reconnected`、`recovery_verified`が必要である。
 - restart budget、90秒health timeout、8秒initial observation timeoutは変更していない。
 - 2026-10-26に3台へのflashとcurrent policyの短時間 / health timeout超過branch切断を実施した。結果は
-  [current policy baseline](2026-10-26-stage-7-current-policy-baseline.md)へ分けて記録する。
+  [長時間通信断時の現行ポリシー基準値](2026-10-26-stage-7-current-policy-baseline.md)へ分けて記録した。
 
-次はcurrent policyの実測を基準に、transport復帰後までrestartを保留する条件を設計する。
+この基準値を用いてtransport復帰後までrestartを保留する条件を設計し、結果を
+[transport復帰後のrestart保留](2026-10-26-stage-7-deferred-restart.md)に記録した。

@@ -29,8 +29,8 @@
 - [idle 180秒切断](worklog/2026-10-25-idle-180-second-disconnect.md) — physical復帰後のdistribution再接続失敗とresource枯渇
 - [同一boot反復切断](worklog/2026-10-25-repeated-branch-disconnect.md) — 短時間切断3回のconnection維持と完全配送
 - [約1時間のactive / idle耐久試験](worklog/2026-10-25-one-hour-active-idle-endurance.md) — 12 runsの完全配送、memory推移、散発timeout
-- [Stage 7 current policy baseline](worklog/2026-10-26-stage-7-current-policy-baseline.md) — timeout未満の同一connection復帰とkernel stop failure
-- [Stage 7 deferred restart](worklog/2026-10-26-stage-7-deferred-restart.md) — transport復帰確認後にbudgetを消費するopt-in policy
+- [Stage 7 長時間通信断時の現行ポリシー基準値](worklog/2026-10-26-stage-7-current-policy-baseline.md) — timeout未満の同一connection復帰とkernel stop failure
+- [Stage 7 transport復帰後のrestart保留](worklog/2026-10-26-stage-7-deferred-restart.md) — transport復帰確認後にbudgetを消費するopt-in policy
 
 ## 更新方針
 

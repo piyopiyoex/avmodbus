@@ -1,4 +1,4 @@
-# Stage 7 transport復帰後のdeferred restart
+# Stage 7 transport復帰後のrestart保留
 
 ## 目的
 
@@ -29,7 +29,7 @@ ROBOT_MULTINODE_TRANSPORT_READY_CONFIRMATIONS=2
 
 既定値はdeferred policy無効のままであり、AVModbus coreとFC-100 wire formatは変更していない。
 
-## Host検証
+## ホスト検証
 
 `ModbusUART`では、長時間gap後の通知が指定回数で止まることと、通常exchangeでは通知しないことをtestした。remote healthでは、
 timeoutだけではbudgetを消費しないこと、transport ready後に1回だけ消費すること、同じconnectionのACKとstale ACKを区別することを
@@ -42,7 +42,7 @@ hello_atomvm_modbus_robot:   127 tests, 0 failures
 
 両exampleで`mix format --check-formatted`も成功した。
 
-Controllerはcurrent policy、Drive / Sensorsはdeferred policyを有効にして、3 roleすべてで`mix atomvm.check`と
+Drive / Sensorsではdeferred policyを有効にし、Controllerを含む3 roleすべてで`mix atomvm.check`と
 `mix atomvm.packbeam`に成功した。`No avm_deps directory found`はstandard libraryをAtomVMのlib partitionへ導入済みの構成での
 既知の案内であり、build failureではない。
 
