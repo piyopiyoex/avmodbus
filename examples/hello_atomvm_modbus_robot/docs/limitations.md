@@ -146,6 +146,11 @@
   Sensors / Drive両probe成功までは10.690–12.119秒だった。ただしobserverのgapはadapter単位で、adapter再生成前の切断区間を
   含まない場合がある。2 runs / conditionは探索的な結果であり、非対称response blackoutを扱えないためdeferredはopt-inを維持する。
   詳細は[Stage 8反復試験](worklog/2026-10-26-stage-8-recovery-repeatability.md)を参照してください。
+- Stage 9の非対称response blackoutでは、Sensorsがrequestを受理しながら180 responsesを破棄する約83秒のfaultを各policyで2回
+  実行した。Currentは2 / 2でController transaction復帰後にrestartして両probeまで復旧し、deferredは2 / 2でrestartを保留したまま
+  180秒以内に復旧しなかった。4 runsすべてでDriveを維持した。`request_accepted`と`response_returned`はいずれもControllerによる
+  response受信を保証しないため、非対称障害には双方向成立を示す追加signalが必要である。詳細は
+  [Stage 9実機比較](worklog/2026-10-27-stage-9-asymmetric-response-blackout.md)を参照してください。
 - 同一Sensors bootで短時間のbranch切断を3回反復した試験では、90秒remote health timeoutへ達せず、同じconnection IDのまま
   3回とも復帰しました。faultを含む2 runsと後続runは両role 64 / 64、欠損・重複なしで完了し、restart budget消費と
   global queue rejectionは0でした。ただし操作時刻とserial logを共通時計で精密測定しておらず、Driveにもfaultを含むrunごとに

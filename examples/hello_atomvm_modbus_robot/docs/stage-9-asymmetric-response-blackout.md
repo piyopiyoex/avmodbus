@@ -1,6 +1,6 @@
 # Stage 9 非対称response blackout試験
 
-状態: 実機試験準備中
+状態: 完了
 
 ## 目的
 
@@ -60,7 +60,7 @@ Controllerだけで`MODBUS_TRACE_TRANSACTIONS=true`を指定する。Application
 
 ## 手順
 
-1. 3台をresetし、両remoteのreadiness ACK、mission完了、queue drainを確認する。
+1. Controller、Drive、Sensorsを順番にresetし、両remoteのreadiness ACK、mission完了、queue drainを確認する。
 2. Sensorsの`response_dropped`開始と、ControllerのUnit 2 transaction failure開始を記録する。
 3. Fault budget消費中もSensorsの`request_accepted`が継続するか確認する。
 4. 最後の`response_dropped`後、最初の`response_returned`とController transaction successを確認する。
@@ -80,3 +80,12 @@ Controllerだけで`MODBUS_TRACE_TRANSACTIONS=true`を指定する。Application
 
 Stage 9では新しいrecovery signalをまだ追加しない。まず既存signalの限界を同じevent schemaで再現し、双方向成立の判定に
 追加情報が必要かを決める。
+
+## 結果
+
+Current policyは2 / 2で1回のrestart後に復旧し、deferred policyは2 / 2でrestartを保留したまま180秒以内に復旧しなかった。
+4 runsすべてでDrive connectionを維持した。Request受理が継続する非対称障害では`transport_ready`が発生しないため、
+双方向成立を示す追加signalが必要と判断した。Stage 9ではsignalを実装せず、currentを既定、deferredをopt-inのまま維持する。
+
+実測値は[Stage 9実機比較](worklog/2026-10-27-stage-9-asymmetric-response-blackout.md)、長期的な判断は
+[ADR 0029](adr/0029-require-bidirectional-evidence-for-asymmetric-recovery.md)を参照する。

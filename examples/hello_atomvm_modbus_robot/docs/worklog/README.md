@@ -52,3 +52,4 @@
 - [2026-10-26: Stage 8 recovery-only report](2026-10-26-stage-8-recovery-report.md)
 - [2026-10-26: Stage 8 recovery policy反復試験](2026-10-26-stage-8-recovery-repeatability.md)
 - [2026-10-27: Stage 9 非対称障害の観測基盤](2026-10-27-stage-9-asymmetric-observation.md)
+- [2026-10-27: Stage 9 非対称response blackout実機比較](2026-10-27-stage-9-asymmetric-response-blackout.md)

@@ -29,9 +29,9 @@ Current policyのController / Drive / Sensorsと、Deferred policyのSensorsに�
 `mix atomvm.packbeam`に成功した。`No avm_deps directory found`はstandard libraryをAtomVMのlib partitionへ導入済みの構成での
 想定内messageである。
 
-## 残作業
+## 実機検証
 
-- Current / deferred各2 runsの3台実機比較
-- 双方向成立を示す追加signalの要否判断
+Current / deferred各2 runsの3台実機比較を完了した。実測値と判断は
+[Stage 9実機比較](2026-10-27-stage-9-asymmetric-response-blackout.md)を参照する。
 
 実機条件は[Stage 9試験計画](../stage-9-asymmetric-response-blackout.md)を正とする。

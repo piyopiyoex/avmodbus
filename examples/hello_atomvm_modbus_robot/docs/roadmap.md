@@ -4,7 +4,8 @@
 3台をphysical baselineとして固定し、N remote peersのscaleをhost modelで検証しました。さらに起動・復旧matrix、
 global resource budget、長時間通信断、約1時間の安定性試験まで完了しています。技術的blockerを特定して
 記録することも成果とします。Stage 7では、長時間通信断後のrestart timingを比較し、transport復帰後の自動回復まで確認しました。
-Stage 8ではcurrent / deferred policyを各4回比較し、deferredの4回すべてで自動復旧しました。
+Stage 8ではcurrent / deferred policyを各4回比較し、deferredの4回すべてで自動復旧しました。Stage 9では非対称response blackoutを
+各policyで2回比較し、request受理だけではresponse経路の復帰を判定できないことを確認しました。
 
 現在の実行方法は [サンプル README](../README.md)、設計判断は [ADR](adr/README.md)、実測結果は
 [作業記録](worklog/README.md) を正とします。
@@ -22,7 +23,7 @@ Stage 8ではcurrent / deferred policyを各4回比較し、deferredの4回す�
 | 6 | 完了 | startup / recovery matrix、global resource budget、長時間安定性 |
 | 7 | 完了 | 長時間通信断後のrestart timingを比較し、transport復帰後の自動回復を実機確認 |
 | 8 | 完了 | recovery reportを分離し、current 0 / 4、deferred 4 / 4を実機比較 |
-| 9 | 進行中 | 非対称response blackoutの観測を分離し、current / deferredを比較 |
+| 9 | 完了 | 非対称response blackoutをcurrent / deferred各2回で比較し、双方向signalの必要性を確認 |
 | 10 | 計画 | AtomVM distribution lifecycleの最小再現とresource調査 |
 | 11 | 計画 | Mission中断後のapplication recoveryを統合検証 |
 | 12 | 任意 | 必要な仮説が生じた場合だけ4台目で実機scaleを確認 |
@@ -204,9 +205,10 @@ current policyは約97秒の操作応答区間で、physical transport復帰前�
 ## Stage 8–12: 次期復旧実験
 
 詳細な順序、完了条件、維持する設計境界は[次期復旧実験](recovery-experiments.md)を正とする。Stage 8ではtrafficと
-recovery-onlyの成功判定を分離し、current / deferred policyの反復比較を完了した。Deferredは4 / 4で復旧したが、
-非対称障害を扱えないためopt-inを維持する。Stage 9の非対称障害とStage 10のruntime最小再現は独立して進められる。
-Stage 11はその結果をapplication recoveryへ反映し、Stage 12は具体的な実機仮説が生じた場合だけ行う。
+recovery-onlyの成功判定を分離し、current / deferred policyの反復比較を完了した。Stage 9では非対称障害を各policyで2回比較し、
+currentは2 / 2でrestart後に復旧、deferredは2 / 2でrestartを保留したまま未復旧だった。双方向signalは必要だが未実装のため、
+deferredはopt-inを維持する。Stage 10のruntime最小再現とStage 11のapplication recoveryへ進み、Stage 12は具体的な実機仮説が
+生じた場合だけ行う。
 
 ## 今回は対象としないこと
 
