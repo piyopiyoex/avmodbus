@@ -17,6 +17,7 @@
 - [Stage 8 recovery policy反復試験](stage-8-recovery-repeatability.md) — 120秒・300秒切断のmatrix、結果、採用判断
 - [Stage 9 非対称response blackout試験](stage-9-asymmetric-response-blackout.md) — request受理とresponse outcomeの比較条件
 - [Stage 10 `net_kernel` lifecycle最小再現](stage-10-net-kernel-lifecycle.md) — setup / stop failureの分離とresource観測
+- [Stage 11 application recovery統合試験](stage-11-application-recovery.md) — mission停止と非変更probeの判定境界
 - [起動・復旧test matrix](startup-recovery-matrix.md) — 起動順序、初回handshake failure、接続後障害の判定基準
 - [長時間通信断・安定性test plan](endurance-test-plan.md) — 30 / 90 / 180秒切断と約1時間運転の条件・判定方法
 - [マルチノードホストモデル](next-experiments.md) — N個のremote peer、公平性、障害、リソース上限の条件と結果

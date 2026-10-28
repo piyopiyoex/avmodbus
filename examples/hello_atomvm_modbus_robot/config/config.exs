@@ -154,7 +154,11 @@ multinode_remote_max_restarts =
 multinode_lifecycle_probe_after_ms =
   parse_integer.("ROBOT_MULTINODE_LIFECYCLE_PROBE_AFTER_MS", 0)
 
+multinode_application_recovery_probe_enabled =
+  parse_boolean.("ROBOT_MULTINODE_APPLICATION_RECOVERY_PROBE_ENABLED", false)
+
 sensor_mission_steps = parse_integer.("ROBOT_SENSOR_MISSION_STEPS", 3)
+sensor_mission_step_delay_ms = parse_integer.("ROBOT_SENSOR_MISSION_STEP_DELAY_MS", 0)
 
 drive_drop_first_reply_per_request =
   parse_boolean.("ROBOT_DRIVE_DROP_FIRST_REPLY_PER_REQUEST", false)
@@ -339,6 +343,10 @@ if sensor_mission_steps < 1 do
   raise ArgumentError, "ROBOT_SENSOR_MISSION_STEPS must be a positive integer"
 end
 
+if sensor_mission_step_delay_ms < 0 do
+  raise ArgumentError, "ROBOT_SENSOR_MISSION_STEP_DELAY_MS must be a non-negative integer"
+end
+
 serial = [
   peripheral: System.get_env("ATOMVM_UART_PERIPHERAL") || "UART1",
   speed: parse_integer.("ATOMVM_UART_SPEED", 9_600),
@@ -427,6 +435,8 @@ config :robot_sim,
   multinode_remote_ack_timeout_ms: multinode_remote_ack_timeout_ms,
   multinode_remote_max_restarts: multinode_remote_max_restarts,
   multinode_lifecycle_probe_after_ms: multinode_lifecycle_probe_after_ms,
+  multinode_application_recovery_probe_enabled: multinode_application_recovery_probe_enabled,
   sensor_mission_steps: sensor_mission_steps,
+  sensor_mission_step_delay_ms: sensor_mission_step_delay_ms,
   drive_drop_first_reply_per_request: drive_drop_first_reply_per_request,
   first_request_id: parse_integer.("ROBOT_FIRST_REQUEST_ID", 1)

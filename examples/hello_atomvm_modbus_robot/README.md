@@ -427,6 +427,7 @@ ROBOT_MODE=multinode ROBOT_ROLE=controller ATOMVM_UART_SPEED=115200 \
 | `ROBOT_MULTINODE_HEALTH_CHECK_MS` | `5000` | Controller が role 別 lease を確認する間隔 |
 | `ROBOT_MULTINODE_LEASE_MS` | `75000` | 最後の readiness から remote unavailable とするまでの期限 |
 | `ROBOT_SENSOR_MISSION_STEPS` | `3` | 起動後に直列実行する sensor-driven mission の step 数 |
+| `ROBOT_SENSOR_MISSION_STEP_DELAY_MS` | `0` | 完了したstepと次のsensor requestの間隔。物理操作を伴う試験用 |
 | `ROBOT_DRIVE_DROP_FIRST_REPLY_PER_REQUEST` | `false` | Drive が各 request の初回 reply を破棄する fault injection |
 | `MODBUS_FAULT_DROP_RESPONSES` | `0` | Server が受理後に破棄する FC-100 response 数。`0` は無効 |
 | `MODBUS_FAULT_MIN_PAYLOAD_BYTES` | `96` | response 破棄の対象にする最小 request payload bytes |
@@ -443,6 +444,7 @@ ROBOT_MODE=multinode ROBOT_ROLE=controller ATOMVM_UART_SPEED=115200 \
 | `ROBOT_MULTINODE_INITIAL_RECOVERY_ENABLED` | `true` | 初回readiness ACKが8秒以内に届かないremoteのdistributionをbounded restartする |
 | `ROBOT_MULTINODE_REMOTE_ACK_TIMEOUT_MS` | `90000` | remote が現在の connection ID の ACK を待つ期限。announce 間隔より大きくする |
 | `ROBOT_MULTINODE_REMOTE_MAX_RESTARTS` | `1` | 初回復旧とremote healthが共用するboard bootごとのrestart上限。0..10 |
+| `ROBOT_MULTINODE_APPLICATION_RECOVERY_PROBE_ENABLED` | `false` | Sensors再接続後にsample relayとguarded Drive statusだけを検証する。missionは再開しない |
 | `ROBOT_MULTINODE_GLOBAL_MAX_QUEUED_BYTES` | `8192` | Controllerの全client streamが共有するoutgoing payload上限 |
 | `ROBOT_MULTINODE_GLOBAL_MAX_QUEUED_CHUNKS` | `256` | Controllerの全client streamが共有するoutgoing chunk上限 |
 

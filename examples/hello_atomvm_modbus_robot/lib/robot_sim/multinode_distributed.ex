@@ -14,6 +14,7 @@ defmodule RobotSim.MultinodeDistributed do
   alias DisterlProbe.{ModbusUART, Payload, PollScheduler, QueueBudget, Session}
 
   alias RobotSim.{
+    ApplicationRecovery,
     ConcurrentTraffic,
     ConnectionTrace,
     Drive,
@@ -149,8 +150,18 @@ defmodule RobotSim.MultinodeDistributed do
                               :multinode_lifecycle_probe_after_ms,
                               0
                             )
+  @application_recovery_probe_enabled Application.compile_env(
+                                        :robot_sim,
+                                        :multinode_application_recovery_probe_enabled,
+                                        false
+                                      )
   @initial_connection_observation_ms 8_000
   @sensor_mission_steps Application.compile_env(:robot_sim, :sensor_mission_steps, 3)
+  @sensor_mission_step_delay_ms Application.compile_env(
+                                  :robot_sim,
+                                  :sensor_mission_step_delay_ms,
+                                  0
+                                )
   @mission_retries Application.compile_env(:robot_sim, :mission_retries, 1)
   @drive_drop_first_reply_per_request Application.compile_env(
                                         :robot_sim,
@@ -1198,6 +1209,7 @@ defmodule RobotSim.MultinodeDistributed do
     receive do
       {MissionWorker, ^mission, {:ok, result}} when is_pid(mission) ->
         IO.puts("modbus_robot_multinode: sensor mission complete state=#{inspect(result.rover)}")
+        IO.puts("modbus_robot_application_recovery: outcome=completed action=none")
         IO.puts("modbus_robot_multinode: complete Drive and Sensors remote messaging")
         remotes = run_soak_if_enabled(remotes)
         schedule_traffic_if_enabled(@traffic_start_delay_ms)
@@ -1205,9 +1217,24 @@ defmodule RobotSim.MultinodeDistributed do
 
       {MissionWorker, ^mission, {:error, reason}} when is_pid(mission) ->
         IO.puts("modbus_robot_multinode: sensor mission stopped reason=#{inspect(reason)}")
+        log_application_failure(reason)
 
         recovery = start_recovery_if_indeterminate(reason)
         controller_loop(remotes, adapters, nil, recovery, endurance)
+
+      {ApplicationRecovery, worker, {:ok, snapshot}} when is_pid(worker) ->
+        IO.puts(
+          "modbus_robot_application_recovery: probe=verified " <>
+            "boot_id=#{snapshot.boot_id} sample=#{inspect(snapshot.sample)} " <>
+            "state=#{inspect(snapshot.rover)}"
+        )
+
+        controller_loop(remotes, adapters, mission, recovery, endurance)
+
+      {ApplicationRecovery, worker, {:error, reason}} when is_pid(worker) ->
+        IO.puts("modbus_robot_application_recovery: probe=failed reason=#{inspect(reason)}")
+
+        controller_loop(remotes, adapters, mission, recovery, endurance)
 
       {RecoveryWorker, ^recovery, {:ok, snapshot}} when is_pid(recovery) ->
         IO.puts(
@@ -1338,6 +1365,7 @@ defmodule RobotSim.MultinodeDistributed do
 
       trace_connection(:recovery_verified, role: restarted_role)
       trace_maintained_peer(peer_role, Map.get(remotes, peer_role))
+      start_application_recovery_probe_if_enabled(restarted_role)
     else
       {:error, reason} ->
         IO.puts("modbus_robot_multinode: recovery probe failed #{inspect(reason)}")
@@ -1428,6 +1456,7 @@ defmodule RobotSim.MultinodeDistributed do
       {@sensors_name, identity(:sensors)},
       {@drive_name, identity(:drive)},
       steps: @sensor_mission_steps,
+      step_delay_ms: @sensor_mission_step_delay_ms,
       first_request_id: Session.new_id(),
       timeout_ms: @probe_timeout_ms,
       max_retries: @mission_retries,
@@ -1458,6 +1487,37 @@ defmodule RobotSim.MultinodeDistributed do
     do: indeterminate_command?(reason)
 
   defp indeterminate_command?(_reason), do: false
+
+  defp log_application_failure(reason) do
+    classification = ApplicationRecovery.classify_failure(reason)
+
+    IO.puts(
+      "modbus_robot_application_recovery: outcome=#{classification.outcome} " <>
+        "action=#{classification.action} step=#{inspect(classification.step)} " <>
+        "reason=#{inspect(classification.reason)}"
+    )
+  end
+
+  defp start_application_recovery_probe_if_enabled(:sensors) do
+    if @application_recovery_probe_enabled do
+      worker =
+        ApplicationRecovery.start(
+          self(),
+          {@sensors_name, identity(:sensors)},
+          {@drive_name, identity(:drive)},
+          request_id: Session.new_id(),
+          timeout_ms: @probe_timeout_ms,
+          max_retries: @mission_retries,
+          trace: true
+        )
+
+      IO.puts("modbus_robot_application_recovery: probe=started worker=#{inspect(worker)}")
+    end
+
+    :ok
+  end
+
+  defp start_application_recovery_probe_if_enabled(_role), do: :ok
 
   defp start_traffic_if_enabled(adapters) do
     if @traffic_samples > 0 do

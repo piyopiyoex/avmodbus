@@ -25,6 +25,20 @@ defmodule RobotSim.SensorMissionTest do
 
     assert SensorMission.run(self(), self(), first_request_id: -1) ==
              {:error, :invalid_first_request_id}
+
+    assert SensorMission.run(self(), self(), step_delay_ms: -1) ==
+             {:error, :invalid_step_delay_ms}
+  end
+
+  test "applies a configured delay only between completed steps" do
+    sensors = start_supervised!(Sensors)
+    drive = start_supervised!(Drive)
+    started_at = System.monotonic_time(:millisecond)
+
+    assert {:ok, %{steps: [%{step: 1}, %{step: 2}]}} =
+             SensorMission.run(sensors, drive, steps: 2, step_delay_ms: 20)
+
+    assert System.monotonic_time(:millisecond) - started_at >= 20
   end
 
   test "stops with an indeterminate outcome instead of executing after a Drive reboot" do

@@ -209,7 +209,8 @@ recovery-onlyの成功判定を分離し、current / deferred policyの反復比
 currentは2 / 2でrestart後に復旧、deferredは2 / 2でrestartを保留したまま未復旧だった。双方向signalは必要だが未実装のため、
 deferredはopt-inを維持する。Stage 10では`net_kernel` lifecycleを分離し、healthy再接続とbranch切断中のsetup failureを比較した。
 60秒・120秒probeで過去のstop timeoutは再現せず、公開APIで特定できる責任境界を記録した。次はStage 11のapplication recoveryへ進み、
-Stage 12は具体的な実機仮説が生じた場合だけ行う。
+Stage 11ではmission停止を`completed / aborted / indeterminate`に分け、Sensors再接続後の非変更probeをhost検証した。実機で
+mission中のbranch切断と復旧を確認する。Stage 12は具体的な実機仮説が生じた場合だけ行う。
 
 ## 今回は対象としないこと
 

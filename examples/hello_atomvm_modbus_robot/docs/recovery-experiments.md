@@ -54,12 +54,16 @@ physical transportだけの復帰は再現した。ExampleはAPI返却、登録�
 
 ## Stage 11: Application recovery
 
+状態: 実機試験準備中
+
 - [ ] Mission中にSensors branchを切断し、復旧後にsensor dataを再取得する
-- [ ] Driveへの未確定commandと重複実行防止を再検証する
-- [ ] 正常継続、明示的中断、未確定状態を区別する
+- [x] Driveへの未確定commandと重複実行防止をhost testで再検証する
+- [x] 正常継続、明示的中断、未確定状態を分類する
 - [ ] 復旧後の小規模traffic、queue、memory、application stateを確認する
 
 Durable stateと自動mission resumeは、必要性が確認されるまで実装しない。
+実機条件は[Stage 11試験計画](stage-11-application-recovery.md)、実装とhost結果は
+[作業記録](worklog/2026-10-28-stage-11-application-recovery.md)を参照する。
 
 ## Stage 12: 実機スケール（任意）
 

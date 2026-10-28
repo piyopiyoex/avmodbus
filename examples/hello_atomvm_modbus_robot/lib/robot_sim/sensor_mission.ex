@@ -28,19 +28,33 @@ defmodule RobotSim.SensorMission do
   def run(sensors, drive, options \\ []) do
     steps = Keyword.get(options, :steps, @default_steps)
     first_request_id = Keyword.get(options, :first_request_id, @default_first_request_id)
+    step_delay_ms = Keyword.get(options, :step_delay_ms, 0)
 
-    validate_and_run(sensors, drive, steps, first_request_id, options)
+    validate_and_run(sensors, drive, steps, first_request_id, step_delay_ms, options)
   end
 
-  defp validate_and_run(_sensors, _drive, steps, _first_request_id, _options)
+  defp validate_and_run(_sensors, _drive, steps, _first_request_id, _step_delay_ms, _options)
        when not is_integer(steps) or steps < 1,
        do: {:error, :invalid_steps}
 
-  defp validate_and_run(_sensors, _drive, _steps, first_request_id, _options)
+  defp validate_and_run(_sensors, _drive, _steps, first_request_id, _step_delay_ms, _options)
        when not is_integer(first_request_id) or first_request_id < 0,
        do: {:error, :invalid_first_request_id}
 
-  defp validate_and_run(sensors, drive, steps, first_request_id, options) do
+  defp validate_and_run(
+         _sensors,
+         _drive,
+         _steps,
+         _first_request_id,
+         step_delay_ms,
+         _options
+       )
+       when not is_integer(step_delay_ms) or step_delay_ms < 0,
+       do: {:error, :invalid_step_delay_ms}
+
+  defp validate_and_run(sensors, drive, steps, first_request_id, step_delay_ms, options) do
+    options = Keyword.put(options, :step_delay_ms, step_delay_ms)
+
     with {:ok, boot_id} <- Controller.drive_identity(drive, options),
          guarded_options = Keyword.put(options, :expected_boot_id, boot_id),
          {:ok, completed, status_request_id} <-
@@ -71,6 +85,7 @@ defmodule RobotSim.SensorMission do
       }
 
       trace_step(Keyword.get(options, :trace, false), completed_step)
+      delay_before_next_step(remaining, Keyword.get(options, :step_delay_ms, 0))
 
       run_steps(
         sensors,
@@ -95,4 +110,9 @@ defmodule RobotSim.SensorMission do
         "command=#{inspect(step.command)} state=#{inspect(step.rover)}"
     )
   end
+
+  defp delay_before_next_step(remaining, delay_ms) when remaining > 1 and delay_ms > 0,
+    do: Process.sleep(delay_ms)
+
+  defp delay_before_next_step(_remaining, _delay_ms), do: :ok
 end

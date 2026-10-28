@@ -54,3 +54,4 @@
 - [2026-10-27: Stage 9 非対称障害の観測基盤](2026-10-27-stage-9-asymmetric-observation.md)
 - [2026-10-27: Stage 9 非対称response blackout実機比較](2026-10-27-stage-9-asymmetric-response-blackout.md)
 - [2026-10-28: Stage 10 lifecycle probe観測基盤](2026-10-28-stage-10-lifecycle-probe.md)
+- [2026-10-28: Stage 11 application recovery観測基盤](2026-10-28-stage-11-application-recovery.md)
