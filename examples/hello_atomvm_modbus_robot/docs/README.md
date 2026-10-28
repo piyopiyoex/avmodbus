@@ -4,7 +4,7 @@
 
 ## 利用方法
 
-- [サンプル README](../README.md) — ホストシミュレーション、Stage 1–9の実行方法、座標規則、設定
+- [サンプル README](../README.md) — ホストシミュレーション、実機実行、座標規則、設定
 
 現在動く機能と再現手順はサンプル README を正とします。
 
@@ -13,7 +13,7 @@
 - [ロードマップ](roadmap.md) — Stage ごとの完了条件、実証済み範囲、対象外の項目
 - [接続復旧とリソース管理の実験結果](reliability-backlog.md) — Stage 6の実施順序、結果、任意の追加検証
 - [長時間通信断後の復旧調査](long-outage-recovery-plan.md) — Stage 7の仮説、lifecycle event、比較手順
-- [Stage 8–12 次期復旧実験](recovery-experiments.md) — recovery再現性、非対称障害、runtime、application recoveryの計画
+- [Stage 8–12 復旧実験](recovery-experiments.md) — Stage 8–11の結果と、任意のStage 12を行う条件
 - [Stage 8 recovery policy反復試験](stage-8-recovery-repeatability.md) — 120秒・300秒切断のmatrix、結果、採用判断
 - [Stage 9 非対称response blackout試験](stage-9-asymmetric-response-blackout.md) — request受理とresponse outcomeの比較条件
 - [Stage 10 `net_kernel` lifecycle最小再現](stage-10-net-kernel-lifecycle.md) — setup / stop failureの分離とresource観測

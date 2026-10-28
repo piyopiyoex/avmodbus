@@ -1,7 +1,7 @@
-# Stage 8–12 次期復旧実験
+# Stage 8–12 復旧実験
 
-Stage 9までの結果を基準に、3台構成でruntime lifecycleとapplication recoveryを調べる。
-4台目は具体的な実機仮説が生じた場合だけ使用する。
+3台構成でrecovery policy、非対称障害、runtime lifecycle、application recoveryを調べた。Stage 8–11は完了している。
+Stage 12の4台目は、host modelでは答えられない具体的な実機仮説が生じた場合だけ使用する。
 
 ## Stage 8: Recovery policyの再現性
 

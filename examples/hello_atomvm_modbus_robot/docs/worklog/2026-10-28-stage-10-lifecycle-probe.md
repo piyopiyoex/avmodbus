@@ -1,4 +1,4 @@
-# Stage 10 lifecycle probe観測基盤
+# Stage 10 lifecycle probe実機検証
 
 ## 目的
 

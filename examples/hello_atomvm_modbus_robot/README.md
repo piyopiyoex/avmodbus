@@ -6,7 +6,7 @@ AtomVM の distributed Erlang over Modbus RTU を、通信確認だけでなく�
 Host simulationから2-node application、3台のModbus multidrop、3-node distributed Erlang、sensor-driven missionまで
 段階的に実証しています。現在は3台を実機baselineとし、共有busのfairness、bounded queue、起動・接続復旧、長時間通信断、
 約1時間の安定性を検証しました。Stage 8–11では復旧policy、非対称障害、`net_kernel` lifecycle、mission中断後の
-application recoveryを調査しています。結果は探索的な実機baselineであり、deferred policyとapplication recovery probeは
+application recoveryを調査しました。結果は探索的な実機baselineであり、deferred policyとapplication recovery probeは
 opt-inのままです。
 
 既存の[`hello_atomvm_modbus_disterl`](../hello_atomvm_modbus_disterl/README.md)をlocal path dependencyとして再利用し、

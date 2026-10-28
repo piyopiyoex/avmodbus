@@ -203,9 +203,9 @@ current policyは約97秒の操作応答区間で、physical transport復帰前�
 対象外であること、general-purpose recoveryではないことは[作業記録](worklog/2026-10-26-stage-7-deferred-restart.md)と
 [既知の制約](limitations.md)に残す。
 
-## Stage 8–12: 次期復旧実験
+## Stage 8–12: 復旧実験
 
-詳細な順序、完了条件、維持する設計境界は[次期復旧実験](recovery-experiments.md)を正とする。Stage 8ではtrafficと
+詳細な順序、完了条件、維持する設計境界は[Stage 8–12復旧実験](recovery-experiments.md)を正とする。Stage 8ではtrafficと
 recovery-onlyの成功判定を分離し、current / deferred policyの反復比較を完了した。Stage 9では非対称障害を各policyで2回比較し、
 currentは2 / 2でrestart後に復旧、deferredは2 / 2でrestartを保留したまま未復旧だった。双方向signalは必要だが未実装のため、
 deferredはopt-inを維持する。Stage 10では`net_kernel` lifecycleを分離し、healthy再接続とbranch切断中のsetup failureを比較した。
