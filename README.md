@@ -21,7 +21,7 @@ AtomVM 向けのファームウェアを作る場合は、AtomVM 側の依存関
 
 初めて Modbus を使う場合は、次の順に読むと進めやすいです。
 
-1. [Modbus の基礎](docs/modbus-basics.md) — RS485 との違いや基本用語
+1. [Modbus の基礎](docs/modbus-basics.md) — RS485 との関係や基本用語
 2. [はじめ方](docs/getting-started.md) — ライブラリの追加と読み書き
 3. [XIAO ESP32-C5 実機チュートリアル](examples/hello_atomvm_modbus/README.md) — 2 台の基板で RS485 通信
 
@@ -85,12 +85,12 @@ mix test
 
 設計や検証結果を調べる場合は、次の資料を参照してください。
 
-- [ドキュメント一覧と更新方針](https://github.com/piyopiyoex/avmodbus/blob/main/docs/README.md) — 資料の分類とメンテナンス方法
+- [ドキュメント一覧と更新方針](https://github.com/piyopiyoex/avmodbus/blob/v0.1.0/docs/README.md) — 資料の分類とメンテナンス方法
 - [開発者ガイド](docs/development.md) — テストと高度な使い方
 - [アーキテクチャ](docs/architecture.md) — 内部構造と設計方針
-- [開発記録](https://github.com/piyopiyoex/avmodbus/blob/main/docs/development/worklog.md) /
-  [設計判断](https://github.com/piyopiyoex/avmodbus/blob/main/docs/adr/README.md) — 実験結果と判断理由
-- [リリース前チェックリスト](https://github.com/piyopiyoex/avmodbus/blob/main/docs/development/release-checklist.md)
+- [開発資料](https://github.com/piyopiyoex/avmodbus/blob/v0.1.0/docs/development/README.md) /
+  [設計判断](https://github.com/piyopiyoex/avmodbus/blob/v0.1.0/docs/adr/README.md) — 検証結果と判断理由
+- [リリース前チェックリスト](https://github.com/piyopiyoex/avmodbus/blob/v0.1.0/docs/development/release-checklist.md)
 
 ## 動作環境と注意点
 
@@ -102,7 +102,7 @@ Modbus TCP の暗号化・相互認証には未対応です。暗号化なしに
 **TCP Server は信頼できるネットワーク内で使用してください**。
 また、ESP32-C5 の TCP 接続数には実機で確認した範囲があります。
 詳細は
-[既知の制約](https://github.com/piyopiyoex/avmodbus/blob/main/docs/limitations.md)
+[既知の制約](https://github.com/piyopiyoex/avmodbus/blob/v0.1.0/docs/limitations.md)
 を参照してください。
 
 ## ライセンス

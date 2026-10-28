@@ -24,8 +24,8 @@ mix docs --warnings-as-errors
 ```
 
 - [x] 上記がすべて成功する
-- [ ] リリース対象コミットで GitHub Actions の `test` と `interoperability` が成功する
-- [ ] `pymodbus` / `libmodbus` の相互運用テストが seed `12345` と `54321` で成功する
+- [x] リリース対象コミットで GitHub Actions の `test` と `interoperability` が成功する
+- [x] `pymodbus` / `libmodbus` の相互運用テストが seed `12345` と `54321` で成功する
 - [x] 対象 AtomVM でサンプルの `mix atomvm.check` とサイズ測定が成功する
 - [x] RTU / RS485 の基本読み書きを実機で再確認し、firmware・配線・設定を記録する
 - [x] [互換性表](../compatibility.md)に検証済みの構成を反映する

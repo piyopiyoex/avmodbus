@@ -25,4 +25,4 @@ response復帰後180秒以内にdistributionが復旧しなかった。
 - Deferred policyは長時間の双方向通信断には有効だが、非対称response blackoutには使用できない。
 - 双方向signalの設計では、diagnostic log、Server adapterの返却、UART送信、Controller受信の境界を区別する。
 - AVModbus coreへ実験固有のrecovery機構を追加しない。
-- 実測条件と結果は[Stage 9実機比較](../worklog/2026-10-27-stage-9-asymmetric-response-blackout.md)を正とする。
+- 実測条件と結果は [検証結果](../worklog/README.md) を正とする。

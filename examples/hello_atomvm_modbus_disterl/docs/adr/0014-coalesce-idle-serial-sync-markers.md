@@ -27,4 +27,4 @@ coalescing条件を再確認する必要がある。
 
 XIAO ESP32-C5実機ではServerを約210秒先行させた後にClientを起動し、genuine distribution handshakeとremote
 ping/pong 3 / 3を完了した。詳細は
-[Server先行時のidle sync coalescing実機検証](../worklog/2026-10-16-server-idle-sync-coalescing.md)に記録する。
+[検証結果](../worklog/README.md) に記録する。

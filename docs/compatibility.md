@@ -12,8 +12,8 @@
 | AVModbus ↔ `pymodbus` | TCP / RTU / ASCII | ホスト上の TCP・仮想シリアル、`pymodbus` 3.15.0 | Client / Server の両方向でテスト |
 | AVModbus ↔ `libmodbus` | TCP / RTU | ホスト上の TCP・仮想シリアル、`libmodbus` 3.1.11 | Client / Server の両方向でテスト |
 
-外部実装とのテストは 2026-10-14 に固定 seed 2 種類でローカル実行しました。
-**GitHub Actions 上での成功は、この記録だけでは確認できません。**
+外部実装とのテストは 2026-10-14 に固定 seed 2 種類でローカル実行し、2026-10-28 の
+`v0.1.0` release PR でも同じ seed `12345` / `54321` の GitHub Actions が成功しました。
 ホスト上の仮想シリアル試験は、実機の RS485 試験とは区別しています。
 2026-10-28 の RTU workflow は 9,600 baud、8N1、Unit ID `1`、20 ms gap で実施しました。
 AtomVM `a1069573` は `18b35870` に distribution tick 用の local patch を加えた版です。
@@ -40,6 +40,4 @@ distributed Erlang carrier は AVModbus core の機能ではなく、production-
 日付、AVModbus・AtomVM のバージョン、機器、配線、通信設定、試した操作、
 成功・失敗の件数、再現手順を記録してください。
 メモリ測定やエラーログがあれば一緒に残します。
-実験結果の背景は
-[開発記録](https://github.com/piyopiyoex/avmodbus/blob/main/docs/development/worklog.md)
-を参照してください。
+検証手順と背景は [開発資料](development/README.md) を参照してください。

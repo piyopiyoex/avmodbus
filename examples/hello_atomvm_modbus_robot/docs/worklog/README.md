@@ -1,57 +1,93 @@
-# 作業記録
+# 検証結果
 
-ホストテスト、実機試験、障害調査など、再現可能な時系列の記録を置きます。現在の利用方法は
-[サンプル README](../../README.md)、長期的な判断は [ADR](../adr/README.md) を正とします。
+Stage 0〜11 の代表的な結果をまとめます。個別の console log と操作時刻は Git の履歴、
+現在の実行方法は [サンプル README](../../README.md)、設計判断は [ADR](../adr/README.md) を参照してください。
 
-## 記録
+## 実機 baseline
 
-- [2026-10-18: Stage 0 ホスト専用ローバーシミュレーション](2026-10-18-stage-0-host-simulation.md)
-- [2026-10-18: Stage 1 ホストアプリケーションプロトコル](2026-10-18-stage-1-host-application-protocol.md)
-- [2026-10-18: Stage 1 AtomVMビルド基盤](2026-10-18-stage-1-atomvm-build.md)
-- [2026-10-18: Stage 1 2台の分散ミッション](2026-10-18-stage-1-two-board-mission.md)
-- [2026-10-18: Stage 1 実行中のDrive再起動](2026-10-18-stage-1-drive-reboot.md)
-- [2026-10-19: Stage 2 3台の標準Modbusマルチドロップ](2026-10-19-stage-2-multidrop.md)
-- [2026-10-19: Stage 3 3ノード分散Erlang](2026-10-19-stage-3-three-node-distribution.md)
-- [2026-10-19: Stage 3 アプリケーション通信の連続試験](2026-10-19-stage-3-application-soak.md)
-- [2026-10-19: Stage 3 通信中のリモート再起動](2026-10-19-stage-3-soak-reboot.md)
-- [2026-10-19: Stage 3 Controller経由のセンサー中継](2026-10-19-stage-3-controller-relay.md)
-- [2026-10-19: Stage 4 センサー駆動の適応ミッション](2026-10-19-stage-4-adaptive-mission.md)
-- [2026-10-19: Stage 4 リモート健全性と独立復旧](2026-10-19-stage-4-remote-health.md)
-- [2026-10-20: Stage 4 応答消失の障害注入](2026-10-20-stage-4-reply-loss-fault-injection.md)
-- [2026-10-20: プロデューサー同時通信の基準値と中負荷構成](2026-10-20-concurrent-traffic.md)
-- [2026-10-20: 同時通信の過負荷と長時間試験](2026-10-20-overload-and-long-run.md)
-- [2026-10-20: Application ACKによるフロー制御の実機検証](2026-10-20-ack-flow-control.md)
-- [2026-10-20: Server応答遮断と非対称half-open connection](2026-10-20-response-blackout.md)
-- [2026-10-20: ACK timeoutによるリモート分散接続の再起動](2026-10-20-response-blackout-recovery.md)
-- [2026-10-20: Readiness ACKによるアイドル接続の復旧](2026-10-20-remote-readiness-health.md)
-- [2026-10-20: 256+256 フロー制御付き長時間試験](2026-10-20-extended-flow-controlled-run.md)
-- [2026-10-21: 物理RS485切断・再接続](2026-10-21-physical-rs485-disconnect.md)
-- [2026-10-21: ミッション実行とヘルスチェックループの分離](2026-10-21-mission-health-loop.md)
-- [2026-10-21: Drive command結果の照合](2026-10-21-drive-command-reconciliation.md)
-- [2026-10-23: 結果不明ミッション後の復旧記録](2026-10-23-indeterminate-recovery-snapshot.md)
-- [2026-10-23: 1回限りの応答障害と安定化確認](2026-10-23-one-shot-response-fault.md)
-- [2026-10-23: 応答遮断中の通信開始と復旧](2026-10-23-traffic-start-recovery.md)
-- [2026-10-23: Readiness ACK間隔とtimeout余裕の基準値](2026-10-23-remote-health-gap-baseline.md)
-- [2026-10-23: 同時通信中のSensors分岐切断・復旧](2026-10-23-physical-branch-during-traffic.md)
-- [2026-10-23: 256+256通信でのreadiness ACK間隔の長時間測定](2026-10-23-extended-ack-gap-run.md)
-- [2026-10-23: 最新AtomVM v0.7 snapshotの3台実機検証](2026-10-23-latest-v07-runtime.md)
-- [2026-10-24: 最新AtomVM v0.7 snapshotでの32+32同時通信](2026-10-24-latest-v07-concurrent-traffic.md)
-- [2026-10-24: Peer descriptor駆動のControllerトランスポート構成](2026-10-24-peer-driven-controller-setup.md)
-- [2026-10-24: スケーラブルなマルチノードホストモデル](2026-10-24-scalable-multinode-host-model.md)
-- [2026-10-24: 起動・復旧test matrixのhost・3台実機baseline](2026-10-24-startup-recovery-matrix.md)
-- [2026-10-24: 初回接続timeout後のbounded recovery](2026-10-24-initial-connection-recovery.md)
-- [2026-10-24: Controller global queue budgetのhost・3台実機検証](2026-10-24-global-queue-budget.md)
-- [2026-10-24: 長時間通信断・安定性試験の計測基盤](2026-10-24-endurance-instrumentation.md)
-- [2026-10-24: Sensors branchの短時間切断と長時間復旧](2026-10-24-extended-fault-recovery.md)
-- [2026-10-25: Sensors branchのidle 180秒切断](2026-10-25-idle-180-second-disconnect.md)
-- [2026-10-25: Sensors branchの同一boot反復切断](2026-10-25-repeated-branch-disconnect.md)
-- [2026-10-25: 約1時間のactive / idle耐久試験](2026-10-25-one-hour-active-idle-endurance.md)
-- [2026-10-25: Stage 7 長時間通信断復旧の計測基盤](2026-10-25-stage-7-recovery-instrumentation.md)
-- [2026-10-26: Stage 7 長時間通信断時の現行ポリシー基準値](2026-10-26-stage-7-current-policy-baseline.md)
-- [2026-10-26: Stage 7 transport復帰後のrestart保留](2026-10-26-stage-7-deferred-restart.md)
-- [2026-10-26: Stage 8 recovery-only report](2026-10-26-stage-8-recovery-report.md)
-- [2026-10-26: Stage 8 recovery policy反復試験](2026-10-26-stage-8-recovery-repeatability.md)
-- [2026-10-27: Stage 9 非対称障害の観測基盤](2026-10-27-stage-9-asymmetric-observation.md)
-- [2026-10-27: Stage 9 非対称response blackout実機比較](2026-10-27-stage-9-asymmetric-response-blackout.md)
-- [2026-10-28: Stage 10 lifecycle probe実機検証](2026-10-28-stage-10-lifecycle-probe.md)
-- [2026-10-28: Stage 11 application recovery統合検証](2026-10-28-stage-11-application-recovery.md)
+| Role | USB serial | Modbus role |
+| --- | --- | --- |
+| Controller | `38:44:BE:A5:05:14` | Client |
+| Drive | `38:44:BE:A5:04:DC` | Server、Unit ID `1` |
+| Sensors | `10:BD:A3:CF:09:04` | Server、Unit ID `2` |
+
+- Device: Seeed Studio XIAO ESP32-C5 × 3、HW-519 × 3、shared 2-wire RS485
+- Runtime: AtomVM `release-0.7` `18b35870` + local tick patch `a1069573`
+- Multinode profile: 115,200 baud、20 ms poll、96-byte chunk
+- 検証期間: 2026-10-18〜28
+
+## Application milestone
+
+| Stage | 主な結果 |
+| ---: | --- |
+| 0 | reference mission が `{x_mm: 100, y_mm: 50, heading_deg: 90}` で完了 |
+| 1 | 2-node genuine distribution mission、same-ID retry、Drive reboot 後の state 不一致検出 |
+| 2 | 3-device standard Modbus、60 cycles / 120 requests、error 0、各 Server reboot から復帰 |
+| 3 | Controller から Drive / Sensors の2 connection、remote messaging、relay、独立 reboot |
+| 4 | sensor-driven mission、readiness lease、reply-loss retry、Drive boot guard |
+| 5 | 1 / 2 / 3 / 8 / 32 peers の host model で round-robin fairness と single active transaction |
+| 6 | 全6起動順序、bounded initial recovery、global queue budget、endurance |
+| 7〜9 | 長時間 branch fault と非対称 response blackout で recovery policy を比較 |
+| 10 | `net_kernel` lifecycle と distribution setup failure を分離 |
+| 11 | Sensors fault で mission を停止し、復旧後に非変更 status を取得 |
+
+## Traffic と endurance
+
+| Scenario | 結果 |
+| --- | --- |
+| 64 + 64、window 1 ACK | 128 / 128、欠損・重複なし、163.039 s |
+| 256 + 256 campaign A | 512 / 512、627.792 s、queue high-water 279 / 162 bytes |
+| 256 + 256 campaign B | 512 / 512、783.317 s、minimum Controller heap 68,848 bytes |
+| 64分30秒 active / idle | 12 / 12 runs、Drive / Sensors 各192 messages、restart 0、global rejection 0 |
+
+endurance では periodic free heap の単調減少を観測しませんでした。Sensors の retry 可能な transaction
+timeout は8件あり、error-free transport や数日間の安定性を示す結果ではありません。
+
+## Startup と resource budget
+
+- 3 role の全6起動順序で、両 remote は約4.5〜7.2秒で接続
+- 初回 setup timeout 後の bounded remote restart により、board reset なしで対象 peer が復旧
+- Controller global budget は ACK、session reset、adapter stop で解放されることを host test で確認
+- 3台 campaign では global rejection 0、queue は停止条件までに drain
+- 32-peer host model の configured payload 合計 262,144 bytes は実機 minimum heap より大きく、default の単純複製は不可
+
+## Long outage recovery
+
+Sensors branch だけを外し、Drive を維持して比較しました。
+
+| Failure model | Current | Deferred |
+| --- | --- | --- |
+| 120 / 300秒 branch fault、各4 runs | 0 / 4 | 4 / 4 |
+| 約83秒の response blackout、各2 runs | 2 / 2 | 0 / 2 |
+
+Deferred policy の branch fault では、観測した FC-100 gap 166.510〜393.908秒の後、transport ready から
+10.690〜12.119秒で Sensors / Drive 両 probe が成功しました。Current は transport 復帰前に restart budget を
+消費しました。一方、request を受理し続ける非対称 blackout では deferred policy が復帰を検出できませんでした。
+4 runs すべてで Drive connection は維持されました。
+
+この結果から current を既定、deferred を opt-in のまま維持しています。
+
+## Runtime lifecycle
+
+- Healthy `net_kernel` stop / start は登録解除 88 ms、再開まで合計 204 msで完了
+- branch 切断中の60秒 / 120秒 probe では stop は67 msで完了したが、再開後の distribution setup が timeout
+- 過去に観測した `net_kernel_stop_timeout` は再現せず、発生条件を一般化できなかった
+- setup failure 中の minimum free heap 低下は process 数と owner mailbox だけでは説明できなかった
+
+AtomVM 内部 resource の原因は特定せず、この repository では再現条件と application 側の責任境界だけを記録します。
+
+## Application recovery
+
+Sensors branch を mission step 1 後に切断した scenario では、step 2 の sample timeout を
+`aborted / stop` として扱いました。Drive connection を維持し、Sensors 復旧後に fresh sample と guarded status を
+取得しました。Drive state は `{x_mm: 100, y_mm: 0, heading_deg: 0}` のままで、movement の再実行や
+mission の自動 resume は発生しませんでした。
+
+## 判断
+
+- 3台を physical baseline とし、scale は host model を先に使う
+- transport、distribution、application recovery の成功を別々に判定する
+- application command の結果が未確定なら自動再実行せず停止する
+- durable state と automatic resume は実装しない
+
+残る保証外の範囲は [既知の制約](../limitations.md)、次の着手条件は [ロードマップ](../roadmap.md) を参照してください。
