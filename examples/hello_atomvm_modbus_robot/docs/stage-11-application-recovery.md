@@ -1,6 +1,6 @@
 # Stage 11 application recovery統合試験
 
-状態: 実機試験準備中
+状態: 完了
 
 ## 目的
 
@@ -20,11 +20,11 @@ Mission結果は次の3種類に分ける。
 Sensors再接続後のprobeは、fresh sample取得、Driveへのrelay、boot ID付き`:status`だけを実行する。Movement command、mission resume、
 durable state更新は行わない。Probeは`ROBOT_MULTINODE_APPLICATION_RECOVERY_PROBE_ENABLED=true`のときだけ有効にする。
 
-## 最初の実機scenario
+## 実機scenario
 
-1. Controllerだけ`ROBOT_SENSOR_MISSION_STEP_DELAY_MS=10000`とし、3台をclean bootする
+1. Controllerだけ`ROBOT_SENSOR_MISSION_STEP_DELAY_MS=120000`とし、3台をclean bootする
 2. 最初のsensor-driven mission stepを確認する
-3. 10秒のstep間隔中にSensors branchを切断する
+3. 120秒のstep間隔中にSensors branchを切断する
 4. Missionが`aborted / stop`で終了し、Driveが継続することを確認する
 5. Remote healthがrestartを保留した後にbranchを復帰する
 6. Sensors / Drive両probeの成功後、application recovery probeを確認する
@@ -42,3 +42,13 @@ durable state更新は行わない。Probeは`ROBOT_MULTINODE_APPLICATION_RECOVE
 - 復旧後のqueue、memory、application stateをworklogに残す
 
 Indeterminate commandは既存のboot ID guardとsnapshotをhost testで維持し、Sensors切断scenarioと混同しない。
+
+## 結果
+
+2026-10-28の3台実機試験では、step 1の100 mm前進後にSensors branchを切断した。Step 2のsensor requestはtimeoutし、missionは
+`aborted / stop`で終了した。Drive connectionを維持したままSensorsを再接続・再起動し、fresh sampleとguarded `:status`を取得した。
+Drive stateは`x=100 mm, y=0 mm, heading=0°`のままで、step 2のmovementやmission自動再開は発生しなかった。
+
+Queueは0 bytes / 0 chunksまで排出され、global rejectionは0だった。詳細なevent、memory、試験条件は
+[実機作業記録](worklog/2026-10-28-stage-11-application-recovery.md)を参照する。この単一scenarioはdurable resumeや任意の障害からの
+回復を保証しない。

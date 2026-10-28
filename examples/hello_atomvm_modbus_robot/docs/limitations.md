@@ -158,6 +158,10 @@
   120秒runでもminimum watermark 75,516 bytesまで低下した時点でresetしました。Process数とowner mailboxでは説明できず、原因は
   未特定です。この結果からstop timeoutの発生条件やmemory leakを一般化できません。詳細は
   [Stage 10 lifecycle probe](worklog/2026-10-28-stage-10-lifecycle-probe.md)を参照してください。
+- Stage 11の単一実機scenarioでは、step 1後のSensors切断を`aborted / stop`としてmissionを止め、Sensors再接続後の非変更probeで
+  Drive stateが`x=100 mm, y=0 mm, heading=0°`のままであることを確認しました。Fresh sampleのrelayとguarded `:status`は成功しましたが、
+  durable state、mission自動再開、未確定movementの自動解決は実装していません。この結果を任意の障害時間やfailure modelへ
+  外挿できません。詳細は[Stage 11実機検証](worklog/2026-10-28-stage-11-application-recovery.md)を参照してください。
 - 同一Sensors bootで短時間のbranch切断を3回反復した試験では、90秒remote health timeoutへ達せず、同じconnection IDのまま
   3回とも復帰しました。faultを含む2 runsと後続runは両role 64 / 64、欠損・重複なしで完了し、restart budget消費と
   global queue rejectionは0でした。ただし操作時刻とserial logを共通時計で精密測定しておらず、Driveにもfaultを含むrunごとに

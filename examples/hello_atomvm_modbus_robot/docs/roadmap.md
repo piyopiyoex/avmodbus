@@ -5,7 +5,8 @@
 global resource budget、長時間通信断、約1時間の安定性試験まで完了しています。技術的blockerを特定して
 記録することも成果とします。Stage 7では、長時間通信断後のrestart timingを比較し、transport復帰後の自動回復まで確認しました。
 Stage 8ではcurrent / deferred policyを各4回比較し、deferredの4回すべてで自動復旧しました。Stage 9では非対称response blackoutを
-各policyで2回比較し、request受理だけではresponse経路の復帰を判定できないことを確認しました。
+各policyで2回比較し、request受理だけではresponse経路の復帰を判定できないことを確認しました。Stage 10ではlifecycleの責任境界、
+Stage 11ではmission中断後の非変更probeを実機確認しました。
 
 現在の実行方法は [サンプル README](../README.md)、設計判断は [ADR](adr/README.md)、実測結果は
 [作業記録](worklog/README.md) を正とします。
@@ -24,8 +25,8 @@ Stage 8ではcurrent / deferred policyを各4回比較し、deferredの4回す�
 | 7 | 完了 | 長時間通信断後のrestart timingを比較し、transport復帰後の自動回復を実機確認 |
 | 8 | 完了 | recovery reportを分離し、current 0 / 4、deferred 4 / 4を実機比較 |
 | 9 | 完了 | 非対称response blackoutをcurrent / deferred各2回で比較し、双方向signalの必要性を確認 |
-| 10 | 進行中 | Healthy restartとsetup failureを分離し、stop failureの再現条件を調査 |
-| 11 | 計画 | Mission中断後のapplication recoveryを統合検証 |
+| 10 | 完了 | Healthy restartとsetup failureを分離し、stop failureの再現条件を限定 |
+| 11 | 完了 | Mission中断後にfresh sampleと非変更Drive statusを実機確認 |
 | 12 | 任意 | 必要な仮説が生じた場合だけ4台目で実機scaleを確認 |
 
 ## Stage 0: ローカル仮想ローバーシミュレーション
@@ -208,9 +209,9 @@ current policyは約97秒の操作応答区間で、physical transport復帰前�
 recovery-onlyの成功判定を分離し、current / deferred policyの反復比較を完了した。Stage 9では非対称障害を各policyで2回比較し、
 currentは2 / 2でrestart後に復旧、deferredは2 / 2でrestartを保留したまま未復旧だった。双方向signalは必要だが未実装のため、
 deferredはopt-inを維持する。Stage 10では`net_kernel` lifecycleを分離し、healthy再接続とbranch切断中のsetup failureを比較した。
-60秒・120秒probeで過去のstop timeoutは再現せず、公開APIで特定できる責任境界を記録した。次はStage 11のapplication recoveryへ進み、
-Stage 11ではmission停止を`completed / aborted / indeterminate`に分け、Sensors再接続後の非変更probeをhost検証した。実機で
-mission中のbranch切断と復旧を確認する。Stage 12は具体的な実機仮説が生じた場合だけ行う。
+60秒・120秒probeで過去のstop timeoutは再現せず、公開APIで特定できる責任境界を記録した。Stage 11ではmission停止を
+`completed / aborted / indeterminate`に分け、step 1後のSensors切断を`aborted / stop`として実機確認した。Sensors再接続後の
+非変更probeはfresh sampleと、step 1直後から変化していないDrive stateを取得した。Stage 12は具体的な実機仮説が生じた場合だけ行う。
 
 ## 今回は対象としないこと
 

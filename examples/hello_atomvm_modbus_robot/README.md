@@ -5,9 +5,9 @@ AtomVM の distributed Erlang over Modbus RTU を、通信確認だけでなく�
 
 Host simulationから2-node application、3台のModbus multidrop、3-node distributed Erlang、sensor-driven missionまで
 段階的に実証しています。現在は3台を実機baselineとし、共有busのfairness、bounded queue、起動・接続復旧、長時間通信断、
-約1時間の安定性を調べています。Stage 8では長時間のSensors branch切断に対し、current policyは0 / 4、deferred policyは
-4 / 4で復旧しました。非対称障害は未検証のため、deferred policyはopt-inのままです。
-Stage 9ではrequestを受信し続けるresponse blackoutの観測を分離し、実機比較を準備しています。
+約1時間の安定性を検証しました。Stage 8–11では復旧policy、非対称障害、`net_kernel` lifecycle、mission中断後の
+application recoveryを調査しています。結果は探索的な実機baselineであり、deferred policyとapplication recovery probeは
+opt-inのままです。
 
 既存の[`hello_atomvm_modbus_disterl`](../hello_atomvm_modbus_disterl/README.md)をlocal path dependencyとして再利用し、
 AVModbus coreとFC-100 wire protocolは変更していません。完了範囲と保証外の条件は
@@ -46,6 +46,7 @@ AVModbus coreとFC-100 wire protocolは変更していません。完了範囲�
 - Controller全体でFC-100 payloadとchunk数を制限し、peer間で共有するqueue使用量を集計する
 - 起動順序、初回handshake failure、長時間通信断、反復切断を共通event形式で比較する
 - bounded trafficとidleを反復し、3 roleのmemory、queue、timeout、restartを集計する
+- mission停止を`completed / aborted / indeterminate`に分類し、Sensors再接続後に非変更probeで現在stateを確認する
 
 各 Stage の進捗と完了条件は [ロードマップ](docs/roadmap.md) を参照してください。
 
