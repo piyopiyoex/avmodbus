@@ -151,6 +151,9 @@ multinode_remote_ack_timeout_ms =
 multinode_remote_max_restarts =
   parse_integer.("ROBOT_MULTINODE_REMOTE_MAX_RESTARTS", 1)
 
+multinode_lifecycle_probe_after_ms =
+  parse_integer.("ROBOT_MULTINODE_LIFECYCLE_PROBE_AFTER_MS", 0)
+
 sensor_mission_steps = parse_integer.("ROBOT_SENSOR_MISSION_STEPS", 3)
 
 drive_drop_first_reply_per_request =
@@ -313,6 +316,11 @@ if multinode_remote_max_restarts < 0 or multinode_remote_max_restarts > 10 do
   raise ArgumentError, "ROBOT_MULTINODE_REMOTE_MAX_RESTARTS must be between 0 and 10"
 end
 
+if multinode_lifecycle_probe_after_ms < 0 do
+  raise ArgumentError,
+        "ROBOT_MULTINODE_LIFECYCLE_PROBE_AFTER_MS must be a non-negative integer"
+end
+
 if multinode_defer_restart_until_transport_ready and not multinode_remote_health_enabled do
   raise ArgumentError,
         "ROBOT_MULTINODE_DEFER_RESTART_UNTIL_TRANSPORT_READYを有効にするにはROBOT_MULTINODE_REMOTE_HEALTH_ENABLED=trueが必要です"
@@ -418,6 +426,7 @@ config :robot_sim,
   multinode_initial_recovery_enabled: multinode_initial_recovery_enabled,
   multinode_remote_ack_timeout_ms: multinode_remote_ack_timeout_ms,
   multinode_remote_max_restarts: multinode_remote_max_restarts,
+  multinode_lifecycle_probe_after_ms: multinode_lifecycle_probe_after_ms,
   sensor_mission_steps: sensor_mission_steps,
   drive_drop_first_reply_per_request: drive_drop_first_reply_per_request,
   first_request_id: parse_integer.("ROBOT_FIRST_REQUEST_ID", 1)

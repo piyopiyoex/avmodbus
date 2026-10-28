@@ -76,6 +76,18 @@ defmodule RobotSim.ConnectionTraceTest do
            )
   end
 
+  test "controlled lifecycle probeの予定をconnection eventとして公開する" do
+    assert :lifecycle_probe_scheduled in ConnectionTrace.events()
+
+    assert ConnectionTrace.format(:lifecycle_probe_scheduled, 100,
+             role: :sensors,
+             connection_id: 200,
+             delay_ms: 60_000
+           ) ==
+             "modbus_robot_connection: at_ms=100 event=lifecycle_probe_scheduled " <>
+               "role=sensors connection_id=200 delay_ms=60000"
+  end
+
   test "他のconsole logを無視してconnection traceをparseする" do
     assert Matrix.parse_line("ordinary log") == :ignore
 

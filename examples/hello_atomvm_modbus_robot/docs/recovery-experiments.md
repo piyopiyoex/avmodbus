@@ -36,12 +36,16 @@ Currentは2 / 2でrestart後に復旧し、deferredは2 / 2でrestartを保留�
 
 ## Stage 10: AtomVM distribution lifecycle
 
-- [ ] `net_kernel` stop / startの最小再現をexample内に作る
-- [ ] Setup failureとstop failureを別scenarioとして扱う
-- [ ] 利用可能なAPIでprocess、mailbox、heapの前後差を測定する
+- [x] `net_kernel` stop / start処理をapplicationの復旧判断から分離する
+- [x] 停止API失敗、登録解除timeout、再開失敗をhost testで再現する
+- [x] Process数、lifecycle owner mailbox、heapを同じeventで測定する
+- [x] Healthy stop / startを実機で確認する
+- [x] Setup failureを実機で記録し、`net_kernel.start/2`成功とhandshake成功を分ける
+- [ ] 過去のstop failureをcontrolled probeで再現するか、再現条件を限定する
 - [ ] Runtime内部とexample側lifecycle管理の責任範囲を切り分ける
 
 AtomVM upstreamへのIssue / PRは作成せず、対象v0.7 snapshotの結果と必要なlocal patchをrepository内に記録する。
+条件と判定項目は[Stage 10試験計画](stage-10-net-kernel-lifecycle.md)を正とする。
 
 ## Stage 11: Application recovery
 

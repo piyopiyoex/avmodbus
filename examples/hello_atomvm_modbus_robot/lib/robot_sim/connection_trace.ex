@@ -16,6 +16,7 @@ defmodule RobotSim.ConnectionTrace do
     :readiness_wait_started,
     :initial_connection_timeout,
     :readiness_acknowledged,
+    :lifecycle_probe_scheduled,
     :remote_connected,
     :remote_reconnected,
     :stale_detected,
@@ -47,6 +48,7 @@ defmodule RobotSim.ConnectionTrace do
           | :readiness_wait_started
           | :initial_connection_timeout
           | :readiness_acknowledged
+          | :lifecycle_probe_scheduled
           | :remote_connected
           | :remote_reconnected
           | :stale_detected
