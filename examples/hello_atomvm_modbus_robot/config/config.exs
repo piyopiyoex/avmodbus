@@ -130,6 +130,12 @@ multinode_remote_health_trace =
 multinode_defer_restart_until_transport_ready =
   parse_boolean.("ROBOT_MULTINODE_DEFER_RESTART_UNTIL_TRANSPORT_READY", false)
 
+multinode_transport_activity_trace =
+  parse_boolean.("ROBOT_MULTINODE_TRANSPORT_ACTIVITY_TRACE", false)
+
+multinode_exchange_trace =
+  parse_boolean.("ROBOT_MULTINODE_EXCHANGE_TRACE", false)
+
 multinode_transport_ready_confirmations =
   parse_integer.("ROBOT_MULTINODE_TRANSPORT_READY_CONFIRMATIONS", 2)
 
@@ -145,7 +151,14 @@ multinode_remote_ack_timeout_ms =
 multinode_remote_max_restarts =
   parse_integer.("ROBOT_MULTINODE_REMOTE_MAX_RESTARTS", 1)
 
+multinode_lifecycle_probe_after_ms =
+  parse_integer.("ROBOT_MULTINODE_LIFECYCLE_PROBE_AFTER_MS", 0)
+
+multinode_application_recovery_probe_enabled =
+  parse_boolean.("ROBOT_MULTINODE_APPLICATION_RECOVERY_PROBE_ENABLED", false)
+
 sensor_mission_steps = parse_integer.("ROBOT_SENSOR_MISSION_STEPS", 3)
+sensor_mission_step_delay_ms = parse_integer.("ROBOT_SENSOR_MISSION_STEP_DELAY_MS", 0)
 
 drive_drop_first_reply_per_request =
   parse_boolean.("ROBOT_DRIVE_DROP_FIRST_REPLY_PER_REQUEST", false)
@@ -307,9 +320,19 @@ if multinode_remote_max_restarts < 0 or multinode_remote_max_restarts > 10 do
   raise ArgumentError, "ROBOT_MULTINODE_REMOTE_MAX_RESTARTS must be between 0 and 10"
 end
 
+if multinode_lifecycle_probe_after_ms < 0 do
+  raise ArgumentError,
+        "ROBOT_MULTINODE_LIFECYCLE_PROBE_AFTER_MS must be a non-negative integer"
+end
+
 if multinode_defer_restart_until_transport_ready and not multinode_remote_health_enabled do
   raise ArgumentError,
         "ROBOT_MULTINODE_DEFER_RESTART_UNTIL_TRANSPORT_READYを有効にするにはROBOT_MULTINODE_REMOTE_HEALTH_ENABLED=trueが必要です"
+end
+
+if multinode_transport_activity_trace and not multinode_connection_trace do
+  raise ArgumentError,
+        "ROBOT_MULTINODE_TRANSPORT_ACTIVITY_TRACEを有効にするにはROBOT_MULTINODE_CONNECTION_TRACE=trueが必要です"
 end
 
 if multinode_transport_ready_confirmations < 1 or multinode_transport_ready_confirmations > 10 do
@@ -318,6 +341,10 @@ end
 
 if sensor_mission_steps < 1 do
   raise ArgumentError, "ROBOT_SENSOR_MISSION_STEPS must be a positive integer"
+end
+
+if sensor_mission_step_delay_ms < 0 do
+  raise ArgumentError, "ROBOT_SENSOR_MISSION_STEP_DELAY_MS must be a non-negative integer"
 end
 
 serial = [
@@ -400,11 +427,16 @@ config :robot_sim,
   multinode_remote_health_enabled: multinode_remote_health_enabled,
   multinode_remote_health_trace: multinode_remote_health_trace,
   multinode_defer_restart_until_transport_ready: multinode_defer_restart_until_transport_ready,
+  multinode_transport_activity_trace: multinode_transport_activity_trace,
+  multinode_exchange_trace: multinode_exchange_trace,
   multinode_transport_ready_confirmations: multinode_transport_ready_confirmations,
   multinode_connection_trace: multinode_connection_trace,
   multinode_initial_recovery_enabled: multinode_initial_recovery_enabled,
   multinode_remote_ack_timeout_ms: multinode_remote_ack_timeout_ms,
   multinode_remote_max_restarts: multinode_remote_max_restarts,
+  multinode_lifecycle_probe_after_ms: multinode_lifecycle_probe_after_ms,
+  multinode_application_recovery_probe_enabled: multinode_application_recovery_probe_enabled,
   sensor_mission_steps: sensor_mission_steps,
+  sensor_mission_step_delay_ms: sensor_mission_step_delay_ms,
   drive_drop_first_reply_per_request: drive_drop_first_reply_per_request,
   first_request_id: parse_integer.("ROBOT_FIRST_REQUEST_ID", 1)

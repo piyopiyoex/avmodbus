@@ -92,6 +92,10 @@ Server の opt-in response fault は incoming packet を通常どおり Channel 
 fault budget が尽きた後の response で同じ sequence を ACK します。通常動作と fault injection の state machine を
 分岐させず、実機上で lost-ACK 相当の条件を作るための example-local 診断です。
 
+任意の`exchange_observer`はrequest受理、response返却、faultによるresponse破棄を同じ`exchange_id`で通知します。
+`response_returned`はAVModbus Serverへ値を返した境界であり、物理UART送信やClient到達の確認ではありません。
+既定の`:all`に加え、破棄対象とfault後の最初のresponseだけを通知する`:fault_window`を選べます。通常構成ではobserverを指定しません。
+
 ```text
 net_kernel / dist_util / distribution controller
                        |

@@ -3,22 +3,14 @@
 AtomVM の distributed Erlang over Modbus RTU を、通信確認だけでなく分散 application に利用するための
 独立した実験用 Mix project です。ロボットは software 上で再現するため、motor、sensor、車体は必要ありません。
 
-現在は **Stage 0: host 上の rover simulation**、**Stage 1: 2-node distributed robot**、および
-**Stage 2: 3-device standard Modbus multidrop** を完了し、**Stage 3: 3-node distributed Erlang** の基本疎通と
-Controller-mediated sensor relay、**Stage 4: sensor-driven mission** まで実証しています。2 台構成では genuine distributed Erlang を確立し、
-Controller から Drive の registered process へ command を送り、最終 state `(100, 50, 90°)` を確認しました。3 台構成では
-1 台の Controller が shared RS485 bus 上の Drive Unit 1 と Sensors Unit 2 を順番に poll し、115,200 baud では
-両 remote node と同時に genuine distribution connection を確立しました。既存の
-[`hello_atomvm_modbus_disterl`](../hello_atomvm_modbus_disterl/README.md) を local path dependency として再利用し、
-128-byte payload の 60 application round trip、3 role の独立 reboot recovery、および
-`Sensors -> Controller -> Drive` の virtual sensor sample 転送と obstacle 回避判断も確認しています。AVModbus core と既存 example の
-protocol design は変更していません。follow-up では、共有 client を現在の AVModbus managed handle で渡すための互換性修正を
-既存 carrier に加え、複数adapterのpollをround-robinで開始する任意schedulerを追加しています。
-**Stage 5: scalable multinode model**では3台を実機baselineとし、1、2、3、8、32 remote peersのfairness、failure、
-bounded queue、session recovery、resource budgetをhost上で検証しました。
-**Stage 6: startup / recoveryとresource管理**では、起動順序matrix、初回接続のbounded recovery、Controller全体のqueue budget、
-30 / 90 / 180秒の通信断、64分30秒のactive / idle耐久試験まで完了しました。**Stage 7**では長時間通信断後の
-deferred restartを実機確認し、**Stage 8**では復旧試験の反復測定基盤を整備しています。現在の完了範囲と保証外の条件は
+Host simulationから2-node application、3台のModbus multidrop、3-node distributed Erlang、sensor-driven missionまで
+段階的に実証しています。現在は3台を実機baselineとし、共有busのfairness、bounded queue、起動・接続復旧、長時間通信断、
+約1時間の安定性を検証しました。Stage 8–11では復旧policy、非対称障害、`net_kernel` lifecycle、mission中断後の
+application recoveryを調査しました。結果は探索的な実機baselineであり、deferred policyとapplication recovery probeは
+opt-inのままです。
+
+既存の[`hello_atomvm_modbus_disterl`](../hello_atomvm_modbus_disterl/README.md)をlocal path dependencyとして再利用し、
+AVModbus coreとFC-100 wire protocolは変更していません。完了範囲と保証外の条件は
 [ロードマップ](docs/roadmap.md)と[既知の制約](docs/limitations.md)を参照してください。
 
 ## 現在できること
@@ -54,6 +46,7 @@ deferred restartを実機確認し、**Stage 8**では復旧試験の反復測�
 - Controller全体でFC-100 payloadとchunk数を制限し、peer間で共有するqueue使用量を集計する
 - 起動順序、初回handshake failure、長時間通信断、反復切断を共通event形式で比較する
 - bounded trafficとidleを反復し、3 roleのmemory、queue、timeout、restartを集計する
+- mission停止を`completed / aborted / indeterminate`に分類し、Sensors再接続後に非変更probeで現在stateを確認する
 
 各 Stage の進捗と完了条件は [ロードマップ](docs/roadmap.md) を参照してください。
 
@@ -435,6 +428,7 @@ ROBOT_MODE=multinode ROBOT_ROLE=controller ATOMVM_UART_SPEED=115200 \
 | `ROBOT_MULTINODE_HEALTH_CHECK_MS` | `5000` | Controller が role 別 lease を確認する間隔 |
 | `ROBOT_MULTINODE_LEASE_MS` | `75000` | 最後の readiness から remote unavailable とするまでの期限 |
 | `ROBOT_SENSOR_MISSION_STEPS` | `3` | 起動後に直列実行する sensor-driven mission の step 数 |
+| `ROBOT_SENSOR_MISSION_STEP_DELAY_MS` | `0` | 完了したstepと次のsensor requestの間隔。物理操作を伴う試験用 |
 | `ROBOT_DRIVE_DROP_FIRST_REPLY_PER_REQUEST` | `false` | Drive が各 request の初回 reply を破棄する fault injection |
 | `MODBUS_FAULT_DROP_RESPONSES` | `0` | Server が受理後に破棄する FC-100 response 数。`0` は無効 |
 | `MODBUS_FAULT_MIN_PAYLOAD_BYTES` | `96` | response 破棄の対象にする最小 request payload bytes |
@@ -444,11 +438,14 @@ ROBOT_MODE=multinode ROBOT_ROLE=controller ATOMVM_UART_SPEED=115200 \
 | `ROBOT_MULTINODE_REMOTE_HEALTH_ENABLED` | `false` | remote が readiness ACK timeout で自身の distribution を再起動する診断設定 |
 | `ROBOT_MULTINODE_REMOTE_HEALTH_TRACE` | `false` | remote がconnection内のreadiness ACK gapとboot内high-waterを出力する測定設定 |
 | `ROBOT_MULTINODE_DEFER_RESTART_UNTIL_TRANSPORT_READY` | `false` | ACK timeout後も、有効なFC-100 exchangeの復帰確認までremote restartを保留する比較実験設定 |
+| `ROBOT_MULTINODE_TRANSPORT_ACTIVITY_TRACE` | `false` | recovery policyを変えずに、長時間gap後のFC-100 exchange復帰をconnection eventとして記録する測定設定 |
+| `ROBOT_MULTINODE_EXCHANGE_TRACE` | `false` | ServerのFC-100 request受理とresponse返却・破棄を別eventで記録する測定設定 |
 | `ROBOT_MULTINODE_TRANSPORT_READY_CONFIRMATIONS` | `2` | 長時間のexchange gap後にtransport復帰と判定する連続exchange数。1..10 |
 | `ROBOT_MULTINODE_CONNECTION_TRACE` | `false` | 起動、handshake、stale検出、restart、再接続を共通event形式で出力する測定設定 |
 | `ROBOT_MULTINODE_INITIAL_RECOVERY_ENABLED` | `true` | 初回readiness ACKが8秒以内に届かないremoteのdistributionをbounded restartする |
 | `ROBOT_MULTINODE_REMOTE_ACK_TIMEOUT_MS` | `90000` | remote が現在の connection ID の ACK を待つ期限。announce 間隔より大きくする |
 | `ROBOT_MULTINODE_REMOTE_MAX_RESTARTS` | `1` | 初回復旧とremote healthが共用するboard bootごとのrestart上限。0..10 |
+| `ROBOT_MULTINODE_APPLICATION_RECOVERY_PROBE_ENABLED` | `false` | Sensors再接続後にsample relayとguarded Drive statusだけを検証する。missionは再開しない |
 | `ROBOT_MULTINODE_GLOBAL_MAX_QUEUED_BYTES` | `8192` | Controllerの全client streamが共有するoutgoing payload上限 |
 | `ROBOT_MULTINODE_GLOBAL_MAX_QUEUED_CHUNKS` | `256` | Controllerの全client streamが共有するoutgoing chunk上限 |
 
@@ -486,12 +483,12 @@ stop / restartします。restart回数はboard bootごとに制限され、古�
 256+256 trafficへ延長した別runではDrive 23,586 ms、Sensors 23,995 msまで伸びました。詳細は
 [長時間ACK gap測定](docs/worklog/2026-10-23-extended-ack-gap-run.md)を参照してください。
 
-Stage 7の比較実験では、remote側だけで
+Stage 7–8の比較実験では、remote側だけで
 `ROBOT_MULTINODE_DEFER_RESTART_UNTIL_TRANSPORT_READY=true`を指定できます。readiness ACK期限を超えてもrestart budgetを
 消費せず、有効なFC-100 exchangeが設定回数連続した後にだけ`net_kernel` restartを開始します。同じconnectionでACKが先に
 復帰した場合は保留を解除します。この設定は物理branch切断のrestart timingを調べるためのopt-inであり、Serverがrequestを
 受信し続ける非対称response blackoutの復旧判定には使えません。設計と検証手順は
-[長時間通信断後の復旧調査](docs/long-outage-recovery-plan.md)を参照してください。
+[Stage 8反復試験](docs/stage-8-recovery-repeatability.md)を参照してください。
 
 この設定は1本だけdistribution connectionを持つremote用のopt-in実験機能です。timeoutはbus congestionでも発生し得るため、通常構成では
 既定の`false`を使用します。設計は[ADR 0012](docs/adr/0012-detect-remote-health-with-readiness-acks.md)、実機結果は

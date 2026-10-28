@@ -39,3 +39,8 @@
 - [0023: Controllerの複数queueをglobal budgetで制限する](0023-bound-controller-queues-with-a-global-budget.md)
 - [0024: Boundedなtraffic runを反復して長時間安定性を測る](0024-repeat-bounded-traffic-runs-for-endurance.md)
 - [0025: trafficとrecoveryの成功判定を分離する](0025-separate-traffic-and-recovery-report-results.md)
+- [0026: transport観測をrecovery policyから分離する](0026-separate-transport-observation-from-recovery-policy.md)
+- [0027: Deferred restartをopt-inのまま維持する](0027-keep-deferred-restart-opt-in.md)
+- [0028: Serverのresponse処理をtransport activityと分けて観測する](0028-observe-server-response-outcomes-separately.md)
+- [0029: 非対称障害の復旧判定には双方向成立の証拠を要求する](0029-require-bidirectional-evidence-for-asymmetric-recovery.md)
+- [0030: kernel startとdistribution readinessを別の成功条件にする](0030-separate-kernel-start-from-distribution-readiness.md)

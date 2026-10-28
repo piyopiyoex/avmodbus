@@ -397,6 +397,99 @@ defmodule DisterlProbe.ModbusUARTTest do
     refute_receive {:modbus_uart_transport_activity, _, _, _, _, _, _}
   end
 
+  test "Serverはrequest受理とresponse返却を同じexchange IDで通知する" do
+    state =
+      Channel.new(467)
+      |> adapter_state()
+      |> Map.merge(%{
+        role: :server,
+        response_fault: ResponseFault.new(),
+        exchange_observer: self(),
+        exchange_count: 0
+      })
+
+    {:ok, request} = Protocol.encode(567, 1, 0, 0, "abc")
+    assert {:reply, {:ok, response}, next} = callback({:exchange, request}, state)
+
+    assert_receive {:modbus_uart_exchange, adapter, 1, 1, :request_accepted, 567, 3, nil}
+
+    assert_receive {:modbus_uart_exchange, ^adapter, 1, 1, :response_returned, 567, 3,
+                    response_bytes}
+
+    assert response_bytes == byte_size(response)
+    assert next.exchange_count == 1
+  end
+
+  test "Serverはfault injectionで破棄したresponseを通知する" do
+    state =
+      Channel.new(468)
+      |> adapter_state()
+      |> Map.merge(%{
+        role: :server,
+        response_fault:
+          ResponseFault.new(
+            [drop_responses: 1, min_payload_bytes: 0],
+            :erlang.monotonic_time(:millisecond)
+          ),
+        exchange_observer: self(),
+        exchange_count: 0
+      })
+
+    {:ok, request} = Protocol.encode(568, 0, 0, 0, <<>>)
+
+    assert {:reply, {:error, {:exception, :server_device_failure}}, next} =
+             callback({:exchange, request}, state)
+
+    assert_receive {:modbus_uart_exchange, adapter, 1, 1, :request_accepted, 568, 0, nil}
+
+    assert_receive {:modbus_uart_exchange, ^adapter, 1, 1, :response_dropped, 568, 0,
+                    response_bytes}
+
+    assert response_bytes > 0
+    assert next.exchange_count == 1
+  end
+
+  test "fault windowは破棄対象とfault後の最初のresponseだけを通知する" do
+    state =
+      Channel.new(469)
+      |> adapter_state()
+      |> Map.merge(%{
+        role: :server,
+        response_fault:
+          ResponseFault.new(
+            [drop_responses: 1, min_payload_bytes: 0, after_ms: 1_000_000],
+            :erlang.monotonic_time(:millisecond)
+          ),
+        exchange_observer: self(),
+        exchange_observer_mode: :fault_window,
+        exchange_count: 0
+      })
+
+    {:ok, request} = Protocol.encode(569, 0, 0, 0, <<>>)
+    assert {:reply, {:ok, _response}, before_fault} = callback({:exchange, request}, state)
+    refute_receive {:modbus_uart_exchange, _, _, _, _, _, _, _}
+
+    armed =
+      put_in(
+        before_fault,
+        [:response_fault, :armed_at_ms],
+        :erlang.monotonic_time(:millisecond) - 1
+      )
+
+    assert {:reply, {:error, {:exception, :server_device_failure}}, dropped} =
+             callback({:exchange, request}, armed)
+
+    assert_receive {:modbus_uart_exchange, adapter, 1, 2, :request_accepted, 569, 0, nil}
+    assert_receive {:modbus_uart_exchange, ^adapter, 1, 2, :response_dropped, 569, 0, _}
+
+    assert {:reply, {:ok, _response}, recovered} = callback({:exchange, request}, dropped)
+    assert_receive {:modbus_uart_exchange, ^adapter, 1, 3, :request_accepted, 569, 0, nil}
+    assert_receive {:modbus_uart_exchange, ^adapter, 1, 3, :response_returned, 569, 0, _}
+
+    assert {:reply, {:ok, _response}, _next} = callback({:exchange, request}, recovered)
+    refute_receive {:modbus_uart_exchange, _, _, _, _, _, _, _}
+  end
+
   test "a peer session replacement releases stale shared budget capacity" do
     {:ok, budget} = QueueBudget.start_link(max_queued_bytes: 100, max_queued_chunks: 4)
     {:ok, channel} = Channel.queue(%{Channel.new(470) | peer_session: 570}, "stale")
@@ -522,7 +615,11 @@ defmodule DisterlProbe.ModbusUARTTest do
       queue_budget: nil,
       unit_id: 1,
       max_queued_bytes_observed: 0,
-      max_outstanding_observed: 0
+      max_outstanding_observed: 0,
+      exchange_observer: nil,
+      exchange_observer_mode: :all,
+      exchange_recovery_notified: false,
+      exchange_count: 0
     }
   end
 

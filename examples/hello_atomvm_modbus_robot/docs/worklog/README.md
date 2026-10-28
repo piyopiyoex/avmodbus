@@ -50,3 +50,8 @@
 - [2026-10-26: Stage 7 長時間通信断時の現行ポリシー基準値](2026-10-26-stage-7-current-policy-baseline.md)
 - [2026-10-26: Stage 7 transport復帰後のrestart保留](2026-10-26-stage-7-deferred-restart.md)
 - [2026-10-26: Stage 8 recovery-only report](2026-10-26-stage-8-recovery-report.md)
+- [2026-10-26: Stage 8 recovery policy反復試験](2026-10-26-stage-8-recovery-repeatability.md)
+- [2026-10-27: Stage 9 非対称障害の観測基盤](2026-10-27-stage-9-asymmetric-observation.md)
+- [2026-10-27: Stage 9 非対称response blackout実機比較](2026-10-27-stage-9-asymmetric-response-blackout.md)
+- [2026-10-28: Stage 10 lifecycle probe実機検証](2026-10-28-stage-10-lifecycle-probe.md)
+- [2026-10-28: Stage 11 application recovery統合検証](2026-10-28-stage-11-application-recovery.md)
