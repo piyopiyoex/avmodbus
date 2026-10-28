@@ -14,7 +14,7 @@
 
 ## Host検証
 
-`mise exec -- mix test`は142 tests、0 failuresだった。Controller、Drive、Sensorsの`mix atomvm.check`も成功した。
+`mise exec -- mix test`は143 tests、0 failuresだった。Controller、Drive、Sensorsの`mix atomvm.check`も成功した。
 
 ## 実機準備
 
@@ -67,7 +67,35 @@ ControllerのSensors transactionは150件連続で失敗した後に成功へ戻
 このrunは、過去のstop failureではなく、stop成功後のsetup failureとresource低下を再現した。Heap低下の原因は、
 distribution setup、終了後に残るprocess / timer、carrier stateのどこにあるか未特定である。
 
+## 120秒probeでの再確認
+
+切断時間を延ばして同じ境界を再確認するため、Sensorsをclean bootし、readiness ACK後にbranchを切断したままbootから120秒後に
+probeを発火した。Poll回数とtimeoutは変更していない。
+
+| Event | Sensors `at_ms` | Resource |
+| --- | ---: | --- |
+| `restart_started` | 120,413 | free 88,480 bytes、20 processes、mailbox 0 |
+| `kernel_stop_requested` | 120,437 | free 87,692 bytes、20 processes、mailbox 0 |
+| `kernel_stop_completed` | 120,504 | free 100,764 bytes、9 processes、mailbox 0 |
+| `kernel_start_started` | 120,520 | free 100,764 bytes、9 processes、mailbox 0 |
+| `kernel_start_succeeded` | 120,621 | free 90,712 bytes、19 processes、mailbox 1 |
+| `initial_connection_timeout` | 128,712 | free 89,860 bytes、18 processes、mailbox 0 |
+
+Stopは今回も67 msで完了し、stop要求からstart成功までは184 msだった。したがって、過去のACK gap 118,168 msで観測した
+`net_kernel_stop_timeout`は、bootからの経過時間やbranch切断だけでは再現しなかった。旧runとの差にはremote healthによる起動経路、
+接続状態、runtime内部状態が残るが、この計測APIだけでは特定できない。
+
+Branch復帰後、ControllerのSensors transactionは53件増えたfailureで止まり、physical FC-100は再開した。しかしSensorsでは
+`unexpected <<"sok">>`と`unsupported_name`でsetupが終了し、distributionは再接続しなかった。Sensorsのprocess数は17、owner
+mailboxは0のまま、periodic free heapは約89 KiBから80,684 bytesへ低下し、minimum watermarkは75,516 bytesだった。Driveの
+transaction failureは2のまま増えなかった。
+
+60秒と120秒のcontrolled probeは、stop failureではなく、start返却後のsetup failure、physical transportだけの復帰、remote側の
+resource低下を同じevent列で再現した。Stop failureの発生条件とheap低下の所有resourceは、AtomVM v0.7 snapshotで利用できる公開APIと
+今回の低負荷snapshotだけでは特定できない。
+
 ## 復旧
 
-試験後、probe、trace、periodic metricsを無効にした通常Sensors firmwareへ戻した。PackBEAMは292,516 bytesで、flashと
-hash verificationに成功した。
+試験後、probe、trace、periodic metricsを無効にした通常Sensors firmwareへ戻した。PackBEAMは292,516 bytesで、2回ともflashと
+hash verificationに成功した。最後のflash後はControllerのUnit 2 successが増加し、failureは222件で停止した。96-byteの
+distribution chunkを配送し、Drive / Sensorsのqueueが0へ戻ることも確認した。Drive failureは2件のまま増えなかった。

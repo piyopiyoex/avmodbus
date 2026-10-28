@@ -1,6 +1,6 @@
 # Stage 10 `net_kernel` lifecycle最小再現
 
-状態: 実機試験中
+状態: 完了
 
 ## 目的
 
@@ -55,9 +55,12 @@ distributionをstop / startする。Restart budgetは消費しない。
 
 Healthy stop / startでは、Sensorsの登録解除を88 ms、再開までを合計204 msで完了し、Controller再接続とDrive維持を確認した。
 
-Sensors branchをprobe前に切断した試験でもstopは67 msで完了したため、過去の`net_kernel_stop_timeout`は再現しなかった。一方、
-`net_kernel.start/2`の返却後にdistribution setupがtimeoutし、branch復帰後はphysical FC-100 pollingだけが再開した。
-Distributionは自動復旧せず、Sensors resetが必要だった。詳細は
+Sensors branchをprobe前に切断した60秒・120秒の試験でもstopは67 msで完了したため、過去の`net_kernel_stop_timeout`は再現しなかった。
+一方、`net_kernel.start/2`の返却後にdistribution setupがtimeoutし、branch復帰後はphysical FC-100 pollingだけが再開した。
+Distributionは自動復旧せず、Sensors resetが必要だった。
+
+Example側で観測できる境界は、stop APIの返却、登録解除、start APIの返却、readiness ACKである。登録解除timeoutやsetup終了の
+runtime内部resourceは公開APIから識別できないため、Stage 10では再現条件をこれ以上一般化しない。詳細は
 [Stage 10実機baseline](worklog/2026-10-28-stage-10-lifecycle-probe.md)を参照する。
 
 ## 完了条件

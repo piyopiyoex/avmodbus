@@ -152,9 +152,11 @@
   response受信を保証しないため、非対称障害には双方向成立を示す追加signalが必要である。詳細は
   [Stage 9実機比較](worklog/2026-10-27-stage-9-asymmetric-response-blackout.md)を参照してください。
 - Stage 10のhealthy lifecycle probeでは、Sensorsの`net_kernel`登録解除を88 ms、再開までを合計204 msで完了し、Controller再接続と
-  Drive維持を確認しました。一方、Sensors branch切断中のprobeではstopは67 msで完了し、過去の`net_kernel_stop_timeout`は
-  再現しませんでした。`net_kernel.start/2`成功後のsetup timeoutと、branch復帰後にphysical FC-100だけが再開する状態を観測しました。
-  Distributionは自動復旧せず、Sensors free heapは最小45,308 bytesまで低下しました。原因は未特定です。詳細は
+  Drive維持を確認しました。一方、Sensors branch切断中の60秒・120秒probeではstopはどちらも67 msで完了し、過去の
+  `net_kernel_stop_timeout`は再現しませんでした。`net_kernel.start/2`成功後のsetup timeoutと、branch復帰後にphysical FC-100だけが
+  再開する状態を観測しました。Distributionは自動復旧せず、60秒runのSensors minimum free heapは45,308 bytesまで低下しました。
+  120秒runでもminimum watermark 75,516 bytesまで低下した時点でresetしました。Process数とowner mailboxでは説明できず、原因は
+  未特定です。この結果からstop timeoutの発生条件やmemory leakを一般化できません。詳細は
   [Stage 10 lifecycle probe](worklog/2026-10-28-stage-10-lifecycle-probe.md)を参照してください。
 - 同一Sensors bootで短時間のbranch切断を3回反復した試験では、90秒remote health timeoutへ達せず、同じconnection IDのまま
   3回とも復帰しました。faultを含む2 runsと後続runは両role 64 / 64、欠損・重複なしで完了し、restart budget消費と
