@@ -41,12 +41,9 @@ Modbus 対応機器
 
 Client（クライアント）は要求を送る側、Server（サーバー）は要求を受けて応答する側です。
 
-```mermaid
-sequenceDiagram
-    participant C as Client
-    participant S as Server
-    C->>S: Register 0 を 2 個読む
-    S-->>C: [123, 456]
+```text
+Client  -- Register 0 を 2 個読む -->  Server
+Client  <-- [123, 456] ------------  Server
 ```
 
 古い資料では Client を Master、Server を Slave と表記している場合があります。
@@ -151,16 +148,14 @@ AVModbus がエンコード・デコード時に処理するため、アプリ�
 シリアル通信の Modbus では、Unit ID `0` に書き込み要求を送ると、同じ通信線上の Server に一斉送信されます。
 各 Server は要求を処理しますが、応答は返しません。
 
-```mermaid
-sequenceDiagram
-    participant C as Client
-    participant B as RS485 通信線
-    participant S1 as Server 1
-    participant S2 as Server 2
-    C->>B: Unit ID 0 への書き込み
-    B->>S1: 一斉送信
-    B->>S2: 一斉送信
-    Note over S1,S2: 要求を処理し、応答は返さない
+```text
+Client
+  |
+  | Unit ID 0 への書き込み
+  v
+RS485 通信線
+  +--> Server 1（要求を処理、応答なし）
+  +--> Server 2（要求を処理、応答なし）
 ```
 
 読み取りには使えません。書き込みを確認したい場合は、後から各 Server に通常の読み取り要求を送ります。
