@@ -1,42 +1,59 @@
 # リリース前チェックリスト
 
-AVModbus はまだ公開していません。このチェックリストは、**初回リリースを決めたとき**に使います。
-未実施の項目はチェックしません。実行したコマンドと結果は、その時点のコミットとともに記録します。
+Hex への初回公開は `v0.1.0` を対象とします。実施した項目だけをチェックし、
+コマンド結果と対象コミットを記録してください。詳細な公開手順は [RELEASE.md](../../RELEASE.md) を参照します。
 
-## API と説明の確認
+## API とドキュメント
 
-- [ ] README・利用例・ExDoc の API と、実装の引数・戻り値が一致している
-- [ ] 同期・非同期の要求、タイムアウト、キュー上限がテストと説明で一致している
-- [ ] TCP の終了処理と `max_buffer` の範囲が正確に説明されている
-- [ ] TLS など未対応の機能がエラーを返し、制約として説明されている
-- [ ] **初回リリース時に** `CHANGELOG.md` の `Unreleased` を対象バージョンと公開日に整理する
+- [x] README・Getting Started・ExDoc の引数、戻り値、コード例が実装と一致する
+- [x] 同期・非同期要求、timeout、queue 上限、TCP の `max_buffer` の説明が正確である
+- [x] TLS 非対応・ESP32-C5 のリソース制限・実機検証範囲を明示している
+- [x] `CHANGELOG.md` の `0.1.0` の内容と `mix.exs` の version が一致する
+- [x] README / Getting Started に未公開を前提とする表記が残っていない
+- [x] バージョン付き ExDoc のソースリンクが `v0.1.0` タグを指す
+- [x] Hex 名 `avmodbus` と公開先アカウント・初期オーナーを確認する
 
-## ホストでのテスト
+## 検証
 
 ```sh
 mix deps.get
 mix format --check-formatted
 mix test --cover
 python3 -m unittest discover -s scripts -p 'test_*.py'
+mix docs --warnings-as-errors
 ```
 
-- [ ] 上記のコマンドがすべて成功する
-- [ ] リリース対象のコミットで GitHub Actions の `test` と `interoperability` が成功する
-- [ ] `pymodbus` / `libmodbus` の相互運用テストが固定 seed `12345` と `54321` の両方で成功する
-- [ ] 不安定なテストがある場合は原因を確認する
+- [x] 上記がすべて成功する
+- [ ] リリース対象コミットで GitHub Actions の `test` と `interoperability` が成功する
+- [ ] `pymodbus` / `libmodbus` の相互運用テストが seed `12345` と `54321` で成功する
+- [x] 対象 AtomVM でサンプルの `mix atomvm.check` とサイズ測定が成功する
+- [x] RTU / RS485 の基本読み書きを実機で再確認し、firmware・配線・設定を記録する
+- [x] [互換性表](../compatibility.md)に検証済みの構成を反映する
 
-## AtomVM と実機
+## Hex パッケージ
 
-- [ ] 対象の AtomVM でサンプルの互換性チェックとビルドが成功する
-- [ ] `MIX_ENV=prod mix atomvm.size` でサイズを確認する
-- [ ] TCP リソース計測でメモリとプロセスが回復し、警告も記録されている
-- [ ] 実機の RTU / RS485 試験を再実行し、基板・ファームウェア・モジュールを記録する
-- [ ] [動作確認済みの構成](../compatibility.md)を更新する
+```sh
+mix hex.build
+mix hex.build --unpack --output tmp/hex-package
+mix hex.publish --dry-run --yes
+```
 
-## 配布する場合のみ
+- [x] `tmp/hex-package` に `lib/`、`docs/`、`mix.exs`、`README.md`、`RELEASE.md`、`LICENSE` が含まれる
+- [x] `examples/hello_atomvm_modbus/README.md` が含まれる
+- [x] テスト・ビルド成果物・distributed Erlang / robot の実験コードと worklog は含まれない
+- [x] `docs/development/worklog.md` は AVModbus core の設計・検証記録として含まれる
+- [x] パッケージ内の README や ExDoc にリンク切れがない
+- [x] 別アプリから展開済み package を `path:` 参照して取得・コンパイルできる
+- [x] `mix hex.publish --dry-run --yes` が成功する（実際の公開は行わない）
 
-- [ ] バージョン、ライセンス、パッケージに含まれるファイルを `mix hex.build` で確認する
-- [ ] 別のアプリケーションからパッケージを利用してみる
-- [ ] リリースノートとタグを準備し、公開操作を承認する
+## 公開時・公開後
 
-この文書を実行しても、Hex への公開や GitHub Release の作成を自動では行いません。
+- [ ] リリース候補を承認して `main` にマージし、タグの対象コミットを確定する
+- [ ] Hex の認証ユーザーと publish 権限を確認する
+- [ ] `v0.1.0` 注釈付きタグを対象コミットに作成する
+- [ ] 対話的な `mix hex.publish` を行い、Hex と HexDocs の公開結果を確認する
+- [ ] タグを push し、CHANGELOG に基づく GitHub Release を公開する
+- [ ] 公開後、別アプリから `{:avmodbus, "~> 0.1.0"}` を取得・コンパイルする
+- [ ] 公開後の修正は既存 version や tag を差し替えず、patch release で行う
+
+チェックリストの作成・実行だけでは Hex への公開は行いません。

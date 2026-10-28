@@ -7,12 +7,12 @@ AVModbus は RTU・ASCII・TCP の Client / Server と、基本的なエラー�
 [設計判断](adr/README.md) を参照してください。
 
 Modbus RTU 上で AtomVM の distributed Erlang を動かす調査は、AVModbus core の機能計画とは
-分けて [standalone example のロードマップ](../examples/hello_atomvm_modbus_disterl/docs/roadmap.md)
+分けて [standalone example のロードマップ](https://github.com/piyopiyoex/avmodbus/blob/v0.1.0/examples/hello_atomvm_modbus_disterl/docs/roadmap.md)
 で管理しています。実機での remote messaging は確認済みですが、production-ready な carrier
 として AVModbus がサポートしているわけではありません。
 
 その carrier を分散 application で利用する仮想ロボット実験も
-[専用ロードマップ](../examples/hello_atomvm_modbus_robot/docs/roadmap.md) で管理します。現在は 2-node distributed mission と
+[専用ロードマップ](https://github.com/piyopiyoex/avmodbus/blob/v0.1.0/examples/hello_atomvm_modbus_robot/docs/roadmap.md) で管理します。現在は 2-node distributed mission と
 3-device standard Modbus multidrop に加え、local AtomVM patch による 3-node adaptive mission、独立 remote recovery、
 application reply loss 後の重複排除を実機確認していますが、AVModbus core の multidrop distribution 対応計画ではありません。
 
@@ -42,4 +42,5 @@ application reply loss 後の重複排除を実機確認していますが、AVM
 - 十分な検証環境がない機材への対応保証
 - 実測に基づかない最適化や大規模な内部構造の変更
 
-公開方法と時期は未定です。Hex への公開は、機能実装とは別に判断します。
+初回 Hex リリース候補は `v0.1.0` とし、公開前の確認事項は [リリース手順](../RELEASE.md) と
+[リリース前チェックリスト](development/release-checklist.md) で管理します。

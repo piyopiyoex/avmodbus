@@ -15,6 +15,42 @@
 | 2026-10-12〜13 | UART の受信データ欠落対策、Serial Transport の整理、待機キューとタイムアウト管理の強化 |
 | 2026-10-13〜14 | TCP 接続・handler の終了処理、受信バッファー制限、負荷テスト、外部実装との CI を強化 |
 | 2026-10-15〜16 | custom FC-100 carrier を使い、Modbus RTU 上の AtomVM distributed Erlang を実機検証 |
+| 2026-10-28 | `v0.1.0` Hex release candidate の package、docs、host test、AtomVM build を検証 |
+
+## v0.1.0 release candidate
+
+2026-10-28 に、初回 Hex 公開候補を次の範囲で確認しました。
+
+- `mix format --check-formatted`、Python 補助 script 3 tests、ExUnit 228 tests が成功
+- coverage は 84.75% で、設定した 80% threshold を満たした
+- `mix docs --warnings-as-errors` が成功
+- 通常、workflow probe、resource probe の `mix atomvm.check` が成功
+- production AVM は 147,536 / 147,736 bytes で size budget 内（残り 200 bytes）
+- `mix hex.build` と unpack が成功し、package は約 103 KiB だった
+- 展開 package を別 Mix application から path dependency として compile し、RTU encode / decode を実行できた
+- `mix hex.publish --dry-run --yes` が成功し、package と docs が公開されないことを確認した
+- Hex 認証 user は `mnishiguchi`、`avmodbus` という公開 package は未登録だった
+
+実機では、Drive を Unit ID `1` の RTU Server、Controller を workflow Client として、
+XIAO ESP32-C5 と HW-519 を共有 RS485 bus へ接続しました。Sensors（Unit ID `2`）も同じ bus へ
+接続したまま試験しました。通信条件は 9,600 baud、8N1、D4 / GPIO23 TX、D5 / GPIO24 RX、
+20 ms gap、20 ms UART idle timeout です。
+
+- Controller: USB serial `38:44:BE:A5:05:14`
+- Drive: USB serial `38:44:BE:A5:04:DC`
+- Sensors: USB serial `10:BD:A3:CF:09:04`
+
+Controller と Drive の runtime はいずれも AtomVM `0.7.0-beta.1+git.a1069573` でした。
+これは upstream `release-0.7` の `18b35870` に distribution tick 用の local patch を加えた版です。
+patch はこの通常 RTU workflow の処理には関与しません。
+
+20 種類の要求を 3 cycles、計 60 件実行し、`modbus_workflow result=ok` を確認しました。
+最小 response-to-next-write interval は 43 ms、broadcast turnaround は 136 ms、
+request は最小 136 ms、最大 218 ms、平均 165 ms、総時間は 9,918 ms でした。
+欠損、timeout、想定外の応答、Unit ID `2` の接続による干渉は観測しませんでした。
+
+リリース対象 commit の CI と外部実装との相互運用は release PR で再確認する。
+実際の publish、tag push、GitHub Release 公開はレビュー承認後に手動で行う。
 
 ## 実験から得た重要な知見
 
@@ -89,9 +125,9 @@ session resynchronization と1回の pong timeout を経て同じ message を再
 
 **判断:** AVModbus の custom function support は application-specific carrier の実装に利用できます。
 ただし、今回の polling protocol、stream adaptation、recovery logic は Modbus library の一般機能では
-ありません。AVModbus core を変更せず、[standalone example](../../examples/hello_atomvm_modbus_disterl/README.md)
+ありません。AVModbus core を変更せず、[standalone example](https://github.com/piyopiyoex/avmodbus/blob/v0.1.0/examples/hello_atomvm_modbus_disterl/README.md)
 内で実験を継続します。条件、測定値、残る制約は
-[実験の worklog](../../examples/hello_atomvm_modbus_disterl/docs/worklog/README.md) に記録しています。
+[実験の worklog](https://github.com/piyopiyoex/avmodbus/blob/v0.1.0/examples/hello_atomvm_modbus_disterl/docs/worklog/README.md) に記録しています。
 
 ## 検証記録を探す
 
@@ -101,7 +137,7 @@ session resynchronization と1回の pong timeout を経て同じ message を再
 | 実機のメモリ使用量、TCP loopback、`.avm` の測定値 | [リソース計測](resource-measurements.md) |
 | TCP 高負荷時の調査と再現条件 | [TCP リソース調査記録](atomvm-tcp-investigation.md) |
 | `pymodbus` / `libmodbus` と動作確認した組み合わせ | [互換性表](../compatibility.md) |
-| Modbus RTU 上の distributed Erlang、性能、復旧試験 | [実験の worklog](../../examples/hello_atomvm_modbus_disterl/docs/worklog/README.md) |
+| Modbus RTU 上の distributed Erlang、性能、復旧試験 | [実験の worklog](https://github.com/piyopiyoex/avmodbus/blob/v0.1.0/examples/hello_atomvm_modbus_disterl/docs/worklog/README.md) |
 | 将来も守りたい設計上の判断 | [ADR 一覧](../adr/README.md) |
 
 ## 新しい実験を記録するとき

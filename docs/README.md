@@ -22,13 +22,13 @@ AVModbus のドキュメントは、利用者向けの説明、開発者向け�
 
 ## 実験
 
-- [Modbus RTU 上の distributed Erlang](../examples/hello_atomvm_modbus_disterl/README.md) —
+- [Modbus RTU 上の distributed Erlang](https://github.com/piyopiyoex/avmodbus/blob/v0.1.0/examples/hello_atomvm_modbus_disterl/README.md) —
   custom Function Code `100` を carrier として使う standalone example
-- [実験用ドキュメント](../examples/hello_atomvm_modbus_disterl/docs/README.md) —
+- [実験用ドキュメント](https://github.com/piyopiyoex/avmodbus/blob/v0.1.0/examples/hello_atomvm_modbus_disterl/docs/README.md) —
   アーキテクチャ、制約、ロードマップ、ADR、実機 worklog
-- [distributed Erlang 仮想ロボット](../examples/hello_atomvm_modbus_robot/README.md) —
+- [distributed Erlang 仮想ロボット](https://github.com/piyopiyoex/avmodbus/blob/v0.1.0/examples/hello_atomvm_modbus_robot/README.md) —
   host-only rover から 2-node application と 3-device multidrop へ進める段階的な実験
-- [仮想ロボットの実験用ドキュメント](../examples/hello_atomvm_modbus_robot/docs/README.md) —
+- [仮想ロボットの実験用ドキュメント](https://github.com/piyopiyoex/avmodbus/blob/v0.1.0/examples/hello_atomvm_modbus_robot/docs/README.md) —
   ロードマップ、制約、ADR、検証 worklog
 
 distributed Erlang example では genuine distribution の動作を実機確認していますが、carrier と
