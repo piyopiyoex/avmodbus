@@ -43,7 +43,7 @@ defmodule AVModbus.MixProject do
       licenses: ["Apache-2.0"],
       links: %{"GitHub" => @source_url},
       files:
-        ~w(lib docs .formatter.exs mix.exs README.md CHANGELOG.md LICENSE) ++
+        ~w(lib docs .formatter.exs mix.exs README.md CHANGELOG.md RELEASE.md LICENSE) ++
           ["examples/hello_atomvm_modbus/README.md"]
     ]
   end
@@ -65,7 +65,7 @@ defmodule AVModbus.MixProject do
         "CHANGELOG.md",
         "LICENSE"
       ],
-      source_ref: "main",
+      source_ref: "v#{@version}",
       groups_for_modules: [
         "Clients and servers": [
           AVModbus,

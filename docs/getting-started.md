@@ -17,20 +17,24 @@
 
 ## 2. ライブラリを追加する
 
-AVModbus はまだ Hex に公開していません。ローカルに複製したリポジトリを指定します。
+利用側の `mix.exs` に次の依存関係を追加します。
 
 ```elixir
 defp deps do
   [
-    {:avmodbus, path: "../avmodbus"},
+    {:avmodbus, "~> 0.1.0"},
     {:exatomvm, github: "atomvm/exatomvm", runtime: false},
     {:atomvm, "~> 0.7.0-beta.0", runtime: false}
   ]
 end
 ```
 
-`path:` は手元のディレクトリ構成に合わせて変更し、`mix deps.get` を実行してください。
-付属サンプルの `mix.exs` には、すでに依存関係が設定されています。
+`mix deps.get` で依存関係を取得します。`exatomvm` は AtomVM へのビルドに使う開発用依存関係です。
+ホスト上で AVModbus を使うだけなら、AtomVM 向けの追加依存関係は不要です。
+
+リポジトリの開発版を使う場合は、上記の `:avmodbus` を
+`{:avmodbus, git: "https://github.com/piyopiyoex/avmodbus.git", branch: "main"}` に置き換えてください。
+付属サンプルは開発用として引き続き `path:` 参照を使います。
 
 ## 3. UART を設定する
 

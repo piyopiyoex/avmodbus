@@ -134,7 +134,7 @@ Controller が final state の不一致を mission failure として検出しま
 fresh Drive 向けです。同じ
 Drive で別の mission を開始する場合は、以前と重ならない `:first_request_id` を指定する必要があります。判断は
 [ADR 0002](docs/adr/0002-deduplicate-retries-with-request-ids.md)、実機結果は
-[Drive reboot worklog](docs/worklog/2026-10-18-stage-1-drive-reboot.md) に記録しています。
+[検証結果](docs/worklog/README.md) に記録しています。
 
 ## リファレンスミッション
 
@@ -220,7 +220,7 @@ modbus_robot: mission complete state=%{... x_mm: 100, y_mm: 50, heading_deg: 90 
 ```
 
 map field の表示順は AtomVM build により異なる場合があります。2026-10-18 の 2-board 検証結果と実測時間は
-[Stage 1 実機検証](docs/worklog/2026-10-18-stage-1-two-board-mission.md) に記録しています。
+[検証結果](docs/worklog/README.md) に記録しています。
 
 主な build-time configuration:
 
@@ -238,7 +238,7 @@ map field の表示順は AtomVM build により異なる場合があります�
 | `ATOMVM_UART_SPEED` | `9600` | RS485 UART baud rate |
 
 UART pin、chunk、queue、trace の environment variable は既存の
-[distributed Erlang example](../hello_atomvm_modbus_disterl/README.md#build-time-configuration) と同じです。
+[distributed Erlang example](../hello_atomvm_modbus_disterl/README.md#ビルド時の設定) と同じです。
 
 ## Stage 2: 3台の標準Modbusマルチドロップ
 
@@ -344,7 +344,7 @@ modbus_robot_multidrop: complete result={:ok, %{successes: 6, failures: 0, ...}}
 | `MODBUS_RESPONSE_TIMEOUT_MS` | `500` | 1 回の response timeout |
 
 60 cycle / 120 request の soak と両 Server の独立 reboot 結果は
-[Stage 2 実機検証](docs/worklog/2026-10-19-stage-2-multidrop.md) に記録しています。Stage 2 と Stage 3 を分離する理由は
+[検証結果](docs/worklog/README.md) に記録しています。Stage 2 と Stage 3 を分離する理由は
 [ADR 0004](docs/adr/0004-validate-standard-multidrop-before-distribution.md) を参照してください。
 
 ## Stage 3: 3ノード分散Erlang疎通
@@ -361,7 +361,7 @@ scale検証の準備として、Controllerのadapter生成、scheduler登録、d
 node identityを持つpeer descriptor listから構成します。現在のlistはDrive / Sensorsの2件（2 remote peers）だけで、
 application roleは依然として固定です。この変更と3台実機regressionは
 [ADR 0019](docs/adr/0019-drive-controller-transport-from-peer-descriptors.md)と
-[peer-driven setup worklog](docs/worklog/2026-10-24-peer-driven-controller-setup.md)、今後のhost model中心の方針は
+[検証結果](docs/worklog/README.md)、今後の host model 中心の方針は
 [ADR 0020](docs/adr/0020-model-scale-on-host-instead-of-adding-devices.md)に記録しています。
 
 application relay は transport routing ではありません。Controller は `:modbus_robot_sensors` へ sample を要求し、値を検証してから
@@ -376,8 +376,7 @@ local patch で修正して 90 秒間 connection を維持しました。公式 
 このexampleの範囲に含めず、AVModbus docsで既知問題とlocal compatibility patchを管理します。
 同snapshotへlocal patch `a1069573`を適用してnative runtimeとboot libraryをbuildし、3台すべてを更新したfollow-upでは、
 2 connection、両remoteのprobe、sensor-driven mission、mission後90秒のconnection維持を確認しました。必要なpatchとbuild条件は
-[Stage 3 実機検証](docs/worklog/2026-10-19-stage-3-three-node-distribution.md)と
-[最新v0.7 snapshot実機検証](docs/worklog/2026-10-23-latest-v07-runtime.md)に記録しています。
+[検証結果](docs/worklog/README.md) に記録しています。
 
 各 role を build する基本形は次のとおりです。port は Stage 2 と同じ対応です。
 
@@ -454,20 +453,20 @@ ROBOT_MODE=multinode ROBOT_ROLE=controller ATOMVM_UART_SPEED=115200 \
 双方向の cable 断とは異なる非対称な failure model です。Sensors で 180 response を破棄した実機試験では physical polling は
 自動復帰しましたが、Controller だけが `net_tick_timeout` で古い distribution connection を閉じ、Sensors 側には古い connection が
 残りました。その結果、same-sequence application retry は新しい connection に到達せず上限まで失敗しました。詳細は
-[response blackout worklog](docs/worklog/2026-10-20-response-blackout.md) を参照してください。
+[検証結果](docs/worklog/README.md) を参照してください。
 
 既定ではresponse faultをboard boot中の最初のadapterだけにarmし、最大1回発生させます。remote distributionが再起動して
 adapterを作り直すと、replacement adapterへ渡すdrop countを0にして2回目のblackoutを防ぎます。反復faultが必要な診断だけ
 `MODBUS_FAULT_REARM_ON_RESTART=true`を明示してください。device rebootでは設定したfaultが再びarmされます。
 one-shot faultでの完全配送とsettled metricsは
-[2026-10-23 worklog](docs/worklog/2026-10-23-one-shot-response-fault.md)を参照してください。
+[検証結果](docs/worklog/README.md) を参照してください。
 
 follow-upではSensorsだけで`ROBOT_MULTINODE_RESTART_ON_TRAFFIC_ACK_TIMEOUT=true`を指定し、最初のACK timeoutでremote側の
 `net_kernel`をstop / restartしました。ControllerのDrive connectionを維持したままSensorsが再接続し、同じproducerが未確認sequenceを
 retryして16+16 messagesを完全配送しました。この設定はconcurrent traffic probe専用のopt-in診断機能です。remoteが複数の
 distribution connectionを持つ構成や一般のrobot command recoveryへ適用するものではありません。設計は
 [ADR 0011](docs/adr/0011-restart-remote-distribution-after-ack-timeout.md)、実測値は
-[response blackout recovery worklog](docs/worklog/2026-10-20-response-blackout-recovery.md)に記録しています。
+[検証結果](docs/worklog/README.md) に記録しています。
 
 application trafficに依存しない診断では、Drive / Sensorsがreadiness heartbeatごとに現在のdistribution connection IDのACKを
 Controllerから受け取ります。`ROBOT_MULTINODE_REMOTE_HEALTH_ENABLED=true`のremoteはACK期限超過時に自身の`net_kernel`を
@@ -479,30 +478,30 @@ stop / restartします。restart回数はboard bootごとに制限され、古�
 `max_gap_ms`を出力します。connection確立までの時間をhealth timeoutの測定へ混ぜないため、各connectionの初回ACKはgap集計から
 除外します。10秒announce、32+32 flow-controlled trafficの単一runではDrive / Sensorsとも最大11,532 msでした。この値は
 25秒timeoutの一般的な安全性を保証せず、profile固有のbaselineです。詳細は
-[readiness ACK gap baseline](docs/worklog/2026-10-23-remote-health-gap-baseline.md)を参照してください。
+[検証結果](docs/worklog/README.md) を参照してください。
 256+256 trafficへ延長した別runではDrive 23,586 ms、Sensors 23,995 msまで伸びました。詳細は
-[長時間ACK gap測定](docs/worklog/2026-10-23-extended-ack-gap-run.md)を参照してください。
+[検証結果](docs/worklog/README.md) を参照してください。
 
 Stage 7–8の比較実験では、remote側だけで
 `ROBOT_MULTINODE_DEFER_RESTART_UNTIL_TRANSPORT_READY=true`を指定できます。readiness ACK期限を超えてもrestart budgetを
 消費せず、有効なFC-100 exchangeが設定回数連続した後にだけ`net_kernel` restartを開始します。同じconnectionでACKが先に
 復帰した場合は保留を解除します。この設定は物理branch切断のrestart timingを調べるためのopt-inであり、Serverがrequestを
 受信し続ける非対称response blackoutの復旧判定には使えません。設計と検証手順は
-[Stage 8反復試験](docs/stage-8-recovery-repeatability.md)を参照してください。
+[検証結果](docs/worklog/README.md) を参照してください。
 
 この設定は1本だけdistribution connectionを持つremote用のopt-in実験機能です。timeoutはbus congestionでも発生し得るため、通常構成では
 既定の`false`を使用します。設計は[ADR 0012](docs/adr/0012-detect-remote-health-with-readiness-acks.md)、実機結果は
-[idle connection recovery worklog](docs/worklog/2026-10-20-remote-readiness-health.md)に記録しています。
+[検証結果](docs/worklog/README.md) に記録しています。
 
 odd cycle は Drive、even cycle は Sensors を先に実行し、固定順による測定 bias を減らします。2026-10-19 の 30-cycle run は
 60 round trip を 198,745 ms で完了し、両 role とも 30 / 30 成功、失敗 0 でした。Drive の平均 RTT は 3,184 ms、Sensors は
 3,180 ms で、差は 4 ms でした。詳細は
-[application traffic soak](docs/worklog/2026-10-19-stage-3-application-soak.md) に記録しています。
+[検証結果](docs/worklog/README.md) に記録しています。
 
 20-cycle run の進行中に Drive と Sensors を 1 回ずつ reset した試験でも、各 role は 20 / 20 成功しました。reboot をまたいだ
 Drive probe は 11,847 ms、Sensors probe は 9,887 ms で、どちらも新 boot session の検出後に 1 回再送して成功しています。
 この retry は echo probe が idempotent であることを前提とし、一般の robot command に exactly-once semantics を与えるものでは
-ありません。詳細は [traffic 中の reboot](docs/worklog/2026-10-19-stage-3-soak-reboot.md) を参照してください。
+ありません。詳細は [検証結果](docs/worklog/README.md) を参照してください。
 
 成功時、Controller は次の log を出します。
 
@@ -534,7 +533,7 @@ probe を完了することを実機確認しています。
 
 この relay は 2026-10-19 に 3 台の実機で確認しました。sample、Drive の last sample、sequence は volatile であり、reboot をまたぐ
 durable delivery や exactly-once semantics はありません。host test と実機条件は
-[Controller-mediated sensor relay](docs/worklog/2026-10-19-stage-3-controller-relay.md) に記録しています。
+[検証結果](docs/worklog/README.md) に記録しています。
 
 shared Client と `uart_ports` を採用した理由は
 [ADR 0005](docs/adr/0005-share-one-client-across-distribution-streams.md)、boot session ID の判断は
@@ -555,7 +554,7 @@ local workerへ分離し、2秒announce / 10秒timeoutの診断構成で約86秒
 一般的な安全値とはしません。10秒announceと32+32 trafficで測った現在実装のACK gap high-waterは両roleとも11,532 msでした。
 256+256 trafficのfollow-upではDrive 23,586 ms、Sensors 23,995 msまで伸びたため、25秒timeoutにも十分な余裕はありません。
 配線条件、scheduler導入理由、handshake retryの詳細は
-[物理RS485切断・再接続](docs/worklog/2026-10-21-physical-rs485-disconnect.md)を参照してください。
+[検証結果](docs/worklog/README.md) を参照してください。
 
 ## Stage 4: センサー駆動ミッション
 
@@ -567,22 +566,22 @@ fresh Sensors の最初の 3 sample は 500、450、400 mm です。このため
 Drive の final state は `(x=200, y=0, heading=90°)` になります。Controller は起動ごとの random ID から command request-ID range を
 開始し、timeout retry に限って同じ ID を再利用します。判断理由は
 [ADR 0008](docs/adr/0008-make-navigation-decisions-in-controller.md)、host test と3台の実機結果は
-[Stage 4 adaptive mission worklog](docs/worklog/2026-10-19-stage-4-adaptive-mission.md) を参照してください。
+[検証結果](docs/worklog/README.md) を参照してください。
 
 missionは`RobotSim.MissionWorker`で実行し、Controller processはその間もreadiness heartbeat、connection ID付きACK、lease期限を
 処理します。これによりapplication reply待ちとhealth判定を分離します。設計判断は
 [ADR 0014](docs/adr/0014-run-missions-outside-the-health-loop.md)、実機結果は
-[Missionとhealth loopの分離](docs/worklog/2026-10-21-mission-health-loop.md)を参照してください。
+[検証結果](docs/worklog/README.md) を参照してください。
 
 mission開始時に取得したDrive boot IDは全movementとfinal statusへ付与します。reply未受信のままDriveがrebootした場合、retryは
 新bootでmovementを実行せず`indeterminate_command`としてmissionを停止します。旧bootでの実行有無、rover state復元、自動resumeは
 保証しません。設計判断は[ADR 0015](docs/adr/0015-bind-mission-commands-to-drive-boots.md)、実機結果は
-[Drive command outcomeのreconciliation](docs/worklog/2026-10-21-drive-command-reconciliation.md)を参照してください。
+[検証結果](docs/worklog/README.md) を参照してください。
 
 indeterminate outcome後もControllerのhealth loopは継続します。別workerが新しいDrive boot IDを取得し、そのbootにguardした
 read-only `:status`をsnapshotとして記録します。これはoperator向けの観測情報であり、movement再送やmission再開は行いません。
 設計判断は[ADR 0016](docs/adr/0016-continue-health-after-indeterminate-missions.md)、実機結果は
-[recovery snapshot worklog](docs/worklog/2026-10-23-indeterminate-recovery-snapshot.md)を参照してください。
+[検証結果](docs/worklog/README.md) を参照してください。
 snapshot確認後にControllerをresetすると、新しいrequest IDと現在のDrive boot guardで別missionを開始できます。Drive stateは
 resetされず保持中のstateから実行するため、旧missionのresumeやstate reconciliationとは区別してください。
 
@@ -591,7 +590,7 @@ remote PID に対する native distributed `Process.monitor/1` も試しまし�
 default lease を超えた role だけを unavailable とします。Drive / Sensors を個別に停止した実機試験では、稼働中 peer の lease と
 connection を維持し、復帰 node と peer の両方へ probe が成功しました。設計判断は
 [ADR 0009](docs/adr/0009-use-readiness-leases-for-remote-health.md)、実機結果は
-[remote health worklog](docs/worklog/2026-10-19-stage-4-remote-health.md) に記録しています。lease を短くしすぎると queued heartbeat による
+[検証結果](docs/worklog/README.md) に記録しています。lease を短くしすぎると queued heartbeat による
 false positive が起きるため、`ROBOT_MULTINODE_LEASE_MS` は heartbeat interval と transport latency に十分な余裕を持たせる必要があります。
 
 movement retry の重複排除を調べる fault injection は opt-in です。Drive で
@@ -611,7 +610,7 @@ application RTT より十分長くしてください。この injection はreply
 Drive rebootをまたぐguarded retryはindeterminate outcomeとして停止します。cache eviction後の古いIDは保護しません。
 通常の実行では必ず既定値 `false` を使用します。host test、build 条件、3台実機で4 request すべてが
 same-ID retry に成功した結果は
-[reply loss fault injection worklog](docs/worklog/2026-10-20-stage-4-reply-loss-fault-injection.md) に記録しています。
+[検証結果](docs/worklog/README.md) に記録しています。
 
 ## ホスト専用マルチノード規模モデル
 
@@ -635,10 +634,10 @@ N streamsへそのまま複製することをsupportできる根拠にはなり�
 modelは`host/multinode_model.ex`に置き、testとscriptが明示的にloadします。firmware用の`lib/`には含めず、
 PackBEAM artifactを変更しません。
 
-数値とmodelの境界は[host model worklog](docs/worklog/2026-10-24-scalable-multinode-host-model.md)、追加deviceを必須としない判断は
+数値と model の境界は [検証結果](docs/worklog/README.md)、追加 device を必須としない判断は
 [ADR 0020](docs/adr/0020-model-scale-on-host-instead-of-adding-devices.md)を参照してください。
 global上限の判断とhost検証は[ADR 0023](docs/adr/0023-bound-controller-queues-with-a-global-budget.md)と
-[global queue budget worklog](docs/worklog/2026-10-24-global-queue-budget.md)を参照してください。
+[検証結果](docs/worklog/README.md) を参照してください。
 3台実機の32+32 trafficでは完全配送し、global high-water 906 bytes / 14 chunks、拒否0、30秒後0 / 0へのdrainを確認しました。
 
 ## 起動・復旧test matrix
@@ -653,7 +652,7 @@ mise exec -- mix run scripts/startup_recovery_matrix.exs
 ```
 
 実機では3 roleを`ROBOT_MULTINODE_CONNECTION_TRACE=true`でbuildします。これはlogだけを追加し、timeoutやrestart policyを
-変更しません。scenario、event、判定方法、実機手順は[起動・復旧test matrix](docs/startup-recovery-matrix.md)を参照してください。
+変更しません。scenario、event、代表結果は [検証結果](docs/worklog/README.md) を参照してください。
 
 ## 境界
 
@@ -718,7 +717,7 @@ Controllerはproducer開始前にもrole別start ACKを待ち、同じretry budg
 distribution restart中も保持し、duplicate startにはACKだけを返します。physical device rebootをまたぐdurable exactly-onceでは
 ありません。設計とblackout中の実機結果は
 [ADR 0018](docs/adr/0018-retry-traffic-starts-with-idempotent-run-ids.md)と
-[traffic start recovery worklog](docs/worklog/2026-10-23-traffic-start-recovery.md)を参照してください。
+[検証結果](docs/worklog/README.md) を参照してください。
 
 `modbus_robot_traffic: complete` の `drive` / `sensors` summary は、それぞれ expected、received、missing、
 duplicates、out_of_order、invalid、duration_ms、sample_span_ms、throughput_milli_messages_per_second、
@@ -736,7 +735,7 @@ max_interarrival_ms を示します。`fairness` は role 間の delivery ratio�
 - 16+16 messagesと270秒idleを12回反復する64分30秒profileは全runを完全配送した。
 
 数値、firmware条件、失敗経路は[作業記録](docs/worklog/README.md)を正とします。timeout、recovery、memoryの保証外の範囲は
-[既知の制約](docs/limitations.md)、scale modelの条件と結果は[multinode host model](docs/next-experiments.md)を参照してください。
+[既知の制約](docs/limitations.md)、scale model の条件と結果は [検証結果](docs/worklog/README.md) を参照してください。
 
 長時間試験では`ROBOT_MULTINODE_TRAFFIC_RUNS`と`ROBOT_MULTINODE_TRAFFIC_IDLE_MS`でactive / idleを反復できます。
 `ROBOT_MULTINODE_METRICS_INTERVAL_MS`を指定すると、Controllerはpeer別queue、global queue budget、free heap、transaction failureを
@@ -751,4 +750,4 @@ mix run scripts/endurance_report.exs controller.log drive.log sensors.log
 Recovery-only試験では`--mode recovery`を指定します。このreportはtraffic / recoveryの個別結果、queue high-water、観測した
 minimum free heap、restart event、host timestampから求めた復旧時間を集計します。VM全体のmemory使用量やlog欠損を
 推定するものではありません。実験条件と判定方法は
-[長時間通信断・安定性test plan](docs/endurance-test-plan.md)を参照してください。
+[検証結果](docs/worklog/README.md) を参照してください。

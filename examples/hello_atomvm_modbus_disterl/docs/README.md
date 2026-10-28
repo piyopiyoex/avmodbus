@@ -17,7 +17,7 @@
 
 ## 検証記録
 
-- [作業記録](worklog/README.md) — 実機試験と調査結果の時系列記録
+- [検証結果](worklog/README.md) — 実機条件、代表値、recovery と fault injection の結果
 
 ## 更新方針
 

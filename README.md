@@ -6,13 +6,22 @@ Modbus RTU・ASCII・TCP に対応し、データを読み取る Client と、�
 たとえば、ESP32-C5 と RS485 モジュールを使ってセンサーの値を読んだり、
 ほかの機器から読み取れる Holding Register を用意したりできます。
 
-> **公開前の開発版です。** まだ Hex には公開していません。現在は AtomVM `release-0.7` を対象に開発しています。
+## インストール
+
+利用側の `mix.exs` に次の依存関係を追加します。
+
+```elixir
+{:avmodbus, "~> 0.1.0"}
+```
+
+AtomVM 向けのファームウェアを作る場合は、AtomVM 側の依存関係も必要です。
+詳細は [はじめ方](docs/getting-started.md) を参照してください。
 
 ## まず動かしてみる
 
 初めて Modbus を使う場合は、次の順に読むと進めやすいです。
 
-1. [Modbus の基礎](docs/modbus-basics.md) — RS485 との違いや基本用語
+1. [Modbus の基礎](docs/modbus-basics.md) — RS485 との関係や基本用語
 2. [はじめ方](docs/getting-started.md) — ライブラリの追加と読み書き
 3. [XIAO ESP32-C5 実機チュートリアル](examples/hello_atomvm_modbus/README.md) — 2 台の基板で RS485 通信
 
@@ -60,10 +69,10 @@ RTU を使う場合は、先に UART のピンや通信速度を設定してく�
 
 AVModbus の公開 API を利用した、次の実験も収録しています。
 
-- [Modbus RTU 上の distributed Erlang](examples/hello_atomvm_modbus_disterl/README.md) — 2 台の ESP32-C5 間で `serial_dist` を動かす実験
-- [distributed Erlang 仮想ロボット](examples/hello_atomvm_modbus_robot/README.md) — 3 台の ESP32-C5 と共有 RS485 バスを使う分散アプリケーション
+- [Modbus RTU 上の distributed Erlang](https://github.com/piyopiyoex/avmodbus/tree/v0.1.0/examples/hello_atomvm_modbus_disterl) — 2 台の ESP32-C5 間で `serial_dist` を動かす実験
+- [distributed Erlang 仮想ロボット](https://github.com/piyopiyoex/avmodbus/tree/v0.1.0/examples/hello_atomvm_modbus_robot) — 3 台の ESP32-C5 と共有 RS485 バスを使う分散アプリケーション
 
-どちらも本番用途の機能ではありません。構成、実測結果、既知の制約は各サンプルの資料を参照してください。
+どちらも本番用途の機能ではなく、Hex パッケージには含めません。構成、実測結果、既知の制約は各サンプルの資料を参照してください。
 
 ## 開発に参加する
 
@@ -76,23 +85,24 @@ mix test
 
 設計や検証結果を調べる場合は、次の資料を参照してください。
 
-- [ドキュメント一覧と更新方針](https://github.com/piyopiyoex/avmodbus/blob/main/docs/README.md) — 資料の分類とメンテナンス方法
+- [ドキュメント一覧と更新方針](https://github.com/piyopiyoex/avmodbus/blob/v0.1.0/docs/README.md) — 資料の分類とメンテナンス方法
 - [開発者ガイド](docs/development.md) — テストと高度な使い方
 - [アーキテクチャ](docs/architecture.md) — 内部構造と設計方針
-- [開発記録](https://github.com/piyopiyoex/avmodbus/blob/main/docs/development/worklog.md) /
-  [設計判断](https://github.com/piyopiyoex/avmodbus/blob/main/docs/adr/README.md) — 実験結果と判断理由
-- [リリース前チェックリスト](https://github.com/piyopiyoex/avmodbus/blob/main/docs/development/release-checklist.md)
+- [開発資料](https://github.com/piyopiyoex/avmodbus/blob/v0.1.0/docs/development/README.md) /
+  [設計判断](https://github.com/piyopiyoex/avmodbus/blob/v0.1.0/docs/adr/README.md) — 検証結果と判断理由
+- [リリース前チェックリスト](https://github.com/piyopiyoex/avmodbus/blob/v0.1.0/docs/development/release-checklist.md)
 
 ## 動作環境と注意点
 
-実機で確認した構成は、XIAO ESP32-C5、HW-519 RS485 モジュール、
-AtomVM `v0.7.0-beta.0+git.8d3e051` です。ライブラリ自体に実行時依存パッケージはありません。
+実機では、XIAO ESP32-C5、HW-519 RS485 モジュール、AtomVM `release-0.7` 系で確認しています。
+正確なバージョンと試験内容は [互換性表](docs/compatibility.md) を参照してください。
+ライブラリ自体に実行時依存パッケージはありません。
 
 Modbus TCP の暗号化・相互認証には未対応です。暗号化なしに自動で切り替わることはありませんが、
 **TCP Server は信頼できるネットワーク内で使用してください**。
 また、ESP32-C5 の TCP 接続数には実機で確認した範囲があります。
 詳細は
-[既知の制約](https://github.com/piyopiyoex/avmodbus/blob/main/docs/limitations.md)
+[既知の制約](https://github.com/piyopiyoex/avmodbus/blob/v0.1.0/docs/limitations.md)
 を参照してください。
 
 ## ライセンス

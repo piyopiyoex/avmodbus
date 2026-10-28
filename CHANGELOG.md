@@ -1,27 +1,27 @@
 # 変更履歴
 
-AVModbus はまだ公開リリースを行っていません。以下は初回リリースに向けた変更です。
-
 ## Unreleased
+
+## 0.1.0
+
+初回公開版。AtomVM を対象とした汎用 Modbus ライブラリを提供します。
 
 ### 追加
 
-- AtomVM 向けの Modbus RTU / ASCII / TCP Client・Server
-- Coil・Register の読み書き、診断、デバイス情報などの Modbus 機能
-- UART 通信、再接続、タイムアウト、読み取り処理のリトライ
-- `pymodbus`・`libmodbus` との相互運用テスト、ESP32-C5 での実機検証
+- Modbus RTU / ASCII / TCP の Client・Server
+- Coil・Discrete Input・Input Register・Holding Register の読み書き
+- 診断、デバイス情報、UART、タイムアウト、再接続、読み取り処理のリトライ
+- `pymodbus`・`libmodbus` との相互運用テストと ESP32-C5 実機検証
 
 ### 改善
 
-- 通信中のエラーや切断からの復旧処理を改善
-- TCP 接続ごとの受信バッファー、終了処理、リソース管理を強化
-- AtomVM のメモリ使用量とファームウェアサイズの計測方法を整備
+- TCP 接続単位の受信バッファー、終了処理、リソース管理を強化
+- AtomVM 上でのメモリ使用量とファームウェアサイズの計測手順を整備
 
-### 実験
+### 実験（Hex パッケージには含まれない）
 
-- AVModbus の custom Function Code `100` を transport primitive として利用する
-  [distributed Erlang over Modbus RTU example](examples/hello_atomvm_modbus_disterl/README.md) を追加
-- 2 台の XIAO ESP32-C5 で AtomVM の genuine distribution handshake、remote process
-  messaging、multi-chunk payload、session recovery を確認
-- carrier と virtual UART adapter はサンプル内に限定し、AVModbus の public API と
-  production support の対象外であることを文書化
+- [distributed Erlang over Modbus RTU](https://github.com/piyopiyoex/avmodbus/tree/v0.1.0/examples/hello_atomvm_modbus_disterl)
+  で genuine distribution、session recovery を検証
+- [分散Erlang仮想ロボット](https://github.com/piyopiyoex/avmodbus/tree/v0.1.0/examples/hello_atomvm_modbus_robot)
+  で3台の ESP32-C5 と共有 RS485 bus を使う実験を実施
+- いずれの experimental carrier も AVModbus の public API または production support の対象外

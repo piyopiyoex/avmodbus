@@ -33,4 +33,4 @@ peerごとの上限をpeer数で割る方法は、設定変更時に全peer数�
 - `QueueBudget`はdistributed Erlang example内の任意機能であり、AVModbus coreとFC-100 wire formatは変更しない。
 - host testで32 owner、ACK、session reset、正常終了、異常終了を検証した。3台実機の32+32 trafficではglobal high-water
   906 bytes / 14 chunks、拒否0、settled 0 / 0を確認した。実測条件は
-  [worklog](../worklog/2026-10-24-global-queue-budget.md)を正とする。
+  [検証結果](../worklog/README.md) を正とする。

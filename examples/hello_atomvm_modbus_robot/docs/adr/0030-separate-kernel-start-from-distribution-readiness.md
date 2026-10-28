@@ -23,4 +23,4 @@ Branch復帰後はFC-100 transactionだけが再開し、distributionは自動�
 - Lifecycle logだけで復旧成功率を過大評価しない。
 - Physical FC-100 pollingの復帰とdistribution handshakeの復帰を区別する。
 - AtomVM runtimeの変更やupstreamへのIssue / PRは、この判断の対象外とする。
-- 実測値は[Stage 10 lifecycle probe](../worklog/2026-10-28-stage-10-lifecycle-probe.md)を正とする。
+- 実測値は [検証結果](../worklog/README.md) を正とする。

@@ -14,21 +14,21 @@ Function Code `100` (`0x64`) だけを利用します。
 
 2026-10-16 の follow-up では、96-byte operating chunk と adaptive response timeout を使い、512-byte payload の
 genuine distribution ping/pong を双方向に完了しました（RTT: 7889 ms）。詳細は
-[bidirectional multi-chunk round trip](docs/worklog/2026-10-16-bidirectional-multichunk.md) を参照してください。
+[検証結果](docs/worklog/README.md) を参照してください。
 
 同じ構成の 30-message soak test では、512-byte payload を 30 往復、223.327 秒にわたって error なしで配送しました。
 RTT の min / average / max は 5250 / 5425 / 7477 ms、pong timeout は 0 回でした。詳細は
-[application-traffic soak test](docs/worklog/2026-10-16-application-traffic-soak.md) を参照してください。
+[検証結果](docs/worklog/README.md) を参照してください。
 
 baud / poll matrix では 9,600–115,200 baud と 20 ms poll の zero-byte ping/pong が成功しました。9,600 baud では
 500 ms poll まで成功し、1,000 ms で distribution setup timeout になりました。再現条件と測定値は
-[baud-rate / poll-interval matrix](docs/worklog/2026-10-16-baud-poll-matrix.md) にあります。大きな payload を含む検証範囲が
+[検証結果](docs/worklog/README.md) にあります。大きな payload を含む検証範囲が
 最も広い 9,600 baud / 20 ms を引き続き default とします。
 
 115,200 baud / 20 ms の follow-up では、512-byte payload を 30 往復、99.877 秒にわたって timeout なしで配送し、
 4 KiB payload の 1 往復も 22.617 秒で完了しました。また、default の 9,600 baud では同じ 4 KiB payload を
 3回連続して往復させ、timeout なしで完了しました（RTT min / average / max: 33.817 / 34.743 / 36.594 秒）。詳細は
-[payload traffic verification](docs/worklog/2026-10-16-high-baud-payloads.md) を参照してください。4 KiB の連続試験は
+[検証結果](docs/worklog/README.md) を参照してください。4 KiB の連続試験は
 9,600 baud の 1 run に限られるため、default は変更せず、一般的な安定動作としては保証しません。
 
 確立済み connection では、2回目の 4 KiB upload の最初の 96-byte chunk を Server が受信した直後に Server を
@@ -38,19 +38,19 @@ reboot しても、Client が session 変更を検出し、1回の pong timeout 
 受け取ってから同じadapterを`serial_dist`へ渡します。Clientを約70秒先行させた実機runでもping/pong 3 / 3へ進みました。
 逆の起動順序では、Serverが繰り返すidle sync markerを未ACKの1 chunkへまとめます。Serverを約210秒先行させた
 実機runでもqueue-fullにならず、Client起動後にping/pong 3 / 3を完了しました。詳細は
-[Server-first idle sync verification](docs/worklog/2026-10-16-server-idle-sync-coalescing.md) にあります。
+[検証結果](docs/worklog/README.md) にあります。
 これは AtomVM の任意のhalf-open connection cleanupを修正するものではありません。
 調査、棄却した retry wrapper、2 run の実機結果は
-[initial-handshake liveness investigation](docs/worklog/2026-10-16-initial-handshake-liveness.md) に記録しています。
+[検証結果](docs/worklog/README.md) に記録しています。
 
 AtomVM `release-0.7`へのfollow-upでは、`net_kernel`がoutgoing setup PIDを最初のpending entryへ保存する最小修正を実装しました。
 readiness後の32-byte handshake responseを40回exceptionへ置換して最初のsetupをtimeoutさせても、修正版boot libraryは
 application retryからping/pong 3 / 3へ復旧しました。同一条件の旧boot libraryは新しいhandshakeを開始しませんでした。
 この修正はAtomVM local branch `fix/net-kernel-setup-pid`のcommit `735841ba`であり、公式releaseには未収録です。手順とlogは
-[AtomVM setup retry verification](docs/worklog/2026-10-16-atomvm-setup-retry.md) にあります。
+[検証結果](docs/worklog/README.md) にあります。
 
 アーキテクチャ、制限、設計判断の一覧は [docs/README.md](docs/README.md)、詳細な実機ログと観察結果は
-[2026-10-15-hardware-verification.md](docs/worklog/2026-10-15-hardware-verification.md) にあります。
+[検証結果](docs/worklog/README.md) にあります。
 
 ## Hardware と配線
 
@@ -242,7 +242,7 @@ Phase 2 Clientのreadiness gateはModbusUARTを一度だけopenし、有効なFC
 `DISTERL_PAYLOAD_BYTES` と `MODBUS_CHUNK_PAYLOAD_BYTES` で build します。低 baud rate では
 `DISTERL_PONG_TIMEOUT_MS` も十分に延ばしてください。232 bytes は wire protocol の上限ですが、今回の XIAO / HW-519
 構成では上限付近の RTU frame が安定しないため default にはしません。実測結果は
-[bidirectional multi-chunk round trip](docs/worklog/2026-10-16-bidirectional-multichunk.md) を参照してください。
+[検証結果](docs/worklog/README.md) を参照してください。
 
 outgoing queue は byte 数と chunk 数の両方で制限します。1 回の write 全体が収まらない場合は partial data を
 queue に残さず `{:error, :queue_full}` を返し、`serial_dist` connection を fail fast させます。既定の 8 KiB は
@@ -261,7 +261,7 @@ retryでdistribution handshakeとping/pongを再確立しました。この回�
 通常の使用例では設定しません。response fault は Server が request を Channel に受理した後で response だけを
 `server_device_failure` に置き換えるため、Client の同一 sequence 再送と Server の duplicate suppression を実機で
 確認できます。再現条件と観測値は
-[Queue memory と ACK-loss](docs/worklog/2026-10-16-queue-memory-and-ack-loss.md) に記録しています。
+[検証結果](docs/worklog/README.md) に記録しています。
 
 ## 参考資料
 
